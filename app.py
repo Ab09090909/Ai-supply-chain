@@ -46,35 +46,60 @@ inject_theme()
 def render_sidebar():
     with st.sidebar:
         if st.session_state.get("user") is None:
-            st.info("👈 Please sign in or register")
+            st.info("👈 Use the main page to Log In or Sign Up")
             return None, None
         else:
             st.title("🌾 AI Supply Chain")
             st.caption("Ethiopian Multi-Sector Commerce")
             st.divider()
-            profile = st.session_state.get("profile") or cached_get_profile(st.session_state.user.id)
+            
+            # Try to get profile
+            profile = st.session_state.get("profile") or get_profile(st.session_state.user.id)
+            
+            # 🚨 FIX: If profile is still None, create it automatically to prevent crash
+            if profile is None:
+                try:
+                    default_name = st.session_state.user.email.split('@')[0] if st.session_state.user.email else "User"
+                    supabase.table("profiles").insert({
+                        "id": st.session_state.user.id,
+                        "full_name": default_name,
+                        "role": "customer",
+                        "is_verified": False,
+                        "documents_uploaded": False
+                    }).execute()
+                    # Fetch it again now that it's created
+                    profile = get_profile(st.session_state.user.id)
+                except Exception as e:
+                    st.error(f"️ Profile creation failed: {e}")
+                    if st.button("Sign Out"):
+                        sign_out()
+                        st.rerun()
+                    st.stop()
+            
             st.session_state.profile = profile
             role = profile.get("role") if profile else None
             st.success(f"Welcome, {profile.get('full_name', 'User')}")
             st.caption(f'Role: {role.capitalize() if role else "N/A"}')
             st.caption(f'Region: {profile.get("region", "N/A")}')
+            
             try:
                 verif_status = check_verification_status(st.session_state.user.id)
                 if not verif_status["is_verified"]:
                     if verif_status["has_documents"]:
                         st.info("⏳ Documents pending verification")
                     else:
-                        st.warning("⚠️ Upload documents to verify")
-            except Exception:
-                pass
-            unread = cached_unread_count(st.session_state.user.id)
+                        st.warning("️ Upload documents to verify")
+            except Exception as _verif_err:
+                st.caption(f"⚠️ Verification check failed: {_verif_err}")
+            
+            unread = get_unread_count(st.session_state.user.id)
             if unread:
                 st.info(f"🔔 {unread} unread notification(s)")
-            if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
+            
+            if st.button("Log Out", use_container_width=True, key="sb_logout_btn"):
                 sign_out()
                 st.rerun()
             return profile, role
-
 
 # ═════════════════════════════════════════════════════════════
 # LANDING PAGE (shown when not logged in)
