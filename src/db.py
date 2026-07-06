@@ -2,6 +2,8 @@
 """
 src/db.py — Supabase Client Initialization
 """
+from dotenv import load_dotenv
+load_dotenv() # This loads the .env file automatically
 import os
 from supabase import create_client, Client
 
