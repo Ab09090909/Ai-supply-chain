@@ -1,6 +1,6 @@
 """
 app.py — Ethiopian AI Supply Chain Platform (Main Entry)
-Handles: Landing page, Authentication, Routing
+Handles: Landing page, Authentication, Routing to pages/
 """
 import sys
 import os
@@ -53,8 +53,8 @@ def render_sidebar():
             st.caption("Ethiopian Multi-Sector Commerce")
             st.divider()
             
-            # Try to get profile
-            profile = st.session_state.get("profile") or get_profile(st.session_state.user.id)
+            # Try to get profile (FIXED: using cached_get_profile)
+            profile = st.session_state.get("profile") or cached_get_profile(st.session_state.user.id)
             
             # 🚨 FIX: If profile is still None, create it automatically to prevent crash
             if profile is None:
@@ -68,9 +68,9 @@ def render_sidebar():
                         "documents_uploaded": False
                     }).execute()
                     # Fetch it again now that it's created
-                    profile = get_profile(st.session_state.user.id)
+                    profile = cached_get_profile(st.session_state.user.id)
                 except Exception as e:
-                    st.error(f"️ Profile creation failed: {e}")
+                    st.error(f"⚠️ Profile creation failed: {e}")
                     if st.button("Sign Out"):
                         sign_out()
                         st.rerun()
@@ -88,18 +88,20 @@ def render_sidebar():
                     if verif_status["has_documents"]:
                         st.info("⏳ Documents pending verification")
                     else:
-                        st.warning("️ Upload documents to verify")
+                        st.warning("⚠️ Upload documents to verify")
             except Exception as _verif_err:
                 st.caption(f"⚠️ Verification check failed: {_verif_err}")
             
-            unread = get_unread_count(st.session_state.user.id)
+            # FIXED: using cached_unread_count
+            unread = cached_unread_count(st.session_state.user.id)
             if unread:
                 st.info(f"🔔 {unread} unread notification(s)")
             
-            if st.button("Log Out", use_container_width=True, key="sb_logout_btn"):
+            if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
                 sign_out()
                 st.rerun()
             return profile, role
+
 
 # ═════════════════════════════════════════════════════════════
 # LANDING PAGE (shown when not logged in)
@@ -204,8 +206,7 @@ profile, role = render_sidebar()
 if st.session_state.get("user") is None:
     show_landing()
 else:
-    # User is logged in — redirect to their dashboard page
-    st.info("👈 Use the sidebar to navigate to your dashboard.")
+    # User is logged in — show a welcome message and direct them to the sidebar pages
     if profile is None:
         st.error("Could not load profile. Please sign out and try again.")
         if st.button("Sign Out"):
@@ -219,7 +220,7 @@ else:
             <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
             <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
             <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
-                Click on your dashboard in the sidebar to get started.
+                👈 Use the sidebar to navigate to your dashboard pages.
             </p>
         </div>
         """, unsafe_allow_html=True)
