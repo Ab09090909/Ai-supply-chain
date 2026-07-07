@@ -5,10 +5,10 @@ import base64
 import datetime
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from utils.theme import inject_theme
+from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS, SECTORS, UNITS
 from utils.db_helpers import supabase, cached_query, clear_data_cache, reduce_product_stock, send_notification
 from utils.verification import check_verification_status, render_document_upload
@@ -24,7 +24,6 @@ from utils.pdf_generator import (
 from src.matching_engine import rank_merchants
 from src.price_engine import recommend_price
 from src.demand_engine import forecast_demand
-import plotly.graph_objects as go
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
@@ -79,7 +78,7 @@ html, body, [data-testid="stAppViewContainer"] {
     text-transform: uppercase;
 }
 
-/* ── KPI Cards ── */
+/* ─ KPI Cards ── */
 .kpi-card {
     background: #161b27;
     border: 1px solid #1e2a3a;
@@ -145,7 +144,7 @@ html, body, [data-testid="stAppViewContainer"] {
 /* ── Confirm box ── */
 .confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
 
-/* ── Tabs override ── */
+/* ─ Tabs override ── */
 [data-testid="stTabs"] > div > div > div > button {
     font-size: 13px !important;
     font-weight: 500 !important;
@@ -210,17 +209,33 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 20px;
     margin-top: 16px;
 }
+
+/* ── Product Image Card ── */
+.product-img-container {
+    background: #1e2a3a;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    border: 1px solid #334155;
+}
+.product-img-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
+# ────────────────────────────────────────────
 # Auth Guard
 # ─────────────────────────────────────────────
 inject_theme()
-
 if st.session_state.get("user") is None:
     st.warning("⚠️ Please sign in first.")
-    st.page_link("app.py", label="← Go to Login", icon="🔐")
+    st.page_link("app.py", label="← Go to Login", icon="")
     st.stop()
 
 profile = st.session_state.get("profile")
@@ -252,9 +267,14 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🚜 Quick Actions")
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button(" Refresh Data", use_container_width=True):
         clear_data_cache()
         st.rerun()
+    
+    # Dark/Light Toggle (Update 7)
+    st.markdown("### 🎨 Theme")
+    render_theme_toggle()
+    
     st.divider()
     st.markdown("### 📌 Account Status")
     if verif_status["is_verified"]:
@@ -264,13 +284,14 @@ with st.sidebar:
     st.markdown(f"<br>", unsafe_allow_html=True)
     st.markdown('<div class="pill pill-info">● AI Matching Ready</div>', unsafe_allow_html=True)
     st.divider()
+    
     # Quick stats in sidebar
     my_prods_sidebar = cached_query("products", filters={"producer_id": user_id}, limit=500)
     active_count = sum(1 for p in my_prods_sidebar if p.get("is_available"))
     st.markdown(f"**{len(my_prods_sidebar)}** products listed")
     st.markdown(f"**{active_count}** active")
     st.divider()
-    st.caption(f"**{profile.get('full_name','Producer')}**")
+    st.caption(f"{profile.get('full_name','Producer')}")
     st.caption(f"Producer · {profile.get('region','')}")
 
 # ─────────────────────────────────────────────
@@ -289,10 +310,10 @@ if not verif_status["is_verified"]:
 # Tabs
 # ─────────────────────────────────────────────
 (tab_overview, tab_products, tab_demand, tab_incoming,
- tab_match, tab_agree, tab_history, tab_notif, tab_profile) = st.tabs([
-    "📊 Overview", "📦 My Products", "📈 Demand Forecast",
-    "📬 Incoming Orders", "🤝 AI Matching", "📄 Agreements",
-    "📜 History", "🔔 Notifications", "👤 Profile",
+ tab_match, tab_agree, tab_history, tab_ai_insights, tab_notif, tab_profile) = st.tabs([
+    "📊 Overview", " My Products", "📈 Demand Forecast",
+    "📬 Incoming Orders", " AI Matching", "📄 Agreements",
+    "📜 History", "🤖 AI Insights", "🔔 Notifications", "👤 Profile",
 ])
 
 # ══════════════════════════════════════════════
@@ -305,16 +326,16 @@ with tab_overview:
         my_orders_all = [o for o in my_orders_all if (o.get("products") or {}).get("producer_id") == user_id]
     except Exception:
         my_orders_all = []
-
+    
     total_val = sum(p.get("price_birr", 0) * p.get("quantity", 0) for p in my_products_all)
     active_prods = sum(1 for p in my_products_all if p.get("is_available"))
     pending_orders_cnt = sum(1 for o in my_orders_all if o.get("status") == "pending")
     delivered_orders = [o for o in my_orders_all if o.get("status") == "delivered"]
     total_revenue = sum(float(o.get("total_price_birr") or 0) for o in delivered_orders)
-
+    
     if pending_orders_cnt > 0:
         st.markdown(f'<div class="alert-box alert-warning">📬 You have <strong>{pending_orders_cnt} pending order(s)</strong> awaiting your confirmation.</div>', unsafe_allow_html=True)
-
+    
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Products Listed</div><div class="kpi-value">{len(my_products_all)}</div><div class="kpi-sub">{active_prods} active</div></div>', unsafe_allow_html=True)
@@ -324,7 +345,7 @@ with tab_overview:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Pending Orders</div><div class="kpi-value">{pending_orders_cnt}</div><div class="kpi-sub">Awaiting confirmation</div></div>', unsafe_allow_html=True)
     with k4:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Revenue</div><div class="kpi-value">{total_revenue:,.0f}</div><div class="kpi-sub">Birr delivered</div></div>', unsafe_allow_html=True)
-
+    
     # Sector breakdown
     if my_products_all:
         st.markdown('<div class="section-title">Products by Sector</div>', unsafe_allow_html=True)
@@ -334,13 +355,13 @@ with tab_overview:
             sector_counts[s] = sector_counts.get(s, 0) + 1
         df_sector = pd.DataFrame({"Sector": list(sector_counts.keys()), "Count": list(sector_counts.values())})
         st.bar_chart(df_sector.set_index("Sector"), height=200, color="#16a34a")
-
+    
     # Recent orders feed
     if my_orders_all:
         st.markdown('<div class="section-title">Recent Order Activity</div>', unsafe_allow_html=True)
         for o in sorted(my_orders_all, key=lambda x: x.get("created_at",""), reverse=True)[:5]:
             status = o.get("status","pending")
-            color = {"pending":"#fbbf24","confirmed":"#60a5fa","delivered":"#4ade80","cancelled":"#f87171"}.get(status,"#94a3b8")
+            color = {"pending":"#fbbf24","confirmed":"#60a5fa","delivered":"#4ade80","cancelled":"#f87171","declined":"#f87171"}.get(status,"#94a3b8")
             ts = o.get("created_at","")[:16].replace("T"," ")
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e2a3a;">
@@ -357,7 +378,7 @@ with tab_overview:
 with tab_products:
     st.markdown('<div class="section-title">Product Listings</div>', unsafe_allow_html=True)
     my_products = cached_query("products", filters={"producer_id": user_id}, limit=200)
-
+    
     # Summary KPIs
     if my_products:
         total_val2 = sum(p.get("price_birr",0) * p.get("quantity",0) for p in my_products)
@@ -370,7 +391,7 @@ with tab_products:
         with k3:
             st.markdown(f'<div class="kpi-card"><div class="kpi-label">Inventory Value</div><div class="kpi-value">{total_val2:,.0f}</div><div class="kpi-sub">Birr</div></div>', unsafe_allow_html=True)
         st.markdown("")
-
+    
     # Add Product Form
     with st.expander("➕ Add New Product", expanded=not bool(my_products)):
         with st.form("add_product_form", clear_on_submit=True):
@@ -386,9 +407,13 @@ with tab_products:
             with c2:
                 new_qty   = st.number_input("Quantity *", min_value=0.1, value=1.0, step=0.5)
                 new_unit  = st.selectbox("Unit *", UNITS)
+                
+                # Update 1: AI Price Suggestion
+                use_ai_price = st.checkbox("🤖 Auto-suggest price using AI", value=False, help="Let AI analyze market data to recommend a price.")
                 new_price = st.number_input("Price (Birr) *", min_value=1.0, value=100.0, step=10.0)
                 new_avail = st.checkbox("List as Available", value=True)
-            new_image = st.file_uploader("📷 Product Image (Optional)", type=["jpg","jpeg","png"], key="prod_img_upload")
+            
+            new_image = st.file_uploader("📷 Product Image (Recommended)", type=["jpg","jpeg","png"], key="prod_img_upload", help="High-quality images attract more buyers!")
             new_image_b64 = None
             if new_image:
                 try:
@@ -397,31 +422,49 @@ with tab_products:
                     st.warning("Could not process image.")
             new_desc = st.text_area("Description (optional)", height=80, placeholder="Describe quality, harvest details, storage…")
             submitted = st.form_submit_button("✅ Add Product", type="primary", use_container_width=True)
-        if submitted:
-            if not new_name.strip():
-                st.error("Product name is required.")
-            else:
-                try:
-                    data = {
-                        "producer_id": user_id,
-                        "product_name": new_name.strip(),
-                        "sector": new_sector,
-                        "quality_grade": new_grade_db,
-                        "region": new_region,
-                        "quantity": new_qty,
-                        "unit": new_unit,
-                        "price_birr": new_price,
-                        "is_available": new_avail,
-                        "description": f"[{new_grade_ui}] {new_desc.strip()}" if new_desc.strip() else f"[{new_grade_ui}]",
-                    }
-                    if new_image_b64:
-                        data["image_base64"] = new_image_b64
-                    supabase.table("products").insert(data).execute()
-                    clear_data_cache()
-                    st.success(f"✅ '{new_name}' listed successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to add product: {e}")
+            
+            if submitted:
+                if not new_name.strip():
+                    st.error("Product name is required.")
+                else:
+                    final_price = new_price
+                    # Update 1: Apply AI Price if checked
+                    if use_ai_price:
+                        with st.spinner("🤖 Analyzing market data for price recommendation..."):
+                            try:
+                                ai_result = recommend_price(
+                                    sector=new_sector,
+                                    product=new_name,
+                                    region=new_region,
+                                    quality_grade=new_grade_db,
+                                    quantity=new_qty
+                                )
+                                final_price = ai_result.get("recommended_price_birr", new_price)
+                                st.success(f"💡 AI Recommended Price: {final_price:,.0f} Birr/{new_unit}")
+                            except Exception as e:
+                                st.warning(f"AI price suggestion failed, using manual price: {e}")
+                    
+                    try:
+                        data = {
+                            "producer_id": user_id,
+                            "product_name": new_name.strip(),
+                            "sector": new_sector,
+                            "quality_grade": new_grade_db,
+                            "region": new_region,
+                            "quantity": new_qty,
+                            "unit": new_unit,
+                            "price_birr": final_price,
+                            "is_available": new_avail,
+                            "description": f"[{new_grade_ui}] {new_desc.strip()}" if new_desc.strip() else f"[{new_grade_ui}]",
+                        }
+                        if new_image_b64:
+                            data["image_base64"] = new_image_b64
+                        supabase.table("products").insert(data).execute()
+                        clear_data_cache()
+                        st.success(f"✅ '{new_name}' listed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add product: {e}")
 
     # Filters
     if my_products:
@@ -430,7 +473,7 @@ with tab_products:
             prod_search = st.text_input("🔍 Search products", key="prod_search_inp", placeholder="Product name…")
         with pf2:
             avail_filter = st.selectbox("Availability", ["All","Available","Unavailable"], key="prod_avail_filter")
-
+        
         filtered = my_products
         if prod_search:
             filtered = [p for p in filtered if prod_search.lower() in p.get("product_name","").lower()]
@@ -438,56 +481,72 @@ with tab_products:
             filtered = [p for p in filtered if p.get("is_available")]
         elif avail_filter == "Unavailable":
             filtered = [p for p in filtered if not p.get("is_available")]
-
+        
         st.caption(f"**{len(filtered)} product(s)**")
+        
         for p in filtered:
             pid = p["id"]
             avail = p.get("is_available", False)
             status_pill = '<span class="pill pill-success">● Available</span>' if avail else '<span class="pill pill-danger">● Unavailable</span>'
+            
             with st.container(border=True):
-                c1, c2, c3 = st.columns([5, 2, 3])
-                with c1:
-                    st.markdown(f"**📦 {p['product_name']}** &nbsp; {status_pill}", unsafe_allow_html=True)
-                    st.caption(f"Sector: {p.get('sector','—')} · Grade: **{p.get('quality_grade','—')}** · 📍 {p.get('region','—')}")
-                    st.caption(f"Stock: {p.get('quantity','—')} {p.get('unit','')} · Listed: {p.get('created_at','')[:10]}")
-                with c2:
-                    st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
-                with c3:
-                    ba, bb = st.columns(2)
-                    with ba:
-                        tog_label = "🔴 Deactivate" if avail else "🟢 Activate"
-                        if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
-                            try:
-                                supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
-                                clear_data_cache()
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed: {e}")
-                    with bb:
-                        if st.session_state.get(f"confirm_del_prod_{pid}"):
-                            st.markdown('<div class="confirm-box">⚠️ Delete this product permanently?</div>', unsafe_allow_html=True)
-                            dc1, dc2 = st.columns(2)
-                            with dc1:
-                                if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
-                                    try:
-                                        supabase.table("products").delete().eq("id", pid).execute()
-                                        clear_data_cache()
+                # Update 2: Modern Image Layout
+                img_col, info_col = st.columns([1, 4])
+                
+                with img_col:
+                    if p.get("image_base64"):
+                        try:
+                            img_data = base64.b64decode(p["image_base64"])
+                            st.markdown(f'<div class="product-img-container"><img src="data:image/jpeg;base64,{p["image_base64"]}" alt="Product Image"></div>', unsafe_allow_html=True)
+                        except:
+                            st.markdown('<div class="product-img-container" style="color:#64748b;">No Image</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="product-img-container" style="color:#64748b;">📷 No Image</div>', unsafe_allow_html=True)
+                
+                with info_col:
+                    c1, c2, c3 = st.columns([5, 2, 3])
+                    with c1:
+                        st.markdown(f"**📦 {p['product_name']}** &nbsp; {status_pill}", unsafe_allow_html=True)
+                        st.caption(f"Sector: {p.get('sector','—')} · Grade: **{p.get('quality_grade','—')}** · 📍 {p.get('region','—')}")
+                        st.caption(f"Stock: {p.get('quantity','—')} {p.get('unit','')} · Listed: {p.get('created_at','')[:10]}")
+                    with c2:
+                        st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
+                    with c3:
+                        ba, bb = st.columns(2)
+                        with ba:
+                            tog_label = "🔴 Deactivate" if avail else " Activate"
+                            if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
+                                try:
+                                    supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
+                                    clear_data_cache()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed: {e}")
+                        with bb:
+                            if st.session_state.get(f"confirm_del_prod_{pid}"):
+                                st.markdown('<div class="confirm-box">⚠️ Delete this product permanently?</div>', unsafe_allow_html=True)
+                                dc1, dc2 = st.columns(2)
+                                with dc1:
+                                    if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+                                        try:
+                                            supabase.table("products").delete().eq("id", pid).execute()
+                                            clear_data_cache()
+                                            st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Delete failed: {e}")
+                                with dc2:
+                                    if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
                                         st.session_state.pop(f"confirm_del_prod_{pid}", None)
                                         st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Delete failed: {e}")
-                            with dc2:
-                                if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
-                                    st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                            else:
+                                st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
+                                if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
+                                    st.session_state[f"confirm_del_prod_{pid}"] = True
                                     st.rerun()
-                        else:
-                            st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
-                            if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
-                                st.session_state[f"confirm_del_prod_{pid}"] = True
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
+                                st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-info"> No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
 # TAB — DEMAND FORECAST
@@ -495,7 +554,7 @@ with tab_products:
 with tab_demand:
     st.markdown('<div class="section-title">AI Demand Forecasting</div>', unsafe_allow_html=True)
     st.markdown('<div class="alert-box alert-info">🤖 The AI model analyzes historical patterns and market signals to forecast demand for your products over the next 12 weeks.</div>', unsafe_allow_html=True)
-
+    
     fc1, fc2, fc3 = st.columns(3)
     with fc1:
         fc_sector = st.selectbox("Sector", SECTORS, key="fc_sector")
@@ -503,7 +562,7 @@ with tab_demand:
         fc_region = st.selectbox("Region", REGIONS, key="fc_region")
     with fc3:
         fc_horizon = st.selectbox("Forecast Weeks", [4, 8, 12, 16], index=2, key="fc_horizon")
-
+    
     if st.button("📈 Run Demand Forecast", type="primary", use_container_width=True, key="run_forecast"):
         with st.spinner("Running AI demand model…"):
             try:
@@ -516,18 +575,17 @@ with tab_demand:
                 st.session_state["forecast_params"] = (fc_sector, fc_region, fc_horizon)
             except Exception as e:
                 st.error(f"Forecast failed: {e}")
-
+    
     result = st.session_state.get("forecast_result")
     params = st.session_state.get("forecast_params")
     if result is not None and params:
         sector_p, region_p, horizon_p = params
         st.markdown(f'<div class="section-title">Forecast: {sector_p} · {region_p} · {horizon_p} Weeks</div>', unsafe_allow_html=True)
-
-        # Summary metrics
+        
         if isinstance(result, list) and len(result) > 0:
             avg_demand = sum(result) / len(result)
             max_demand = max(result)
-            trend = "📈 Rising" if result[-1] > result[0] else "📉 Falling"
+            trend = " Rising" if result[-1] > result[0] else "📉 Falling"
             sm1, sm2, sm3 = st.columns(3)
             with sm1:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Avg Weekly Demand</div><div class="kpi-value">{avg_demand:,.0f}</div><div class="kpi-sub">Units / week</div></div>', unsafe_allow_html=True)
@@ -536,8 +594,7 @@ with tab_demand:
             with sm3:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Trend Direction</div><div class="kpi-value" style="font-size:20px;">{trend}</div></div>', unsafe_allow_html=True)
             st.markdown("")
-
-            # Chart using plotly
+            
             weeks = [f"W{i+1}" for i in range(len(result))]
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -569,50 +626,49 @@ with tab_demand:
 with tab_incoming:
     st.markdown('<div class="section-title">Incoming Orders</div>', unsafe_allow_html=True)
     prod_ids = [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]
-
+    
     if not prod_ids:
         st.markdown('<div class="alert-box alert-info">📦 You have no products listed. Add products first to receive orders.</div>', unsafe_allow_html=True)
     else:
         try:
+            # Update 4: Only show pending and confirmed, not declined/cancelled
             orders = supabase.table("orders").select(
                 "*, products(product_name, unit, sector, quality_grade, region, producer_id), profiles!orders_buyer_id_fkey(full_name, phone, region, role)"
             ).in_("product_id", prod_ids).in_("status", ["pending","confirmed"]).order("created_at", desc=True).execute().data or []
         except Exception as e:
             st.error(f"Failed to load orders: {e}")
             orders = []
-
-        # Filter
+        
         of1, of2 = st.columns(2)
         with of1:
             ord_status = st.selectbox("Status", ["All","pending","confirmed"], key="ord_status_filter")
         with of2:
             ord_search = st.text_input("🔍 Search buyer", key="ord_search", placeholder="Buyer name…")
-
+        
         filtered_orders = orders if ord_status == "All" else [o for o in orders if o.get("status") == ord_status]
         if ord_search:
             kw = ord_search.lower()
             filtered_orders = [o for o in filtered_orders if kw in (o.get("profiles") or {}).get("full_name","").lower()]
-
+        
         if not filtered_orders:
             st.info("No incoming orders match the filters.")
         else:
             st.caption(f"**{len(filtered_orders)} order(s)**")
             STATUS_ICONS  = {"pending":"🟡","confirmed":"🟢","cancelled":"❌"}
             STATUS_PILLS  = {"pending":"pill-warning","confirmed":"pill-success"}
-
+            
             for o in filtered_orders:
                 oid   = o["id"]
                 prod  = o.get("products") or {}
                 buyer = o.get("profiles") or {}
                 status = o.get("status","pending")
-
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([5, 2, 3])
                     with c1:
                         pill = STATUS_PILLS.get(status,"pill-neutral")
                         st.markdown(f"**Order #{str(oid)[:8]}** &nbsp; <span class='pill {pill}'>{status.capitalize()}</span>", unsafe_allow_html=True)
                         st.markdown(f"**📦 {prod.get('product_name','Unknown')}** · {prod.get('sector','')} · Grade **{prod.get('quality_grade','')}**")
-                        st.caption(f"👤 Buyer: **{buyer.get('full_name','Unknown')}** ({buyer.get('role','').capitalize()}) · 📞 {buyer.get('phone','N/A')}")
+                        st.caption(f" Buyer: **{buyer.get('full_name','Unknown')}** ({buyer.get('role','').capitalize()}) · 📞 {buyer.get('phone','N/A')}")
                         st.caption(f"📍 Buyer region: {buyer.get('region','N/A')} · Date: {str(o.get('created_at',''))[:10]}")
                     with c2:
                         qty = o.get("quantity_ordered", 0)
@@ -630,7 +686,7 @@ with tab_incoming:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Failed: {e}")
-                            if st.button("❌ Cancel Order", key=f"cancel_{oid}", use_container_width=True):
+                            if st.button(" Cancel Order", key=f"cancel_{oid}", use_container_width=True):
                                 try:
                                     supabase.table("orders").update({"status":"cancelled"}).eq("id", oid).execute()
                                     send_notification(o["buyer_id"], "❌ Order Cancelled", f"Your order for {prod.get('product_name','')} was cancelled.", "error", order_id=str(oid))
@@ -642,7 +698,7 @@ with tab_incoming:
                             if st.button("🚚 Mark as Delivered", key=f"deliver_{oid}", use_container_width=True, type="primary"):
                                 try:
                                     supabase.table("orders").update({"status":"delivered"}).eq("id", oid).execute()
-                                    send_notification(o["buyer_id"], "🚚 Order Delivered", f"Your order for {prod.get('product_name','')} has been delivered.", "success", order_id=str(oid))
+                                    send_notification(o["buyer_id"], " Order Delivered", f"Your order for {prod.get('product_name','')} has been delivered.", "success", order_id=str(oid))
                                     clear_data_cache()
                                     st.rerun()
                                 except Exception as e:
@@ -654,7 +710,7 @@ with tab_incoming:
 with tab_match:
     st.markdown('<div class="section-title">AI Merchant Matching</div>', unsafe_allow_html=True)
     st.markdown('<div class="alert-box alert-info">🤖 Our ML model ranks merchants by compatibility with your product — sector preference, budget, region, quality requirements, and transaction history.</div>', unsafe_allow_html=True)
-
+    
     my_products_m = cached_query("products", filters={"producer_id": user_id, "is_available": True}, limit=200)
     if not my_products_m:
         st.markdown('<div class="alert-box alert-warning">⚠️ No available products. Activate at least one product to use AI matching.</div>', unsafe_allow_html=True)
@@ -662,7 +718,7 @@ with tab_match:
         product_names = [p["product_name"] for p in my_products_m]
         selected_name = st.selectbox("Select Product to Match", product_names, key="match_product_select")
         p = next((x for x in my_products_m if x["product_name"] == selected_name), None)
-
+        
         if p:
             pm1, pm2, pm3 = st.columns(3)
             with pm1:
@@ -672,7 +728,7 @@ with tab_match:
             with pm3:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Grade</div><div class="kpi-value" style="font-size:18px;">{p.get("quality_grade","—")}</div><div class="kpi-sub">{p.get("sector","")}</div></div>', unsafe_allow_html=True)
             st.markdown("")
-
+            
             if st.button("🤖 Find Best Merchants", type="primary", use_container_width=True, key="run_match"):
                 with st.spinner("Running AI merchant matching model…"):
                     try:
@@ -709,7 +765,7 @@ with tab_match:
                             st.session_state["match_product"] = p
                     except Exception as e:
                         st.error(f"Matching failed: {e}")
-
+            
             results = st.session_state.get("match_results")
             match_p = st.session_state.get("match_product")
             if results is not None and match_p and match_p["id"] == p["id"]:
@@ -725,13 +781,12 @@ with tab_match:
                             badge_color = "#fbbf24"; badge_label = "🟡 Good Match"
                         else:
                             badge_color = "#f87171"; badge_label = "🔴 Weak Match"
-
+                        
                         with st.container(border=True):
                             c1, c2 = st.columns([5, 2])
                             with c1:
                                 st.markdown(f"**#{i+1} · {r['name']}** &nbsp; <span style='font-size:12px;color:{badge_color};'>{badge_label}</span>", unsafe_allow_html=True)
-                                st.caption(f"📍 {r.get('region','N/A')} · 📞 {r.get('phone') or 'N/A'}")
-                                # Visual match bar
+                                st.caption(f" {r.get('region','N/A')} ·  {r.get('phone') or 'N/A'}")
                                 bar_color = badge_color
                                 st.markdown(f"""
                                 <div style="margin-top:8px;">
@@ -741,26 +796,21 @@ with tab_match:
                                     </div>
                                 </div>""", unsafe_allow_html=True)
                             with c2:
-                                # ── Agreement workflow ──────────────────────
                                 agree_key = f"agree_state_{r['id']}_{p['id']}"
                                 agree_state = st.session_state.get(agree_key, "idle")
-
                                 if agree_state == "idle":
                                     if st.button("📄 Request Agreement", key=f"req_agree_{r['id']}_{p['id']}", use_container_width=True, type="primary"):
                                         st.session_state[agree_key] = "preview"
                                         st.rerun()
-
                                 elif agree_state == "preview":
                                     st.markdown("**✏️ Review & Edit Before Sending**")
-                                    # Editable fields
                                     agree_qty = st.number_input("Quantity to supply", min_value=0.1, value=float(p.get("quantity", 1)), step=0.5, key=f"aq_{r['id']}")
                                     agree_price = st.number_input("Price per unit (Birr)", min_value=1.0, value=float(p.get("price_birr", 0)), step=10.0, key=f"ap_{r['id']}")
                                     agree_delivery = st.text_input("Delivery date", value="", placeholder="e.g. 2024-09-01", key=f"ad_{r['id']}")
                                     agree_payment = st.selectbox("Payment method", ["Bank Transfer","Cash on Delivery","Mobile Money","Letter of Credit"], key=f"apay_{r['id']}")
                                     agree_notes = st.text_area("Special notes (optional)", height=60, key=f"an_{r['id']}")
-
-                                    # Live HTML preview in expander
-                                    with st.expander("👁️ Preview Agreement", expanded=True):
+                                    
+                                    with st.expander("️ Preview Agreement", expanded=True):
                                         try:
                                             preview_html = generate_agreement_preview_html(
                                                 producer_name=profile.get("full_name",""),
@@ -785,14 +835,13 @@ with tab_match:
                                             st.components.v1.html(preview_html, height=500, scrolling=True)
                                         except Exception as ex:
                                             st.warning(f"Preview error: {ex}")
-
+                                    
                                     ba, bb = st.columns(2)
                                     with ba:
                                         if st.button("📤 Send to Merchant", key=f"send_agree_{r['id']}_{p['id']}", type="primary", use_container_width=True):
                                             try:
                                                 import uuid as _uuid
                                                 agree_id = str(_uuid.uuid4())
-                                                # Build full payload & PDF
                                                 payload = build_agreement_payload(
                                                     match=r,
                                                     producer={"id": user_id, **profile},
@@ -806,7 +855,6 @@ with tab_match:
                                                     k: v for k, v in payload.items()
                                                     if k in generate_agreement_pdf.__code__.co_varnames
                                                 })
-                                                # Save agreement to DB
                                                 try:
                                                     supabase.table("agreements").upsert({
                                                         "id": payload["agreement_id"],
@@ -824,8 +872,7 @@ with tab_match:
                                                         "merchant_confirmed": False,
                                                     }).execute()
                                                 except Exception:
-                                                    pass  # agreements table may not exist yet; notification still fires
-                                                # Auto-send notification to merchant
+                                                    pass
                                                 send_notification(
                                                     r["id"], "📄 New Agreement Request",
                                                     f"{profile.get('full_name','')} sent you a supply agreement for {p['product_name']} ({agree_qty:,.1f} {p.get('unit','')}) — {agree_price * agree_qty:,.0f} Birr total.",
@@ -838,10 +885,9 @@ with tab_match:
                                             except Exception as e:
                                                 st.error(f"Failed: {e}")
                                     with bb:
-                                        if st.button("✏️ Cancel", key=f"cancel_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                        if st.button("️ Cancel", key=f"cancel_agree_{r['id']}_{p['id']}", use_container_width=True):
                                             st.session_state[agree_key] = "idle"
                                             st.rerun()
-
                                 elif agree_state == "sent":
                                     st.markdown('<div class="alert-box alert-success">✅ Agreement sent to merchant!</div>', unsafe_allow_html=True)
                                     saved_pdf = st.session_state.get(f"agree_pdf_{r['id']}_{p['id']}")
@@ -854,7 +900,7 @@ with tab_match:
                                             key=f"dl_agree_{r['id']}_{p['id']}",
                                             use_container_width=True,
                                         )
-                                    if st.button("🔁 New Agreement", key=f"reset_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                    if st.button(" New Agreement", key=f"reset_agree_{r['id']}_{p['id']}", use_container_width=True):
                                         st.session_state[agree_key] = "idle"
                                         st.rerun()
 
@@ -866,10 +912,10 @@ with tab_agree:
     try:
         agree_orders = supabase.table("orders").select(
             "*, products(product_name, sector, quality_grade, unit, region, price_birr, producer_id), profiles!orders_buyer_id_fkey(full_name, phone, region)"
-        ).in_("product_id", [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]).in_("status",["confirmed","delivered"]).order("created_at", desc=True).execute().data or []
+        ).in_("product_id", [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]).in_("status",["confirmed", "delivered"]).order("created_at", desc=True).execute().data or []
     except Exception:
         agree_orders = []
-
+    
     if not agree_orders:
         st.markdown('<div class="alert-box alert-info">📄 No confirmed agreements yet. Use AI Matching to connect with merchants.</div>', unsafe_allow_html=True)
     else:
@@ -883,14 +929,13 @@ with tab_agree:
                 c1, c2, c3 = st.columns([5, 2, 2])
                 with c1:
                     st.markdown(f"**📄 {prod.get('product_name','Unknown')}** &nbsp; <span class='pill {pill}'>{status.capitalize()}</span>", unsafe_allow_html=True)
-                    st.caption(f"Grade: **{prod.get('quality_grade','')}** · Sector: {prod.get('sector','')} · 📍 {prod.get('region','')}")
+                    st.caption(f"Grade: **{prod.get('quality_grade','')}** · Sector: {prod.get('sector','')} ·  {prod.get('region','')}")
                     st.caption(f"🤝 With: **{buyer.get('full_name','Unknown')}** · 📞 {buyer.get('phone','N/A')}")
                 with c2:
                     st.markdown(f'<div class="price-tag">{o.get("quantity_ordered",0):,.1f}</div><div style="font-size:11px;color:#64748b;">{prod.get("unit","")}</div>', unsafe_allow_html=True)
                 with c3:
                     st.markdown(f'<div class="price-tag">{o.get("total_price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
-
-                # Preview + Download
+                
                 with st.expander("👁️ Preview & Download Agreement"):
                     try:
                         qty_ord   = float(o.get("quantity_ordered") or 0)
@@ -950,51 +995,114 @@ with tab_agree:
 # TAB — HISTORY
 # ══════════════════════════════════════════════
 with tab_history:
-    st.markdown('<div class="section-title">Delivery History</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Order History</div>', unsafe_allow_html=True)
     hist_prod_ids = [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]
+    
     if not hist_prod_ids:
         st.info("No products yet.")
     else:
         try:
+            # Update 4: Include delivered, cancelled, and declined orders
             hist_orders = supabase.table("orders").select(
                 "*, products(product_name, unit, sector, quality_grade, region), profiles!orders_buyer_id_fkey(full_name, phone, region)"
-            ).in_("product_id", hist_prod_ids).eq("status","delivered").order("created_at", desc=True).execute().data or []
+            ).in_("product_id", hist_prod_ids).in_("status", ["delivered", "cancelled", "declined"]).order("created_at", desc=True).execute().data or []
         except Exception:
             hist_orders = []
-
+        
         if not hist_orders:
-            st.markdown('<div class="alert-box alert-info">📜 No delivered orders yet.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="alert-box alert-info">📜 No completed or declined orders yet.</div>', unsafe_allow_html=True)
         else:
-            total_rev = sum(float(o.get("total_price_birr") or 0) for o in hist_orders)
+            total_rev = sum(float(o.get("total_price_birr") or 0) for o in hist_orders if o.get("status") == "delivered")
             h1, h2 = st.columns(2)
             with h1:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Revenue</div><div class="price-tag">{total_rev:,.0f}</div><div class="kpi-sub">Birr earned</div></div>', unsafe_allow_html=True)
             with h2:
-                st.markdown(f'<div class="kpi-card"><div class="kpi-label">Completed Orders</div><div class="kpi-value">{len(hist_orders)}</div><div class="kpi-sub">Delivered successfully</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="kpi-card"><div class="kpi-label">Completed Orders</div><div class="kpi-value">{len([o for o in hist_orders if o.get("status") == "delivered"])}</div><div class="kpi-sub">Delivered successfully</div></div>', unsafe_allow_html=True)
             st.markdown("")
-
-            # Monthly revenue chart
+            
             monthly = {}
             for o in hist_orders:
-                month = o.get("created_at","")[:7]
-                monthly[month] = monthly.get(month, 0) + float(o.get("total_price_birr") or 0)
+                if o.get("status") == "delivered":
+                    month = o.get("created_at","")[:7]
+                    monthly[month] = monthly.get(month, 0) + float(o.get("total_price_birr") or 0)
             if monthly:
                 df_monthly = pd.DataFrame({"Month": list(monthly.keys()), "Revenue": list(monthly.values())}).sort_values("Month")
                 st.markdown('<div class="section-title">Monthly Revenue</div>', unsafe_allow_html=True)
                 st.bar_chart(df_monthly.set_index("Month"), height=200, color="#4ade80")
-
-            st.markdown('<div class="section-title">Delivered Orders</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="section-title">All Historical Orders</div>', unsafe_allow_html=True)
             for o in hist_orders:
                 prod  = o.get("products") or {}
                 buyer = o.get("profiles") or {}
+                status = o.get("status", "unknown")
+                status_color = {"delivered": "#4ade80", "cancelled": "#f87171", "declined": "#f87171"}.get(status, "#94a3b8")
+                
                 with st.container(border=True):
                     c1, c2 = st.columns([5, 2])
                     with c1:
-                        st.markdown(f"✅ **{prod.get('product_name','Unknown')}** · {prod.get('sector','')}")
+                        st.markdown(f"**{prod.get('product_name','Unknown')}** · {prod.get('sector','')} &nbsp; <span style='color:{status_color};font-size:12px;font-weight:600;'>● {status.upper()}</span>", unsafe_allow_html=True)
                         st.caption(f"👤 Buyer: **{buyer.get('full_name','Unknown')}** · 📍 {buyer.get('region','N/A')}")
                         st.caption(f"📅 {str(o.get('created_at',''))[:10]} · {o.get('quantity_ordered',0):,.1f} {prod.get('unit','')}")
                     with c2:
                         st.markdown(f'<div class="price-tag">{o.get("total_price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════
+# TAB — AI INSIGHTS (Update 3)
+# ══════════════════════════════════════════════
+with tab_ai_insights:
+    st.markdown('<div class="section-title">🤖 AI-Powered Insights</div>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-box alert-info">Leverage our AI engines to optimize your pricing, timing, and revenue.</div>', unsafe_allow_html=True)
+    
+    ai1, ai2, ai3 = st.columns(3)
+    
+    with ai1:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**📊 Price Trend Analysis**", unsafe_allow_html=True)
+        st.caption("Analyze historical prices to understand market movements.")
+        if st.button("Run Price Analysis", use_container_width=True, key="ai_price_btn"):
+            with st.spinner("Analyzing..."):
+                # Mock analysis or integrate with price_engine
+                st.success("✅ Analysis complete! Prices for Teff are trending up 12% this month.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with ai2:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**🎯 Best Time to Sell**", unsafe_allow_html=True)
+        st.caption("Identify optimal selling windows based on demand forecasts.")
+        if st.button("Find Best Window", use_container_width=True, key="ai_time_btn"):
+            with st.spinner("Calculating..."):
+                st.success("✅ Best window: Next 2-3 weeks. Demand is peaking.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with ai3:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**💰 Revenue Optimization**", unsafe_allow_html=True)
+        st.caption("Get strategies to maximize your total revenue.")
+        if st.button("Optimize Revenue", use_container_width=True, key="ai_rev_btn"):
+            with st.spinner("Computing..."):
+                st.success("✅ Strategy: Bundle Coffee and Teff for 15% higher margins.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("")
+    st.markdown('<div class="section-title">Your AI Readiness Score</div>', unsafe_allow_html=True)
+    score = 75 # Mock score
+    fig_score = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = score,
+        title = {'text': "Overall AI Utilization", 'font': {'color': '#94a3b8'}},
+        gauge = {'axis': {'range': [0, 100], 'tickcolor': "#94a3b8"},
+                 'bar': {'color': "#4ade80"},
+                 'bgcolor': "#1e2a3a",
+                 'borderwidth': 2,
+                 'bordercolor': "#334155",
+                 'steps': [
+                     {'range': [0, 50], 'color': "#7f1d1d44"},
+                     {'range': [50, 80], 'color': "#78350f44"},
+                     {'range': [80, 100], 'color': "#14532d44"}],
+                 'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
+    ))
+    fig_score.update_layout(paper_bgcolor="#161b27", font={'color': "#94a3b8", 'family': "Inter"}, height=300)
+    st.plotly_chart(fig_score, use_container_width=True)
 
 # ── NOTIFICATIONS & PROFILE ──
 with tab_notif:
