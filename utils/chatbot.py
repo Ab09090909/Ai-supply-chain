@@ -2,6 +2,7 @@
 import os
 import json
 import streamlit as st
+import streamlit.components.v1 as components
 from groq import Groq
 
 # Initialize Groq client (Free)
@@ -50,46 +51,92 @@ groq_tools = [
 ]
 
 # ─────────────────────────────────────────────
+# JS INJECTOR — styles the real Streamlit buttons by their visible text
+# instead of relying on Streamlit's internal (version-dependent) DOM class
+# names. components.html renders in a same-origin iframe, so it can reach
+# back into window.parent.document and style the actual page.
+# ─────────────────────────────────────────────
+def inject_widget_js():
+    components.html("""
+    <script>
+    function styleChatWidget() {
+        try {
+            const doc = window.parent.document;
+            const buttons = doc.querySelectorAll('button');
+            buttons.forEach(function(btn) {
+                const txt = (btn.innerText || '').trim();
+
+                if (txt === '\\ud83d\\udcac') { // 💬 FAB toggle
+                    btn.style.setProperty('position', 'fixed', 'important');
+                    btn.style.setProperty('top', '20px', 'important');
+                    btn.style.setProperty('right', '24px', 'important');
+                    btn.style.setProperty('left', 'auto', 'important');
+                    btn.style.setProperty('z-index', '999999', 'important');
+                    btn.style.setProperty('width', '56px', 'important');
+                    btn.style.setProperty('height', '56px', 'important');
+                    btn.style.setProperty('border-radius', '50%', 'important');
+                    btn.style.setProperty('background', 'linear-gradient(135deg, #D4A017 0%, #F4C430 100%)', 'important');
+                    btn.style.setProperty('color', '#1B4332', 'important');
+                    btn.style.setProperty('font-size', '26px', 'important');
+                    btn.style.setProperty('border', 'none', 'important');
+                    btn.style.setProperty('padding', '0', 'important');
+                    btn.style.setProperty('box-shadow', '0 6px 20px rgba(0,0,0,0.4)', 'important');
+                    btn.style.setProperty('cursor', 'pointer', 'important');
+                    // collapse ancestor wrapper divs so they don't reserve empty flow space
+                    let p = btn.parentElement;
+                    for (let i = 0; i < 5 && p; i++) {
+                        p.style.setProperty('position', 'static', 'important');
+                        p.style.setProperty('width', 'auto', 'important');
+                        p.style.setProperty('min-width', '0px', 'important');
+                        p = p.parentElement;
+                    }
+                } else if (txt === '\\ud83e\\uddf9') { // 🧹 clear
+                    btn.style.setProperty('background', 'rgba(255,255,255,0.12)', 'important');
+                    btn.style.setProperty('border', '1px solid rgba(255,255,255,0.22)', 'important');
+                    btn.style.setProperty('color', '#ffffff', 'important');
+                    btn.style.setProperty('width', '30px', 'important');
+                    btn.style.setProperty('height', '30px', 'important');
+                    btn.style.setProperty('min-width', '30px', 'important');
+                    btn.style.setProperty('border-radius', '8px', 'important');
+                    btn.style.setProperty('padding', '0', 'important');
+                } else if (txt === '\\u2715') { // ✕ close
+                    btn.style.setProperty('background', 'rgba(239,68,68,0.18)', 'important');
+                    btn.style.setProperty('border', '1px solid rgba(239,68,68,0.35)', 'important');
+                    btn.style.setProperty('color', '#ffffff', 'important');
+                    btn.style.setProperty('width', '30px', 'important');
+                    btn.style.setProperty('height', '30px', 'important');
+                    btn.style.setProperty('min-width', '30px', 'important');
+                    btn.style.setProperty('border-radius', '8px', 'important');
+                    btn.style.setProperty('padding', '0', 'important');
+                }
+            });
+        } catch (e) {
+            console.error('chat widget styling error', e);
+        }
+    }
+
+    styleChatWidget();
+    try {
+        const observer = new MutationObserver(function() { styleChatWidget(); });
+        observer.observe(window.parent.document.body, { childList: true, subtree: true });
+    } catch (e) {}
+    setInterval(styleChatWidget, 400);
+    </script>
+    """, height=0, width=0)
+
+# ─────────────────────────────────────────────
 # RENDER THE FLOATING CHATBOT UI
 # ─────────────────────────────────────────────
 def render_floating_chatbot(user_profile):
-    # 1. Inject CSS — fixed TOP-RIGHT positioning + polished visual design
+    # 1. Inject CSS — visual styling for elements we render ourselves
     st.markdown("""
     <style>
-    /* ── Floating Action Button (FAB) - Fixed Top Right ──
-       Streamlit does not expose key="..." as a real HTML attribute on the
-       button element, so it must be targeted via the auto-generated
-       st-key-<key> class on the widget's wrapper div instead. */
-    div[class*="st-key-fab_chat_toggle"] {
-        position: fixed !important;
-        top: 20px !important;
-        right: 24px !important;
-        left: auto !important;
-        z-index: 999999 !important;
-        width: 56px !important;
-        height: 56px !important;
-    }
-    div[class*="st-key-fab_chat_toggle"] > div,
-    div[class*="st-key-fab_chat_toggle"] .stButton {
-        width: 56px !important;
-        height: 56px !important;
-    }
-    div[class*="st-key-fab_chat_toggle"] button {
-        width: 56px !important;
-        height: 56px !important;
-        background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
-        color: #1B4332 !important;
-        border-radius: 50% !important;
-        font-size: 26px !important;
-        padding: 0 !important;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important;
-        border: none !important;
-        transition: transform 0.2s ease !important;
-    }
-    div[class*="st-key-fab_chat_toggle"] button:hover {
-        transform: scale(1.08) !important;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
-    }
+    /* Floating Action Button, header icon buttons, and the chat window are
+
+       positioned/styled via JavaScript (see inject_widget_js below) because
+       Streamlit's internal DOM class names for keyed widgets vary between
+       versions and cannot be relied on for CSS targeting. This <style>
+       block only covers plain HTML we render ourselves. */
 
     /* ── Label Under Icon ── */
     .chatbot-label {
@@ -111,11 +158,10 @@ def render_floating_chatbot(user_profile):
     }
 
     /* ── Chat Window - Fixed Below Button (Top Right) ──
-       :has() targets the nearest real ancestor block that contains the
-       .floating-chat-box marker div, which is what actually needs to be
-       pinned to the viewport (the marker div itself has no box). */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.floating-chat-box),
-    div[data-testid="stVerticalBlock"]:has(> div.floating-chat-box) {
+       This div is one we render ourselves, so it can be targeted directly
+       with a plain class selector — no dependency on Streamlit's internal
+       DOM structure. */
+    .floating-chat-box {
         position: fixed !important;
         top: 112px !important;
         right: 24px !important;
@@ -123,10 +169,6 @@ def render_floating_chatbot(user_profile):
         width: 380px !important;
         height: 560px !important;
         z-index: 999998 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    .floating-chat-box {
         background: #12161f;
         border: 1px solid #2a3344;
         border-radius: 18px;
@@ -134,7 +176,6 @@ def render_floating_chatbot(user_profile):
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        height: 100%;
         animation: chatFadeIn 0.2s ease-out;
     }
     @keyframes chatFadeIn {
@@ -161,42 +202,10 @@ def render_floating_chatbot(user_profile):
     .chat-header-status { font-size: 11px; color: #B7E4C7; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; display: inline-block; box-shadow: 0 0 6px #4ADE80; }
 
-    /* Header icon buttons (Clear / Close) rendered via st.button inside header row.
-       Same fix as the FAB: target the real st-key-<key> wrapper class. */
+    /* Header icon buttons (Clear / Close) — sized/colored via JS injection
+       (inject_widget_js), which targets them by their button text ("🧹" /
+       "✕") instead of relying on Streamlit's internal class names. */
     div[data-testid="stHorizontalBlock"]:has(.header-anchor) { align-items: center !important; }
-
-    div[class*="st-key-clear_chat_icon"] button,
-    div[class*="st-key-close_chat_icon"] button {
-        background: rgba(255,255,255,0.12) !important;
-        border: 1px solid rgba(255,255,255,0.22) !important;
-        color: #ffffff !important;
-        font-size: 14px !important;
-        padding: 0 !important;
-        margin: 0 auto !important;
-        min-height: 30px !important;
-        max-height: 30px !important;
-        width: 30px !important;
-        min-width: 30px !important;
-        max-width: 30px !important;
-        border-radius: 8px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        transition: all 0.2s !important;
-    }
-    div[class*="st-key-clear_chat_icon"] button:hover,
-    div[class*="st-key-close_chat_icon"] button:hover {
-        background: rgba(255,255,255,0.25) !important;
-        border-color: rgba(255,255,255,0.45) !important;
-    }
-    div[class*="st-key-close_chat_icon"] button {
-        background: rgba(239,68,68,0.18) !important;
-        border-color: rgba(239,68,68,0.35) !important;
-    }
-    div[class*="st-key-close_chat_icon"] button:hover {
-        background: rgba(239,68,68,0.35) !important;
-        border-color: rgba(239,68,68,0.55) !important;
-    }
 
     /* ── Message Area ── */
     .chat-messages-area {
@@ -273,6 +282,9 @@ def render_floating_chatbot(user_profile):
     if st.button("💬", key="fab_chat_toggle"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
+
+    # 3b. Apply JS-based styling/positioning (version-independent, see inject_widget_js)
+    inject_widget_js()
 
     # 4. Render the Label Under the Icon
     st.markdown('<div class="chatbot-label">Assistant AI</div>', unsafe_allow_html=True)
