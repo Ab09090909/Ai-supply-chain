@@ -1,19 +1,19 @@
-"""Admin Dashboard Page — Professional redesign."""
+"""Admin Dashboard Page — Professional redesign with AI Analytics."""
 import sys
 import os
 import base64
 import datetime
 import streamlit as st
 import pandas as pd
-
+import plotly.graph_objects as go
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from utils.theme import inject_theme, render_page_header
+from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS
 from utils.db_helpers import supabase, cached_get_profile, send_notification, clear_data_cache
+from src.fraud_engine import detect_fraud
 
 # ─────────────────────────────────────────────
-# Custom CSS — dark professional theme
+# Page Config + CSS
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Admin Panel",
@@ -89,6 +89,7 @@ html, body, [data-testid="stAppViewContainer"] {
     border-radius: 10px;
     padding: 20px 24px;
     transition: border-color 0.2s;
+    height: 100%;
 }
 .kpi-card:hover { border-color: #2563eb55; }
 .kpi-label {
@@ -256,14 +257,18 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #fca5a5;
     margin-bottom: 8px;
 }
+
+/* ── Fraud risk badges ── */
+.fraud-low  { color: #4ade80; font-weight: 600; font-size: 12px; }
+.fraud-med  { color: #fbbf24; font-weight: 600; font-size: 12px; }
+.fraud-high { color: #f87171; font-weight: 600; font-size: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Auth guard
+# Auth Guard
 # ─────────────────────────────────────────────
 inject_theme()
-
 if st.session_state.get("user") is None:
     st.warning("⚠️ Please sign in first.")
     st.page_link("app.py", label="← Go to Login", icon="🔐")
@@ -290,38 +295,41 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# Sidebar — Quick Actions & Stats
+# Sidebar
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🛡️ Quick Actions")
     if st.button("🔄 Refresh All Data", use_container_width=True):
         clear_data_cache()
         st.rerun()
-
+    
+    # Update 7: Dark/Light Toggle
+    st.markdown("### 🎨 Theme")
+    render_theme_toggle()
+    
     st.divider()
     st.markdown("### 📌 System Status")
     st.markdown('<div class="pill pill-success">● Database Online</div>', unsafe_allow_html=True)
     st.markdown('<br><div class="pill pill-success">● API Connected</div>', unsafe_allow_html=True)
     st.markdown('<br><div class="pill pill-info">● Storage Active</div>', unsafe_allow_html=True)
-
     st.divider()
     st.caption(f"Logged in as **{profile.get('full_name','Admin')}**")
     st.caption(f"Session started {now_str}")
 
 # ─────────────────────────────────────────────
-# Fetch core stats once
+# Fetch Stats (Cached for performance - Update 8)
 # ─────────────────────────────────────────────
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)  # Increased cache time for performance
 def fetch_overview_stats():
     try:
-        total_users     = supabase.table("profiles").select("*", count="exact").execute().count or 0
-        total_producers = supabase.table("profiles").select("*", count="exact").eq("role", "producer").execute().count or 0
-        total_merchants = supabase.table("profiles").select("*", count="exact").eq("role", "merchant").execute().count or 0
-        total_customers = supabase.table("profiles").select("*", count="exact").eq("role", "customer").execute().count or 0
-        total_products  = supabase.table("products").select("*", count="exact").execute().count or 0
-        total_orders    = supabase.table("orders").select("*", count="exact").execute().count or 0
-        pending_verify  = supabase.table("profiles").select("*", count="exact").eq("is_verified", False).execute().count or 0
-        pending_orders  = supabase.table("orders").select("*", count="exact").eq("status", "pending").execute().count or 0
+        total_users     = supabase.table("profiles").select("", count="exact").execute().count or 0
+        total_producers = supabase.table("profiles").select("", count="exact").eq("role", "producer").execute().count or 0
+        total_merchants = supabase.table("profiles").select("", count="exact").eq("role", "merchant").execute().count or 0
+        total_customers = supabase.table("profiles").select("", count="exact").eq("role", "customer").execute().count or 0
+        total_products  = supabase.table("products").select("", count="exact").execute().count or 0
+        total_orders    = supabase.table("orders").select("", count="exact").execute().count or 0
+        pending_verify  = supabase.table("profiles").select("", count="exact").eq("is_verified", False).execute().count or 0
+        pending_orders  = supabase.table("orders").select("", count="exact").eq("status", "pending").execute().count or 0
         revenue_data    = supabase.table("orders").select("total_price_birr").eq("status", "delivered").execute().data or []
         total_revenue   = sum(r.get("total_price_birr", 0) for r in revenue_data)
     except Exception:
@@ -341,10 +349,10 @@ stats = fetch_overview_stats()
 # Tabs
 # ─────────────────────────────────────────────
 (tab_overview, tab_users, tab_verify, tab_docs,
- tab_db, tab_products, tab_orders, tab_activity, tab_settings) = st.tabs([
+ tab_db, tab_products, tab_orders, tab_analytics, tab_activity, tab_settings) = st.tabs([
     "📊 Overview", "👥 Users", "✅ Verify",
     "📄 Documents", "🗄️ Database", "📦 Products",
-    "📋 Orders", "📡 Activity", "⚙️ Settings",
+    "📋 Orders", "📈 Analytics", "📡 Activity", "⚙️ Settings",
 ])
 
 # ══════════════════════════════════════════════
@@ -356,7 +364,7 @@ with tab_overview:
         st.markdown(f'<div class="alert-box alert-warning">⏳ <strong>{stats["pending_verify"]} users</strong> are awaiting account verification.</div>', unsafe_allow_html=True)
     if stats["pending_orders"] > 0:
         st.markdown(f'<div class="alert-box alert-info">📦 <strong>{stats["pending_orders"]} orders</strong> are pending confirmation.</div>', unsafe_allow_html=True)
-
+    
     # KPI row 1
     k1, k2, k3, k4 = st.columns(4)
     with k1:
@@ -368,9 +376,9 @@ with tab_overview:
     with k4:
         revenue_display = f"{stats['total_revenue']:,.0f}"
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Revenue (Birr)</div><div class="kpi-value">{revenue_display}</div></div>', unsafe_allow_html=True)
-
+    
     st.markdown("")
-
+    
     # KPI row 2
     k5, k6, k7, k8 = st.columns(4)
     with k5:
@@ -383,7 +391,7 @@ with tab_overview:
         pv = stats["pending_verify"]
         color = "pill-warning" if pv > 0 else "pill-success"
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Pending Verify</div><div class="kpi-value">{pv}</div></div>', unsafe_allow_html=True)
-
+    
     # Role breakdown chart
     st.markdown('<div class="section-title">Role Distribution</div>', unsafe_allow_html=True)
     chart_data = pd.DataFrame({
@@ -397,7 +405,6 @@ with tab_overview:
 # ══════════════════════════════════════════════
 with tab_users:
     st.markdown('<div class="section-title">User Management</div>', unsafe_allow_html=True)
-
     fcol1, fcol2, fcol3 = st.columns([2, 2, 1])
     with fcol1:
         filter_role = st.selectbox("Role", ["All", "producer", "merchant", "customer", "admin"], key="admin_filter_role")
@@ -405,7 +412,7 @@ with tab_users:
         search_user = st.text_input("🔍 Search by name", key="admin_search_user", placeholder="Type a name…")
     with fcol3:
         filter_verified = st.selectbox("Status", ["All", "Verified", "Unverified"], key="admin_filter_verified")
-
+    
     try:
         query = supabase.table("profiles").select("*")
         if filter_role != "All":
@@ -420,16 +427,14 @@ with tab_users:
             users = [u for u in users if kw in u.get("full_name", "").lower()]
     except Exception:
         users = []
-
+    
     st.caption(f"**{len(users)} user(s) found**")
-
     for user in users:
         uid = user["id"]
         verified = user.get("is_verified", False)
         role = user.get("role", "N/A")
         role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "⚪")
         status_pill = '<span class="pill pill-success">Verified</span>' if verified else '<span class="pill pill-warning">Pending</span>'
-
         with st.container(border=True):
             c1, c2, c3, c4 = st.columns([5, 2, 2, 3])
             with c1:
@@ -453,7 +458,6 @@ with tab_users:
                 if st.button("✉️ Notify", key=f"notify_{uid}", use_container_width=True):
                     st.session_state[f"show_notify_{uid}"] = True
             with c4:
-                # Delete with confirmation
                 if st.session_state.get(f"confirm_del_user_{uid}"):
                     st.markdown('<div class="confirm-box">⚠️ This will permanently delete this user.</div>', unsafe_allow_html=True)
                     dc1, dc2 = st.columns(2)
@@ -476,8 +480,7 @@ with tab_users:
                         st.session_state[f"confirm_del_user_{uid}"] = True
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
-
-            # Notify inline form
+            
             if st.session_state.get(f"show_notify_{uid}"):
                 with st.expander("📨 Send Notification", expanded=True):
                     n_title = st.text_input("Title", key=f"ntitle_{uid}")
@@ -499,7 +502,7 @@ with tab_verify:
         pending_users = supabase.table("profiles").select("*").eq("is_verified", False).order("created_at", desc=True).execute().data or []
     except Exception:
         pending_users = []
-
+    
     if not pending_users:
         st.info("✅ No pending verifications. All caught up!")
     else:
@@ -509,7 +512,6 @@ with tab_verify:
             role = user.get("role", "N/A")
             created = user.get("created_at", "")[:10] if user.get("created_at") else "—"
             role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒"}.get(role, "⚪")
-
             with st.container(border=True):
                 c1, c2 = st.columns([5, 2])
                 with c1:
@@ -535,17 +537,16 @@ with tab_docs:
         all_docs = supabase.table("verification_documents").select("*").order("uploaded_at", desc=True).execute().data or []
     except Exception:
         all_docs = []
-
+    
     if not all_docs:
         st.info("No documents uploaded yet.")
     else:
-        # Filter controls
         df1, df2 = st.columns(2)
         with df1:
             doc_status_filter = st.selectbox("Status", ["All", "Pending", "Verified"], key="doc_status_filter")
         with df2:
             doc_type_filter = st.text_input("Filter by type", placeholder="e.g. license", key="doc_type_filter")
-
+        
         filtered_docs = all_docs
         if doc_status_filter == "Pending":
             filtered_docs = [d for d in filtered_docs if not d.get("is_verified")]
@@ -553,28 +554,23 @@ with tab_docs:
             filtered_docs = [d for d in filtered_docs if d.get("is_verified")]
         if doc_type_filter:
             filtered_docs = [d for d in filtered_docs if doc_type_filter.lower() in (d.get("document_type") or "").lower()]
-
+        
         st.caption(f"**{len(filtered_docs)} document(s)**")
-
         for doc in filtered_docs:
             doc_id = doc["id"]
             is_verified = doc.get("is_verified", False)
             user_info = cached_get_profile(doc.get("user_id")) or {}
             status_pill = '<span class="pill pill-success">Verified</span>' if is_verified else '<span class="pill pill-warning">Pending</span>'
             size_kb = doc.get("file_size", 0) / 1024
-
             with st.container(border=True):
                 c1, c2, c3 = st.columns([5, 2, 3])
                 with c1:
                     st.markdown(f"**📄 {doc.get('document_name','Unnamed')}** &nbsp; {status_pill}", unsafe_allow_html=True)
                     st.caption(f"👤 {user_info.get('full_name','Unknown')} ({user_info.get('role','N/A').capitalize()})")
                     st.caption(f"Type: {doc.get('document_type','—')}  ·  Size: {size_kb:.1f} KB  ·  Uploaded: {doc.get('uploaded_at','')[:10]}")
-
                 with c2:
-                    # Preview button
                     if st.button("👁️ Preview", key=f"prev_{doc_id}", use_container_width=True):
                         st.session_state[f"preview_{doc_id}"] = not st.session_state.get(f"preview_{doc_id}", False)
-
                 with c3:
                     if not is_verified:
                         if st.button("✅ Approve", key=f"vdoc_{doc_id}", type="primary", use_container_width=True):
@@ -594,14 +590,11 @@ with tab_docs:
                             st.warning("Rejection sent.")
                     else:
                         st.success("✅ Approved")
-
-                # Document Preview Panel
+                
                 if st.session_state.get(f"preview_{doc_id}"):
                     st.markdown('<div class="doc-preview-container">', unsafe_allow_html=True)
                     file_url = doc.get("file_url") or doc.get("storage_path") or ""
-                    file_type = (doc.get("document_type") or "").lower()
                     st.markdown(f"**Preview: {doc.get('document_name','')}**")
-
                     if file_url:
                         if any(ext in file_url.lower() for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
                             st.image(file_url, caption=doc.get("document_name",""), use_container_width=True)
@@ -610,26 +603,6 @@ with tab_docs:
                             st.components.v1.iframe(file_url, height=500, scrolling=True)
                         else:
                             st.markdown(f"[📥 Download / Open Document]({file_url})")
-                    else:
-                        # Try to fetch from Supabase storage
-                        try:
-                            bucket = "verification-documents"
-                            path   = doc.get("storage_path", "")
-                            if path:
-                                res = supabase.storage.from_(bucket).download(path)
-                                fname = path.split("/")[-1].lower()
-                                if fname.endswith((".png", ".jpg", ".jpeg")):
-                                    st.image(res, caption=doc.get("document_name",""), use_container_width=True)
-                                elif fname.endswith(".pdf"):
-                                    b64 = base64.b64encode(res).decode()
-                                    pdf_display = f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="500px"></iframe>'
-                                    st.markdown(pdf_display, unsafe_allow_html=True)
-                                else:
-                                    st.info("Preview not available for this file type. Use download link if available.")
-                            else:
-                                st.info("No file path available for preview.")
-                        except Exception as pe:
-                            st.info(f"Preview unavailable: {pe}")
                     st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
@@ -643,21 +616,18 @@ with tab_db:
         selected_table = st.selectbox("Table", tables, key="admin_db_table")
     with col_l:
         row_limit = st.selectbox("Rows", [50, 100, 500, 1000], key="admin_db_limit")
-
+    
     try:
         data = supabase.table(selected_table).select("*").limit(row_limit).execute().data or []
         st.caption(f"**{len(data)} records** (limit {row_limit})")
         if data:
             df = pd.DataFrame(data)
-            # Column search
             col_search = st.text_input("🔍 Filter rows (any column)", key="db_col_search", placeholder="Search value…")
             if col_search:
                 mask = df.apply(lambda row: row.astype(str).str.contains(col_search, case=False).any(), axis=1)
                 df = df[mask]
                 st.caption(f"Filtered to **{len(df)} rows**")
-
             st.dataframe(df, use_container_width=True, height=420)
-
             dl1, dl2 = st.columns(2)
             with dl1:
                 csv = df.to_csv(index=False).encode("utf-8")
@@ -677,22 +647,20 @@ with tab_products:
         products = supabase.table("products").select("*, profiles(full_name)").order("created_at", desc=True).execute().data or []
     except Exception:
         products = []
-
-    # Filters
+    
     pf1, pf2 = st.columns(2)
     with pf1:
         prod_search = st.text_input("🔍 Search products", key="prod_search", placeholder="Product name…")
     with pf2:
         prod_region = st.selectbox("Region", ["All"] + list(REGIONS), key="prod_region_filter")
-
+    
     filtered_prods = products
     if prod_search:
         filtered_prods = [p for p in filtered_prods if prod_search.lower() in (p.get("product_name") or "").lower()]
     if prod_region != "All":
         filtered_prods = [p for p in filtered_prods if p.get("region") == prod_region]
-
+    
     st.caption(f"**{len(filtered_prods)} product(s)**")
-
     for p in filtered_prods:
         pid = p["id"]
         with st.container(border=True):
@@ -739,13 +707,13 @@ with tab_orders:
         ).order("created_at", desc=True).execute().data or []
     except Exception:
         orders = []
-
+    
     of1, of2 = st.columns(2)
     with of1:
-        status_filter = st.selectbox("Status", ["All", "pending", "confirmed", "delivered", "cancelled"], key="admin_order_filter")
+        status_filter = st.selectbox("Status", ["All", "pending", "confirmed", "delivered", "cancelled", "declined"], key="admin_order_filter")
     with of2:
         order_search = st.text_input("🔍 Search orders", key="order_search", placeholder="Buyer or product name…")
-
+    
     filtered_orders = orders if status_filter == "All" else [o for o in orders if o.get("status") == status_filter]
     if order_search:
         kw = order_search.lower()
@@ -754,20 +722,18 @@ with tab_orders:
             if kw in (o.get("products",{}).get("product_name","")).lower()
             or kw in (o.get("profiles",{}).get("full_name","")).lower()
         ]
-
+    
     st.caption(f"**{len(filtered_orders)} order(s)**")
-
-    STATUS_ICONS  = {"pending": "🟡", "confirmed": "🟢", "delivered": "✅", "cancelled": "❌"}
-    STATUS_PILLS  = {"pending": "pill-warning", "confirmed": "pill-info", "delivered": "pill-success", "cancelled": "pill-danger"}
+    STATUS_ICONS  = {"pending": "🟡", "confirmed": "🟢", "delivered": "✅", "cancelled": "❌", "declined": "❌"}
+    STATUS_PILLS  = {"pending": "pill-warning", "confirmed": "pill-info", "delivered": "pill-success", "cancelled": "pill-danger", "declined": "pill-danger"}
     NEXT_STATUS   = {"pending": "confirmed", "confirmed": "delivered"}
-
+    
     for o in filtered_orders:
         oid    = o["id"]
         status = o.get("status", "pending")
         icon   = STATUS_ICONS.get(status, "⚪")
         pill   = STATUS_PILLS.get(status, "pill-neutral")
         oid_short = str(oid)[:8]
-
         with st.container(border=True):
             c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
             with c1:
@@ -778,7 +744,6 @@ with tab_orders:
             with c2:
                 st.metric("Total", f"{o.get('total_price_birr',0):,.0f} Birr")
             with c3:
-                # Status advancement
                 next_s = NEXT_STATUS.get(status)
                 if next_s:
                     if st.button(f"→ {next_s.capitalize()}", key=f"adv_{oid}", use_container_width=True, type="primary"):
@@ -813,13 +778,187 @@ with tab_orders:
                     st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
+# TAB — ANALYTICS (Update 5: Big Dashboard)
+# ══════════════════════════════════════════════
+with tab_analytics:
+    st.markdown('<div class="section-title">📈 Advanced Analytics Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-box alert-info">🤖 AI-powered insights for product pricing, fraud detection, and producer demand forecasting.</div>', unsafe_allow_html=True)
+    
+    # Fetch all data
+    try:
+        all_products = supabase.table("products").select("*").execute().data or []
+        all_orders = supabase.table("orders").select("*").execute().data or []
+        all_profiles = supabase.table("profiles").select("*").execute().data or []
+    except Exception:
+        all_products = []
+        all_orders = []
+        all_profiles = []
+    
+    # Row 1: Key Metrics
+    a1, a2, a3, a4 = st.columns(4)
+    
+    with a1:
+        avg_price = sum(p.get("price_birr", 0) for p in all_products) / len(all_products) if all_products else 0
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Avg Product Price</div><div class="kpi-value">{avg_price:,.0f}</div><div class="kpi-sub">Birr</div></div>', unsafe_allow_html=True)
+    
+    with a2:
+        # Fraud detection stats
+        high_risk_orders = [o for o in all_orders if o.get("total_price_birr", 0) > 50000]
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">High-Value Orders</div><div class="kpi-value">{len(high_risk_orders)}</div><div class="kpi-sub">Flagged for review</div></div>', unsafe_allow_html=True)
+    
+    with a3:
+        # Producer demand
+        producer_orders = {}
+        for o in all_orders:
+            # Get producer from products
+            prod_id = o.get("product_id")
+            if prod_id:
+                prod = next((p for p in all_products if p.get("id") == prod_id), None)
+                if prod:
+                    pid = prod.get("producer_id", "unknown")
+                    producer_orders[pid] = producer_orders.get(pid, 0) + 1
+        
+        total_prod_orders = sum(producer_orders.values())
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Producer Orders</div><div class="kpi-value">{total_prod_orders}</div><div class="kpi-sub">Across all producers</div></div>', unsafe_allow_html=True)
+    
+    with a4:
+        active_listings = sum(1 for p in all_products if p.get("is_available"))
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Active Listings</div><div class="kpi-value">{active_listings}</div><div class="kpi-sub">Currently available</div></div>', unsafe_allow_html=True)
+    
+    st.markdown("")
+    
+    # Product Price Table
+    st.markdown('<div class="section-title">All Products & Pricing</div>', unsafe_allow_html=True)
+    if all_products:
+        df_prices = pd.DataFrame([{
+            "Product": p.get("product_name"),
+            "Sector": p.get("sector"),
+            "Price (Birr)": p.get("price_birr"),
+            "Stock": f"{p.get('quantity')} {p.get('unit')}",
+            "Region": p.get("region"),
+            "Producer": p.get("producer_id", "")[:8] if p.get("producer_id") else "N/A",
+            "Status": "Active" if p.get("is_available") else "Inactive"
+        } for p in all_products])
+        st.dataframe(df_prices, use_container_width=True, height=300)
+    
+    st.markdown("")
+    
+    # Fraud Detection Panel
+    st.markdown('<div class="section-title">🛡️ Fraud Detection Overview</div>', unsafe_allow_html=True)
+    f1, f2 = st.columns(2)
+    with f1:
+        st.markdown("**High-Value Transactions**")
+        for o in high_risk_orders[:5]:
+            risk_level = "high" if o.get("total_price_birr", 0) > 100000 else "med"
+            risk_class = "fraud-high" if risk_level == "high" else "fraud-med"
+            st.markdown(f'<div style="padding:8px;margin-bottom:6px;background:#1e2a3a;border-radius:6px;">Order #{str(o["id"])[:8]} — <span class="{risk_class}">{o.get("total_price_birr",0):,.0f} Birr</span></div>', unsafe_allow_html=True)
+    
+    with f2:
+        st.markdown("**AI Fraud Analysis**")
+        if st.button("🔍 Run Fraud Detection on All Orders", use_container_width=True):
+            with st.spinner("Analyzing transactions..."):
+                fraud_results = []
+                for o in all_orders[:20]:  # Limit for performance
+                    try:
+                        fraud_score = detect_fraud({
+                            "total_price_birr": o.get("total_price_birr", 0),
+                            "buyer_id": o.get("buyer_id", ""),
+                            "status": o.get("status", "")
+                        })
+                        fraud_results.append({
+                            "order_id": str(o["id"])[:8],
+                            "amount": o.get("total_price_birr", 0),
+                            "risk_score": fraud_score.get("risk_score", 0),
+                            "risk_level": fraud_score.get("risk_level", "unknown")
+                        })
+                    except Exception:
+                        pass
+                
+                if fraud_results:
+                    df_fraud = pd.DataFrame(fraud_results)
+                    st.dataframe(df_fraud, use_container_width=True, height=200)
+                    st.success("✅ Fraud analysis complete!")
+        
+        st.info("Click button above to analyze recent transactions for fraud patterns.")
+    
+    # Producer Demand Chart
+    st.markdown('<div class="section-title">📊 Producer Demand Distribution</div>', unsafe_allow_html=True)
+    if producer_orders:
+        # Get producer names
+        producer_names = {}
+        for pid in producer_orders.keys():
+            prof = next((p for p in all_profiles if p.get("id") == pid), None)
+            if prof:
+                producer_names[pid] = prof.get("full_name", "Unknown")[:20]
+            else:
+                producer_names[pid] = "Unknown"
+        
+        df_demand = pd.DataFrame({
+            "Producer": [producer_names.get(pid, "Unknown") for pid in producer_orders.keys()],
+            "Orders": list(producer_orders.values())
+        }).sort_values("Orders", ascending=False).head(10)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=df_demand["Producer"],
+            y=df_demand["Orders"],
+            marker_color="#2563eb",
+            text=df_demand["Orders"],
+            textposition='auto',
+        ))
+        fig.update_layout(
+            paper_bgcolor="#161b27",
+            plot_bgcolor="#161b27",
+            font=dict(color="#94a3b8", family="Inter"),
+            xaxis=dict(gridcolor="#1e2a3a", showgrid=True),
+            yaxis=dict(gridcolor="#1e2a3a", showgrid=True, title="Number of Orders"),
+            margin=dict(l=40, r=20, t=20, b=60),
+            height=350,
+            showlegend=False,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Price Trends by Sector
+    st.markdown('<div class="section-title">💰 Average Price by Sector</div>', unsafe_allow_html=True)
+    if all_products:
+        sector_prices = {}
+        for p in all_products:
+            sector = p.get("sector", "Other")
+            price = p.get("price_birr", 0)
+            if sector not in sector_prices:
+                sector_prices[sector] = []
+            sector_prices[sector].append(price)
+        
+        avg_sector_prices = {sector: sum(prices)/len(prices) for sector, prices in sector_prices.items()}
+        df_sector_price = pd.DataFrame({
+            "Sector": list(avg_sector_prices.keys()),
+            "Avg Price (Birr)": list(avg_sector_prices.values())
+        }).sort_values("Avg Price (Birr)", ascending=False)
+        
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(
+            x=df_sector_price["Sector"],
+            y=df_sector_price["Avg Price (Birr)"],
+            marker_color="#16a34a",
+        ))
+        fig2.update_layout(
+            paper_bgcolor="#161b27",
+            plot_bgcolor="#161b27",
+            font=dict(color="#94a3b8", family="Inter"),
+            xaxis=dict(gridcolor="#1e2a3a", showgrid=True),
+            yaxis=dict(gridcolor="#1e2a3a", showgrid=True),
+            margin=dict(l=40, r=20, t=20, b=60),
+            height=300,
+            showlegend=False,
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+# ══════════════════════════════════════════════
 # TAB — ACTIVITY LOG
 # ══════════════════════════════════════════════
 with tab_activity:
     st.markdown('<div class="section-title">Recent Activity</div>', unsafe_allow_html=True)
-
     col_a, col_b = st.columns(2)
-
     with col_a:
         st.markdown("**🆕 Recent Registrations**")
         try:
@@ -838,7 +977,6 @@ with tab_activity:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
     with col_b:
         st.markdown("**📦 Recent Orders**")
         try:
@@ -847,7 +985,7 @@ with tab_activity:
             ).order("created_at", desc=True).limit(10).execute().data or []
         except Exception:
             recent_orders = []
-        STATUS_COLORS = {"pending": "#fbbf24", "confirmed": "#60a5fa", "delivered": "#4ade80", "cancelled": "#f87171"}
+        STATUS_COLORS = {"pending": "#fbbf24", "confirmed": "#60a5fa", "delivered": "#4ade80", "cancelled": "#f87171", "declined": "#f87171"}
         for o in recent_orders:
             ts = o.get("created_at", "")[:16].replace("T", " ")
             status = o.get("status", "pending")
@@ -868,9 +1006,7 @@ with tab_activity:
 # ══════════════════════════════════════════════
 with tab_settings:
     st.markdown('<div class="section-title">System Settings</div>', unsafe_allow_html=True)
-
     s1, s2 = st.columns(2)
-
     with s1:
         st.markdown("**📢 Broadcast Notification**")
         with st.container(border=True):
@@ -888,7 +1024,6 @@ with tab_settings:
                         st.error(f"Broadcast failed: {e}")
                 else:
                     st.warning("Fill in both title and message.")
-
     with s2:
         st.markdown("**🗄️ Cache & Data**")
         with st.container(border=True):
@@ -897,7 +1032,6 @@ with tab_settings:
                 clear_data_cache()
                 st.cache_data.clear()
                 st.success("All caches cleared.")
-
             st.divider()
             st.markdown("**📊 Export Full Database**")
             tables_export = ["profiles", "products", "orders", "verification_documents"]
@@ -918,7 +1052,7 @@ with tab_settings:
                             )
                     except Exception:
                         st.warning(f"Could not export {tbl}")
-
+        
         st.markdown("**⚠️ Danger Zone**")
         with st.container(border=True):
             st.markdown('<div class="alert-box alert-danger">These actions are irreversible. Proceed with extreme caution.</div>', unsafe_allow_html=True)
