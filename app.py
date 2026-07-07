@@ -13,6 +13,8 @@ from utils.auth import sign_in, sign_up, sign_out, forgot_password
 from utils.constants import REGIONS, SECTORS, SESSION_KEYS
 from utils.db_helpers import get_supabase_client, cached_get_profile, cached_unread_count, clear_data_cache
 from utils.verification import check_verification_status
+from models import ensure_models
+ensure_models()
 
 # ═════════════════════════════════════════════════════════════
 # PAGE CONFIG
