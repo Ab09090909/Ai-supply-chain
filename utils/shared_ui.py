@@ -1,12 +1,12 @@
 """Shared UI components used across multiple dashboards."""
 import re as _re
 import base64
-import io
 import streamlit as st
 from utils.constants import REGIONS, SECTORS, UNITS, GRADES_DICT
 from utils.db_helpers import supabase, cached_query, cached_unread_count, clear_data_cache, reduce_product_stock
 from utils.verification import check_verification_status
 from src.fraud_engine import check_fraud_risk
+
 
 def get_grades_for_product(sector, product_name=""):
     sector_lower = sector.lower() if sector else ""
@@ -24,6 +24,7 @@ def get_grades_for_product(sector, product_name=""):
             return GRADES_DICT.get(value, GRADES_DICT["general"])
     return GRADES_DICT["general"]
 
+
 def map_grade_to_db(grade_name):
     if not grade_name:
         return "B"
@@ -35,6 +36,7 @@ def map_grade_to_db(grade_name):
     else:
         return 'C'
 
+
 def get_fraud_risk(sector, product, region, payment_method, quantity, price_birr):
     try:
         return check_fraud_risk(
@@ -45,12 +47,17 @@ def get_fraud_risk(sector, product, region, payment_method, quantity, price_birr
     except Exception:
         return {"risk_level": "Unknown", "is_fraud": 0, "fraud_probability": 0.0}
 
+
 def render_fraud_badge(risk):
-    badge = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}.get(risk.get("risk_level"), "")
+    badge = {"Low": "", "Medium": "🟡", "High": "🔴"}.get(risk.get("risk_level"), "⚪")
     st.caption(f"{badge} Fraud Risk: {risk.get('risk_level', 'Unknown')}")
 
+
+# ─────────────────────────────────────────────
+# NEW: Product Image Renderer (Handles PNG & JPEG)
+# ─────────────────────────────────────────────
 def render_product_image(product, height=150):
-    """Safely render product image from base64."""
+    """Safely render product image from base64. Works for both PNG and JPEG."""
     img_b64 = product.get("image_base64")
     if img_b64:
         try:
@@ -59,14 +66,14 @@ def render_product_image(product, height=150):
         except Exception:
             st.markdown("📷 *Image unavailable*")
     else:
-        # Placeholder
         st.markdown(f"""
         <div style="background: #1e2a3a; border-radius: 8px; height: {height}px; 
                     display: flex; align-items: center; justify-content: center; 
                     border: 1px dashed #334155; color: #64748b; font-size: 14px;">
-             No Image Uploaded
+            📷 No Image Uploaded
         </div>
         """, unsafe_allow_html=True)
+
 
 def render_browse_tab(role, profile):
     st.subheader("🛒 Browse Available Products")
@@ -108,7 +115,7 @@ def render_browse_tab(role, profile):
                     st.caption(desc[:100] + "..." if len(desc) > 100 else desc)
                 else:
                     st.caption("No description")
-                st.caption(f' {p.get("region")}')
+                st.caption(f'📍 {p.get("region")}')
                 
                 c_price, c_action = st.columns(2)
                 with c_price:
@@ -131,7 +138,7 @@ def render_browse_tab(role, profile):
                         
                         if st.button("🛒 Place Order", key=f'order_{p["id"]}'):
                             if risk["risk_level"] == "High":
-                                st.warning("️ High fraud risk — proceed with caution.")
+                                st.warning("⚠️ High fraud risk — proceed with caution.")
                             try:
                                 supabase.table("orders").insert({
                                     "product_id": p["id"],
@@ -148,10 +155,11 @@ def render_browse_tab(role, profile):
                             except Exception as e:
                                 st.error(f"Order failed: {e}")
                     else:
-                        st.caption("📍 " + p.get("region", ""))
+                        st.caption(" " + p.get("region", ""))
+
 
 def render_notifications_tab(user_id):
-    st.subheader(" Notifications")
+    st.subheader("🔔 Notifications")
     if st.button("✅ Mark All Read", use_container_width=True):
         try:
             supabase.table("notifications").update({"is_read": True}).eq("recipient_id", user_id).eq("is_read", False).execute()
@@ -173,6 +181,7 @@ def render_notifications_tab(user_id):
             st.markdown(f"{icon} **{n.get('title', '')}**")
             st.caption(n.get("message", ""))
             st.caption(f"🕐 {str(n.get('created_at', ''))[:16]}")
+
 
 def render_profile_edit_tab(profile, user_id):
     st.subheader("👤 Edit Profile")
