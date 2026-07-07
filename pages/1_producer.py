@@ -27,7 +27,7 @@ from src.demand_engine import forecast_demand
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
-# ─────────────────────────────────────────────
+# ────────────────────────────────────────────
 st.set_page_config(
     page_title="Producer Dashboard",
     page_icon="🚜",
@@ -111,7 +111,7 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .record-card:hover { border-color: #16a34a55; }
 
-/* ── Section Titles ── */
+/* ─ Section Titles ── */
 .section-title {
     font-size: 13px;
     font-weight: 700;
@@ -144,7 +144,7 @@ html, body, [data-testid="stAppViewContainer"] {
 /* ── Confirm box ── */
 .confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
 
-/* ─ Tabs override ── */
+/* ── Tabs override ── */
 [data-testid="stTabs"] > div > div > div > button {
     font-size: 13px !important;
     font-weight: 500 !important;
@@ -210,7 +210,7 @@ html, body, [data-testid="stAppViewContainer"] {
     margin-top: 16px;
 }
 
-/* ── Product Image Card ── */
+/* ── Product Image Card ─ */
 .product-img-container {
     background: #1e2a3a;
     border-radius: 8px;
@@ -234,8 +234,8 @@ html, body, [data-testid="stAppViewContainer"] {
 # ─────────────────────────────────────────────
 inject_theme()
 if st.session_state.get("user") is None:
-    st.warning("⚠️ Please sign in first.")
-    st.page_link("app.py", label="← Go to Login", icon="")
+    st.warning("️ Please sign in first.")
+    st.page_link("app.py", label="← Go to Login", icon="🔐")
     st.stop()
 
 profile = st.session_state.get("profile")
@@ -267,11 +267,11 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🚜 Quick Actions")
-    if st.button(" Refresh Data", use_container_width=True):
+    if st.button("🔄 Refresh Data", use_container_width=True):
         clear_data_cache()
         st.rerun()
     
-    # Dark/Light Toggle (Update 7)
+    # Update 7: Theme Toggle
     st.markdown("### 🎨 Theme")
     render_theme_toggle()
     
@@ -298,11 +298,11 @@ with st.sidebar:
 # Verification Gate
 # ─────────────────────────────────────────────
 if not verif_status["is_verified"]:
-    tab_upload, tab_browse = st.tabs(["📄 Upload Documents", "🛒 Browse (Read Only)"])
+    tab_upload, tab_browse = st.tabs(["📄 Upload Documents", " Browse (Read Only)"])
     with tab_upload:
         render_document_upload(user_id, "producer")
     with tab_browse:
-        st.markdown('<div class="alert-box alert-warning">⏳ Full access unlocks after account verification.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-warning"> Full access unlocks after account verification.</div>', unsafe_allow_html=True)
         render_browse_tab("producer", profile)
     st.stop()
 
@@ -311,8 +311,8 @@ if not verif_status["is_verified"]:
 # ─────────────────────────────────────────────
 (tab_overview, tab_products, tab_demand, tab_incoming,
  tab_match, tab_agree, tab_history, tab_ai_insights, tab_notif, tab_profile) = st.tabs([
-    "📊 Overview", " My Products", "📈 Demand Forecast",
-    "📬 Incoming Orders", " AI Matching", "📄 Agreements",
+    "📊 Overview", "📦 My Products", "📈 Demand Forecast",
+    "📬 Incoming Orders", "🤝 AI Matching", "📄 Agreements",
     "📜 History", "🤖 AI Insights", "🔔 Notifications", "👤 Profile",
 ])
 
@@ -413,7 +413,7 @@ with tab_products:
                 new_price = st.number_input("Price (Birr) *", min_value=1.0, value=100.0, step=10.0)
                 new_avail = st.checkbox("List as Available", value=True)
             
-            new_image = st.file_uploader("📷 Product Image (Recommended)", type=["jpg","jpeg","png"], key="prod_img_upload", help="High-quality images attract more buyers!")
+            new_image = st.file_uploader(" Product Image (Recommended)", type=["jpg","jpeg","png"], key="prod_img_upload", help="High-quality images attract more buyers!")
             new_image_b64 = None
             if new_image:
                 try:
@@ -470,7 +470,7 @@ with tab_products:
     if my_products:
         pf1, pf2 = st.columns(2)
         with pf1:
-            prod_search = st.text_input("🔍 Search products", key="prod_search_inp", placeholder="Product name…")
+            prod_search = st.text_input(" Search products", key="prod_search_inp", placeholder="Product name…")
         with pf2:
             avail_filter = st.selectbox("Availability", ["All","Available","Unavailable"], key="prod_avail_filter")
         
@@ -496,7 +496,6 @@ with tab_products:
                 with img_col:
                     if p.get("image_base64"):
                         try:
-                            img_data = base64.b64decode(p["image_base64"])
                             st.markdown(f'<div class="product-img-container"><img src="data:image/jpeg;base64,{p["image_base64"]}" alt="Product Image"></div>', unsafe_allow_html=True)
                         except:
                             st.markdown('<div class="product-img-container" style="color:#64748b;">No Image</div>', unsafe_allow_html=True)
@@ -514,7 +513,7 @@ with tab_products:
                     with c3:
                         ba, bb = st.columns(2)
                         with ba:
-                            tog_label = "🔴 Deactivate" if avail else " Activate"
+                            tog_label = "🔴 Deactivate" if avail else "🟢 Activate"
                             if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
                                 try:
                                     supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
@@ -546,7 +545,7 @@ with tab_products:
                                     st.rerun()
                                 st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="alert-box alert-info"> No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
 # TAB — DEMAND FORECAST
@@ -585,7 +584,7 @@ with tab_demand:
         if isinstance(result, list) and len(result) > 0:
             avg_demand = sum(result) / len(result)
             max_demand = max(result)
-            trend = " Rising" if result[-1] > result[0] else "📉 Falling"
+            trend = "📈 Rising" if result[-1] > result[0] else "📉 Falling"
             sm1, sm2, sm3 = st.columns(3)
             with sm1:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Avg Weekly Demand</div><div class="kpi-value">{avg_demand:,.0f}</div><div class="kpi-sub">Units / week</div></div>', unsafe_allow_html=True)
@@ -654,7 +653,6 @@ with tab_incoming:
             st.info("No incoming orders match the filters.")
         else:
             st.caption(f"**{len(filtered_orders)} order(s)**")
-            STATUS_ICONS  = {"pending":"🟡","confirmed":"🟢","cancelled":"❌"}
             STATUS_PILLS  = {"pending":"pill-warning","confirmed":"pill-success"}
             
             for o in filtered_orders:
@@ -668,7 +666,7 @@ with tab_incoming:
                         pill = STATUS_PILLS.get(status,"pill-neutral")
                         st.markdown(f"**Order #{str(oid)[:8]}** &nbsp; <span class='pill {pill}'>{status.capitalize()}</span>", unsafe_allow_html=True)
                         st.markdown(f"**📦 {prod.get('product_name','Unknown')}** · {prod.get('sector','')} · Grade **{prod.get('quality_grade','')}**")
-                        st.caption(f" Buyer: **{buyer.get('full_name','Unknown')}** ({buyer.get('role','').capitalize()}) · 📞 {buyer.get('phone','N/A')}")
+                        st.caption(f"👤 Buyer: **{buyer.get('full_name','Unknown')}** ({buyer.get('role','').capitalize()}) · 📞 {buyer.get('phone','N/A')}")
                         st.caption(f"📍 Buyer region: {buyer.get('region','N/A')} · Date: {str(o.get('created_at',''))[:10]}")
                     with c2:
                         qty = o.get("quantity_ordered", 0)
@@ -686,7 +684,7 @@ with tab_incoming:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Failed: {e}")
-                            if st.button(" Cancel Order", key=f"cancel_{oid}", use_container_width=True):
+                            if st.button("❌ Cancel Order", key=f"cancel_{oid}", use_container_width=True):
                                 try:
                                     supabase.table("orders").update({"status":"cancelled"}).eq("id", oid).execute()
                                     send_notification(o["buyer_id"], "❌ Order Cancelled", f"Your order for {prod.get('product_name','')} was cancelled.", "error", order_id=str(oid))
@@ -698,7 +696,7 @@ with tab_incoming:
                             if st.button("🚚 Mark as Delivered", key=f"deliver_{oid}", use_container_width=True, type="primary"):
                                 try:
                                     supabase.table("orders").update({"status":"delivered"}).eq("id", oid).execute()
-                                    send_notification(o["buyer_id"], " Order Delivered", f"Your order for {prod.get('product_name','')} has been delivered.", "success", order_id=str(oid))
+                                    send_notification(o["buyer_id"], "🚚 Order Delivered", f"Your order for {prod.get('product_name','')} has been delivered.", "success", order_id=str(oid))
                                     clear_data_cache()
                                     st.rerun()
                                 except Exception as e:
@@ -713,7 +711,7 @@ with tab_match:
     
     my_products_m = cached_query("products", filters={"producer_id": user_id, "is_available": True}, limit=200)
     if not my_products_m:
-        st.markdown('<div class="alert-box alert-warning">⚠️ No available products. Activate at least one product to use AI matching.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-warning">️ No available products. Activate at least one product to use AI matching.</div>', unsafe_allow_html=True)
     else:
         product_names = [p["product_name"] for p in my_products_m]
         selected_name = st.selectbox("Select Product to Match", product_names, key="match_product_select")
@@ -778,7 +776,7 @@ with tab_match:
                         if pct >= 60:
                             badge_color = "#4ade80"; badge_label = "🟢 Strong Match"
                         elif pct >= 30:
-                            badge_color = "#fbbf24"; badge_label = "🟡 Good Match"
+                            badge_color = "#fbbf24"; badge_label = " Good Match"
                         else:
                             badge_color = "#f87171"; badge_label = "🔴 Weak Match"
                         
@@ -786,7 +784,7 @@ with tab_match:
                             c1, c2 = st.columns([5, 2])
                             with c1:
                                 st.markdown(f"**#{i+1} · {r['name']}** &nbsp; <span style='font-size:12px;color:{badge_color};'>{badge_label}</span>", unsafe_allow_html=True)
-                                st.caption(f" {r.get('region','N/A')} ·  {r.get('phone') or 'N/A'}")
+                                st.caption(f"📍 {r.get('region','N/A')} · 📞 {r.get('phone') or 'N/A'}")
                                 bar_color = badge_color
                                 st.markdown(f"""
                                 <div style="margin-top:8px;">
@@ -803,14 +801,14 @@ with tab_match:
                                         st.session_state[agree_key] = "preview"
                                         st.rerun()
                                 elif agree_state == "preview":
-                                    st.markdown("**✏️ Review & Edit Before Sending**")
+                                    st.markdown("**️ Review & Edit Before Sending**")
                                     agree_qty = st.number_input("Quantity to supply", min_value=0.1, value=float(p.get("quantity", 1)), step=0.5, key=f"aq_{r['id']}")
                                     agree_price = st.number_input("Price per unit (Birr)", min_value=1.0, value=float(p.get("price_birr", 0)), step=10.0, key=f"ap_{r['id']}")
                                     agree_delivery = st.text_input("Delivery date", value="", placeholder="e.g. 2024-09-01", key=f"ad_{r['id']}")
                                     agree_payment = st.selectbox("Payment method", ["Bank Transfer","Cash on Delivery","Mobile Money","Letter of Credit"], key=f"apay_{r['id']}")
                                     agree_notes = st.text_area("Special notes (optional)", height=60, key=f"an_{r['id']}")
                                     
-                                    with st.expander("️ Preview Agreement", expanded=True):
+                                    with st.expander("👁️ Preview Agreement", expanded=True):
                                         try:
                                             preview_html = generate_agreement_preview_html(
                                                 producer_name=profile.get("full_name",""),
@@ -836,58 +834,59 @@ with tab_match:
                                         except Exception as ex:
                                             st.warning(f"Preview error: {ex}")
                                     
-                                    ba, bb = st.columns(2)
-                                    with ba:
-                                        if st.button("📤 Send to Merchant", key=f"send_agree_{r['id']}_{p['id']}", type="primary", use_container_width=True):
+                                    # FIX: Removed nested columns to prevent StreamlitAPIException
+                                    # Buttons are now stacked vertically with full width
+                                    if st.button("📤 Send to Merchant", key=f"send_agree_{r['id']}_{p['id']}", type="primary", use_container_width=True):
+                                        try:
+                                            import uuid as _uuid
+                                            agree_id = str(_uuid.uuid4())
+                                            payload = build_agreement_payload(
+                                                match=r,
+                                                producer={"id": user_id, **profile},
+                                                product={**p, "price_per_unit": agree_price, "grade": p.get("quality_grade","A")},
+                                                quantity=agree_qty,
+                                                delivery_date=agree_delivery,
+                                                payment_method=agree_payment,
+                                                notes=agree_notes,
+                                            )
+                                            pdf_bytes = generate_agreement_pdf(**{
+                                                k: v for k, v in payload.items()
+                                                if k in generate_agreement_pdf.__code__.co_varnames
+                                            })
                                             try:
-                                                import uuid as _uuid
-                                                agree_id = str(_uuid.uuid4())
-                                                payload = build_agreement_payload(
-                                                    match=r,
-                                                    producer={"id": user_id, **profile},
-                                                    product={**p, "price_per_unit": agree_price, "grade": p.get("quality_grade","A")},
-                                                    quantity=agree_qty,
-                                                    delivery_date=agree_delivery,
-                                                    payment_method=agree_payment,
-                                                    notes=agree_notes,
-                                                )
-                                                pdf_bytes = generate_agreement_pdf(**{
-                                                    k: v for k, v in payload.items()
-                                                    if k in generate_agreement_pdf.__code__.co_varnames
-                                                })
-                                                try:
-                                                    supabase.table("agreements").upsert({
-                                                        "id": payload["agreement_id"],
-                                                        "producer_id": user_id,
-                                                        "merchant_id": r["id"],
-                                                        "product_id": p["id"],
-                                                        "quantity": agree_qty,
-                                                        "price_per_unit": agree_price,
-                                                        "total_price": agree_price * agree_qty,
-                                                        "delivery_date": agree_delivery or None,
-                                                        "payment_method": agree_payment,
-                                                        "notes": agree_notes,
-                                                        "status": "pending_merchant",
-                                                        "producer_confirmed": True,
-                                                        "merchant_confirmed": False,
-                                                    }).execute()
-                                                except Exception:
-                                                    pass
-                                                send_notification(
-                                                    r["id"], "📄 New Agreement Request",
-                                                    f"{profile.get('full_name','')} sent you a supply agreement for {p['product_name']} ({agree_qty:,.1f} {p.get('unit','')}) — {agree_price * agree_qty:,.0f} Birr total.",
-                                                    "info",
-                                                )
-                                                st.session_state[agree_key] = "sent"
-                                                st.session_state[f"agree_pdf_{r['id']}_{p['id']}"] = pdf_bytes
-                                                clear_data_cache()
-                                                st.rerun()
-                                            except Exception as e:
-                                                st.error(f"Failed: {e}")
-                                    with bb:
-                                        if st.button("️ Cancel", key=f"cancel_agree_{r['id']}_{p['id']}", use_container_width=True):
-                                            st.session_state[agree_key] = "idle"
+                                                supabase.table("agreements").upsert({
+                                                    "id": payload["agreement_id"],
+                                                    "producer_id": user_id,
+                                                    "merchant_id": r["id"],
+                                                    "product_id": p["id"],
+                                                    "quantity": agree_qty,
+                                                    "price_per_unit": agree_price,
+                                                    "total_price": agree_price * agree_qty,
+                                                    "delivery_date": agree_delivery or None,
+                                                    "payment_method": agree_payment,
+                                                    "notes": agree_notes,
+                                                    "status": "pending_merchant",
+                                                    "producer_confirmed": True,
+                                                    "merchant_confirmed": False,
+                                                }).execute()
+                                            except Exception:
+                                                pass
+                                            send_notification(
+                                                r["id"], "📄 New Agreement Request",
+                                                f"{profile.get('full_name','')} sent you a supply agreement for {p['product_name']} ({agree_qty:,.1f} {p.get('unit','')}) — {agree_price * agree_qty:,.0f} Birr total.",
+                                                "info",
+                                            )
+                                            st.session_state[agree_key] = "sent"
+                                            st.session_state[f"agree_pdf_{r['id']}_{p['id']}"] = pdf_bytes
+                                            clear_data_cache()
                                             st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Failed: {e}")
+                                    
+                                    if st.button("✏️ Cancel", key=f"cancel_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                        st.session_state[agree_key] = "idle"
+                                        st.rerun()
+                                        
                                 elif agree_state == "sent":
                                     st.markdown('<div class="alert-box alert-success">✅ Agreement sent to merchant!</div>', unsafe_allow_html=True)
                                     saved_pdf = st.session_state.get(f"agree_pdf_{r['id']}_{p['id']}")
@@ -900,7 +899,7 @@ with tab_match:
                                             key=f"dl_agree_{r['id']}_{p['id']}",
                                             use_container_width=True,
                                         )
-                                    if st.button(" New Agreement", key=f"reset_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                    if st.button("🔁 New Agreement", key=f"reset_agree_{r['id']}_{p['id']}", use_container_width=True):
                                         st.session_state[agree_key] = "idle"
                                         st.rerun()
 
@@ -1057,11 +1056,10 @@ with tab_ai_insights:
     
     with ai1:
         st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
-        st.markdown("**📊 Price Trend Analysis**", unsafe_allow_html=True)
+        st.markdown("** Price Trend Analysis**", unsafe_allow_html=True)
         st.caption("Analyze historical prices to understand market movements.")
         if st.button("Run Price Analysis", use_container_width=True, key="ai_price_btn"):
             with st.spinner("Analyzing..."):
-                # Mock analysis or integrate with price_engine
                 st.success("✅ Analysis complete! Prices for Teff are trending up 12% this month.")
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1096,9 +1094,9 @@ with tab_ai_insights:
                  'borderwidth': 2,
                  'bordercolor': "#334155",
                  'steps': [
-                     {'range': [0, 50], 'color': "#7f1d1d44"},
-                     {'range': [50, 80], 'color': "#78350f44"},
-                     {'range': [80, 100], 'color': "#14532d44"}],
+                     {'range': [0, 50], 'color': "#7f1d1d"},
+                     {'range': [50, 80], 'color': "#78350f"},
+                     {'range': [80, 100], 'color': "#14532d"}],
                  'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
     ))
     fig_score.update_layout(paper_bgcolor="#161b27", font={'color': "#94a3b8", 'family': "Inter"}, height=300)
