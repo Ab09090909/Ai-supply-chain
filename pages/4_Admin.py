@@ -1080,3 +1080,9 @@ with tab_settings:
                 if st.button("🗑️ Purge All Notifications", key="purge_notif_btn", use_container_width=True):
                     st.session_state["confirm_purge_notifications"] = True
                     st.rerun()
+
+# ═════════════════════════════════════════════════════════════
+# FLOATING CHATBOT (Add this at the end of 4_Admin.py)
+# ═════════════════════════════════════════════════════════════
+from utils.chatbot import render_floating_chatbot
+render_floating_chatbot(profile)
