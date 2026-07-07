@@ -51,10 +51,18 @@ groq_tools = [
 ]
 
 # ─────────────────────────────────────────────
-# JS INJECTOR — styles the real Streamlit buttons by their visible text
-# instead of relying on Streamlit's internal (version-dependent) DOM class
-# names. components.html renders in a same-origin iframe, so it can reach
-# back into window.parent.document and style the actual page.
+# JS INJECTOR
+#
+# Why JS instead of pure CSS: raw HTML written via st.markdown (e.g. a
+# "<div>" opening tag) does NOT become a real parent of the Streamlit
+# widgets that follow it in the code — each st.* call adds its own
+# sibling node to the page. So a hand-written div can never wrap a
+# button, a chat_input, etc. The only Streamlit call that creates a real
+# parent for later widgets is st.container(). This script finds that
+# real container (via an invisible marker placed inside it) and turns
+# IT into the floating panel, and finds the FAB/clear/close buttons by
+# their visible text (version-independent — no reliance on Streamlit's
+# internal class names, which differ across releases).
 # ─────────────────────────────────────────────
 def inject_widget_js():
     components.html("""
@@ -62,6 +70,8 @@ def inject_widget_js():
     function styleChatWidget() {
         try {
             const doc = window.parent.document;
+
+            // ── FAB / clear / close buttons, matched by visible text ──
             const buttons = doc.querySelectorAll('button');
             buttons.forEach(function(btn) {
                 const txt = (btn.innerText || '').trim();
@@ -82,7 +92,6 @@ def inject_widget_js():
                     btn.style.setProperty('padding', '0', 'important');
                     btn.style.setProperty('box-shadow', '0 6px 20px rgba(0,0,0,0.4)', 'important');
                     btn.style.setProperty('cursor', 'pointer', 'important');
-                    // collapse ancestor wrapper divs so they don't reserve empty flow space
                     let p = btn.parentElement;
                     for (let i = 0; i < 5 && p; i++) {
                         p.style.setProperty('position', 'static', 'important');
@@ -110,6 +119,26 @@ def inject_widget_js():
                     btn.style.setProperty('padding', '0', 'important');
                 }
             });
+
+            // ── The chat window itself: find the real st.container() via
+            // the invisible marker, then style/position THAT node. ──
+            const marker = doc.querySelector('#chat-window-marker');
+            if (marker) {
+                const panel = marker.closest('[data-testid="stVerticalBlock"]');
+                if (panel && !panel.classList.contains('floating-chat-panel')) {
+                    panel.classList.add('floating-chat-panel');
+                }
+            }
+
+            // ── The header button row (clear/close columns): give it the
+            // same header background so it reads as one continuous bar. ──
+            const hMarker = doc.querySelector('#chat-header-btns-marker');
+            if (hMarker) {
+                const row = hMarker.closest('[data-testid="stHorizontalBlock"]');
+                if (row && !row.classList.contains('chat-header-btns-row')) {
+                    row.classList.add('chat-header-btns-row');
+                }
+            }
         } catch (e) {
             console.error('chat widget styling error', e);
         }
@@ -128,16 +157,10 @@ def inject_widget_js():
 # RENDER THE FLOATING CHATBOT UI
 # ─────────────────────────────────────────────
 def render_floating_chatbot(user_profile):
-    # 1. Inject CSS — visual styling for elements we render ourselves
+    # 1. Inject CSS for elements we render directly, plus the classes that
+    # inject_widget_js() attaches to the real Streamlit container/row.
     st.markdown("""
     <style>
-    /* Floating Action Button, header icon buttons, and the chat window are
-
-       positioned/styled via JavaScript (see inject_widget_js below) because
-       Streamlit's internal DOM class names for keyed widgets vary between
-       versions and cannot be relied on for CSS targeting. This <style>
-       block only covers plain HTML we render ourselves. */
-
     /* ── Label Under Icon ── */
     .chatbot-label {
         position: fixed !important;
@@ -157,39 +180,45 @@ def render_floating_chatbot(user_profile):
         pointer-events: none;
     }
 
-    /* ── Chat Window - Fixed Below Button (Top Right) ──
-       This div is one we render ourselves, so it can be targeted directly
-       with a plain class selector — no dependency on Streamlit's internal
-       DOM structure. */
-    .floating-chat-box {
+    /* ── The chat window panel — this class is added by JS onto the real
+       st.container() div, so everything rendered inside that container
+       (header, buttons, messages, input) is an actual DOM child and
+       therefore visually contained, scrollable, etc. Sized responsively
+       so it never exceeds the viewport on small/mobile screens. ── */
+    div.floating-chat-panel {
         position: fixed !important;
-        top: 112px !important;
-        right: 24px !important;
+        top: min(112px, 10vh) !important;
+        right: 16px !important;
         left: auto !important;
-        width: 380px !important;
-        height: 560px !important;
+        width: min(380px, calc(100vw - 32px)) !important;
+        height: min(520px, 72vh) !important;
+        max-height: 72vh !important;
         z-index: 999998 !important;
-        background: #12161f;
-        border: 1px solid #2a3344;
-        border-radius: 18px;
-        box-shadow: 0 16px 48px rgba(0,0,0,0.55);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        animation: chatFadeIn 0.2s ease-out;
+        margin: 0 !important;
+        background: #12161f !important;
+        border: 1px solid #2a3344 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.55) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        animation: chatFadeIn 0.18s ease-out;
     }
     @keyframes chatFadeIn {
         from { opacity: 0; transform: translateY(-8px); }
         to { opacity: 1; transform: translateY(0); }
     }
+    /* Make sure padding/gap Streamlit normally adds inside a block doesn't
+       leave odd gaps between our header/messages/input children. */
+    div.floating-chat-panel > div { width: 100%; }
 
     /* ── Header ── */
-    .chat-header-wrap { background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); }
     .chat-header-bar {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 14px 12px 14px 16px;
+        padding: 12px 12px 12px 16px;
+        background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
     }
     .chat-avatar {
         width: 34px; height: 34px; border-radius: 50%;
@@ -202,16 +231,21 @@ def render_floating_chatbot(user_profile):
     .chat-header-status { font-size: 11px; color: #B7E4C7; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; display: inline-block; box-shadow: 0 0 6px #4ADE80; }
 
-    /* Header icon buttons (Clear / Close) — sized/colored via JS injection
-       (inject_widget_js), which targets them by their button text ("🧹" /
-       "✕") instead of relying on Streamlit's internal class names. */
-    div[data-testid="stHorizontalBlock"]:has(.header-anchor) { align-items: center !important; }
+    /* Row holding the Clear / Close buttons — JS tags the real Streamlit
+       horizontal-block with this class so it matches the header's bg. */
+    div.chat-header-btns-row {
+        background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%) !important;
+        padding: 2px 10px 8px 10px !important;
+        margin-top: -6px !important;
+        align-items: center !important;
+    }
 
     /* ── Message Area ── */
     .chat-messages-area {
-        flex: 1;
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
-        padding: 16px 14px;
+        padding: 14px 12px;
         background: #0d1017;
         display: flex;
         flex-direction: column;
@@ -243,23 +277,15 @@ def render_floating_chatbot(user_profile):
         border: 1px solid #2a3344;
         border-radius: 14px 14px 14px 3px;
     }
-    .msg-typing { display: flex; gap: 4px; padding: 4px 2px; }
-    .msg-typing span {
-        width: 6px; height: 6px; border-radius: 50%;
-        background: #94a3b8; opacity: 0.6;
-        animation: typingBounce 1s infinite ease-in-out;
-    }
-    .msg-typing span:nth-child(2) { animation-delay: 0.15s; }
-    .msg-typing span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
 
     /* ── Input Area ── */
-    .floating-chat-box .stChatInput {
+    div.floating-chat-panel .stChatInput {
         padding: 10px 12px !important;
         background: #12161f !important;
         border-top: 1px solid #2a3344 !important;
+        flex-shrink: 0 !important;
     }
-    .floating-chat-box .stChatInput textarea {
+    div.floating-chat-panel .stChatInput textarea {
         background: #1e2532 !important;
         color: #e5e7eb !important;
         border-radius: 10px !important;
@@ -283,30 +309,31 @@ def render_floating_chatbot(user_profile):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
 
-    # 3b. Apply JS-based styling/positioning (version-independent, see inject_widget_js)
-    inject_widget_js()
-
     # 4. Render the Label Under the Icon
     st.markdown('<div class="chatbot-label">Assistant AI</div>', unsafe_allow_html=True)
 
-    # 5. Render the Chat Window (if open)
+    # 5. Render the Chat Window (if open) — everything below lives inside
+    # ONE real st.container(), which is what inject_widget_js() finds and
+    # turns into the floating panel.
     if st.session_state.chat_open:
         with st.container():
-            st.markdown('<div class="floating-chat-box">', unsafe_allow_html=True)
+            # Invisible marker so JS can locate this exact container.
+            st.markdown('<span id="chat-window-marker" style="display:none"></span>', unsafe_allow_html=True)
 
-            # ── Header: avatar + title/status + clear/close buttons ──
-            st.markdown('<div class="chat-header-wrap"><span class="header-anchor"></span>', unsafe_allow_html=True)
-            col_title, col_clear, col_close = st.columns([5, 1, 1])
-            with col_title:
-                st.markdown("""
-                <div class="chat-header-bar">
-                    <div class="chat-avatar">💬</div>
-                    <div class="chat-header-text">
-                        <div class="chat-header-title">Assistant AI</div>
-                        <div class="chat-header-status"><span class="status-dot"></span>Online now</div>
-                    </div>
+            # ── Header: avatar + title/status ──
+            st.markdown("""
+            <div class="chat-header-bar">
+                <div class="chat-avatar">💬</div>
+                <div class="chat-header-text">
+                    <div class="chat-header-title">Assistant AI</div>
+                    <div class="chat-header-status"><span class="status-dot"></span>Online now</div>
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── Clear / Close buttons ──
+            st.markdown('<span id="chat-header-btns-marker" style="display:none"></span>', unsafe_allow_html=True)
+            _, col_clear, col_close = st.columns([5, 1, 1])
             with col_clear:
                 if st.button("🧹", key="clear_chat_icon", help="Clear chat history"):
                     st.session_state.chat_messages = [st.session_state.chat_messages[0]]
@@ -315,7 +342,6 @@ def render_floating_chatbot(user_profile):
                 if st.button("✕", key="close_chat_icon", help="Close chat"):
                     st.session_state.chat_open = False
                     st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
             # ── Messages Area ──
             messages_html = '<div class="chat-messages-area">'
@@ -381,4 +407,6 @@ def render_floating_chatbot(user_profile):
                             st.error(f"Error: {e}")
                     st.rerun()
 
-            st.markdown('</div>', unsafe_allow_html=True)
+    # 6. Apply JS-based styling/positioning last, so the marker(s) above
+    # already exist in the DOM by the time this runs.
+    inject_widget_js()
