@@ -212,6 +212,28 @@ def render_floating_chatbot(user_profile):
        leave odd gaps between our header/messages/input children. */
     div.floating-chat-panel > div { width: 100%; }
 
+    /* Streamlit wraps every widget/markdown call in its own wrapper divs
+       (element-container / stMarkdown / stMarkdownContainer). Those
+       wrappers — not our custom <div>s — are the actual flex children of
+       the panel, so flex:1 set on our own div was being ignored by the
+       real layout. Collapsing the wrappers with display:contents makes
+       our own divs (and Streamlit's real widgets) the direct flex
+       children instead, so flex:1 / flex-shrink:0 behave correctly and
+       the chat input never gets pushed out of view. */
+    div.floating-chat-panel [data-testid="element-container"],
+    div.floating-chat-panel [data-testid="stElementContainer"],
+    div.floating-chat-panel [data-testid="stMarkdown"],
+    div.floating-chat-panel [data-testid="stMarkdownContainer"] {
+        display: contents !important;
+    }
+    /* Non-growing items keep their natural height so the messages area
+       (flex:1 below) absorbs all remaining space and scrolls. */
+    div.floating-chat-panel .chat-header-bar,
+    div.floating-chat-panel .chat-header-btns-row,
+    div.floating-chat-panel .stChatInput {
+        flex-shrink: 0 !important;
+    }
+
     /* ── Header ── */
     .chat-header-bar {
         display: flex;
@@ -232,19 +254,32 @@ def render_floating_chatbot(user_profile):
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; display: inline-block; box-shadow: 0 0 6px #4ADE80; }
 
     /* Row holding the Clear / Close buttons — JS tags the real Streamlit
-       horizontal-block with this class so it matches the header's bg. */
+       horizontal-block with this class so it matches the header's bg.
+       Streamlit auto-stacks st.columns() vertically on narrow/mobile
+       viewports; force it back to a horizontal row here. */
     div.chat-header-btns-row {
         background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%) !important;
         padding: 2px 10px 8px 10px !important;
         margin-top: -6px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-end !important;
         align-items: center !important;
+        gap: 8px !important;
+    }
+    div.chat-header-btns-row > [data-testid="stColumn"] {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
     }
 
     /* ── Message Area ── */
-    .chat-messages-area {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
+    div.floating-chat-panel .chat-messages-area {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
         padding: 14px 12px;
         background: #0d1017;
         display: flex;
@@ -333,7 +368,7 @@ def render_floating_chatbot(user_profile):
 
             # ── Clear / Close buttons ──
             st.markdown('<span id="chat-header-btns-marker" style="display:none"></span>', unsafe_allow_html=True)
-            _, col_clear, col_close = st.columns([5, 1, 1])
+            col_clear, col_close = st.columns(2)
             with col_clear:
                 if st.button("🧹", key="clear_chat_icon", help="Clear chat history"):
                     st.session_state.chat_messages = [st.session_state.chat_messages[0]]
