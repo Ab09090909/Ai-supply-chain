@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS
 from utils.db_helpers import supabase, cached_get_profile, send_notification, clear_data_cache
-from src.fraud_engine import detect_fraud
+from src.fraud_engine import check_fraud_risk
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
