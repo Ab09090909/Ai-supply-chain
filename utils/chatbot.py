@@ -9,10 +9,9 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key) if api_key else None
 
 # ─────────────────────────────────────────────
-# DATABASE TOOLS (The AI uses these to fetch live data)
-# ─────────────────────────────────────────────
+# DATABASE TOOLS
+# ────────────────────────────────────────────
 def search_products(product_name=None, sector=None, region=None):
-    """Search the products table in Supabase."""
     try:
         from utils.db_helpers import supabase
         query = supabase.table("products").select(
@@ -29,9 +28,7 @@ def search_products(product_name=None, sector=None, region=None):
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-
 def search_producers(region=None):
-    """Search the producers in the profiles table."""
     try:
         from utils.db_helpers import supabase
         query = supabase.table("profiles").select(
@@ -44,9 +41,7 @@ def search_producers(region=None):
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-
 def get_platform_stats():
-    """Get general statistics about the platform."""
     try:
         from utils.db_helpers import supabase
         from utils.constants import REGIONS
@@ -60,27 +55,24 @@ def get_platform_stats():
     except Exception as e:
         return json.dumps({"error": str(e)})
 
-
-# Map tool names to Python functions
 available_tools = {
     "search_products": search_products,
     "search_producers": search_producers,
     "get_platform_stats": get_platform_stats,
 }
 
-# Define tools schema for the LLM
 groq_tools = [
     {
         "type": "function",
         "function": {
             "name": "search_products",
-            "description": "Search for products in the database. Returns product names, prices, sectors, and regions.",
+            "description": "Search for products in the database.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "product_name": {"type": "string", "description": "Name of the product (e.g., 'Teff', 'Coffee')"},
-                    "sector": {"type": "string", "description": "Sector to filter by (e.g., 'Agriculture')"},
-                    "region": {"type": "string", "description": "Region to filter by (e.g., 'Amhara')"}
+                    "sector": {"type": "string", "description": "Sector to filter by"},
+                    "region": {"type": "string", "description": "Region to filter by"}
                 },
                 "required": []
             }
@@ -90,7 +82,7 @@ groq_tools = [
         "type": "function",
         "function": {
             "name": "search_producers",
-            "description": "Search for producers in the database. Returns their names and regions.",
+            "description": "Search for producers in the database.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -104,7 +96,7 @@ groq_tools = [
         "type": "function",
         "function": {
             "name": "get_platform_stats",
-            "description": "Get general statistics about the platform (total products, users, regions).",
+            "description": "Get general statistics about the platform.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -113,7 +105,6 @@ groq_tools = [
         }
     }
 ]
-
 
 # ─────────────────────────────────────────────
 # RENDER THE FLOATING CHATBOT UI
@@ -179,6 +170,24 @@ def render_floating_chatbot(user_profile):
         font-weight: 700;
         font-size: 16px;
     }
+    .chat-exit-btn {
+        background: #ef4444 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50% !important;
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 18px !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: background 0.2s !important;
+    }
+    .chat-exit-btn:hover {
+        background: #dc2626 !important;
+    }
     .chat-messages-area {
         flex: 1;
         overflow-y: auto;
@@ -205,14 +214,11 @@ def render_floating_chatbot(user_profile):
         role = user_profile.get("role", "user") if user_profile else "guest"
         name = user_profile.get("full_name", "User") if user_profile else "Guest"
         st.session_state.chat_messages = [
-            {"role": "system", "content": f"""You are the AI Support Assistant for the Ethiopian AI Supply Chain Platform.
-The current user is a {role} named {name}.
-You have access to live database tools. If the user asks about specific products, producers, prices, or regions, YOU MUST use the provided tools to fetch the data before answering.
-Be helpful, concise, and professional. Format lists using bullet points. Answer in simple English."""}
+            {"role": "system", "content": f"You are the AI Support Assistant for the Ethiopian AI Supply Chain Platform. The current user is a {role} named {name}. You have access to live database tools. If the user asks about specific products, producers, prices, or regions, YOU MUST use the provided tools to fetch the data before answering. Be helpful, concise, and professional. Format lists using bullet points."}
         ]
 
     # 3. Render the Floating Action Button (FAB)
-    if st.button("💬", key="fab_chat_toggle"):
+    if st.button("", key="fab_chat_toggle"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
 
@@ -221,13 +227,21 @@ Be helpful, concise, and professional. Format lists using bullet points. Answer 
         with st.container():
             st.markdown('<div class="floating-chat-box">', unsafe_allow_html=True)
 
-            # Header
+            # Header with Exit Button
             st.markdown("""
             <div class="chat-header-bar">
                 <span>💬 AI Support</span>
                 <span style="font-size: 12px; opacity: 0.8; font-weight: 400;">🧠 Database Connected</span>
             </div>
             """, unsafe_allow_html=True)
+
+            # Exit Button (placed right below header)
+            with st.container():
+                st.markdown('<div style="padding: 10px 20px; background: #161b27; border-bottom: 1px solid #334155; text-align: right;">', unsafe_allow_html=True)
+                if st.button(" Exit Chat", key="exit_chat_btn", use_container_width=False):
+                    st.session_state.chat_open = False
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
 
             # Messages Area
             with st.container():
@@ -246,16 +260,15 @@ Be helpful, concise, and professional. Format lists using bullet points. Answer 
 
             if prompt:
                 if not client:
-                    st.error("️ GROQ_API_KEY missing in environment variables.")
+                    st.error("⚠️ GROQ_API_KEY missing in environment variables.")
                 else:
                     st.session_state.chat_messages.append(
                         {"role": "user", "content": prompt}
                     )
 
                     with st.chat_message("assistant"):
-                        with st.spinner(" Searching database..."):
+                        with st.spinner("🔍 Searching database..."):
                             try:
-                                # STEP 1: Ask AI if it needs to use a tool
                                 response = client.chat.completions.create(
                                     model="llama-3.3-70b-versatile",
                                     messages=st.session_state.chat_messages,
@@ -267,19 +280,19 @@ Be helpful, concise, and professional. Format lists using bullet points. Answer 
                                 response_message = response.choices[0].message
                                 tool_calls = response_message.tool_calls
 
-                                # STEP 2: If AI wants a tool, execute it
                                 if tool_calls:
-                                    st.session_state.chat_messages.append(response_message)
+                                    st.session_state.chat_messages.append({
+                                        "role": response_message.role,
+                                        "content": response_message.content or "",
+                                        "tool_calls": response_message.tool_calls
+                                    })
 
                                     for tool_call in tool_calls:
                                         function_name = tool_call.function.name
                                         function_to_call = available_tools[function_name]
                                         function_args = json.loads(tool_call.function.arguments)
-
-                                        # Execute the Supabase query
                                         function_response = function_to_call(**function_args)
 
-                                        # Feed result back to AI
                                         st.session_state.chat_messages.append({
                                             "tool_call_id": tool_call.id,
                                             "role": "tool",
@@ -287,7 +300,6 @@ Be helpful, concise, and professional. Format lists using bullet points. Answer 
                                             "content": function_response,
                                         })
 
-                                    # STEP 3: Generate final answer from data
                                     second_response = client.chat.completions.create(
                                         model="llama-3.3-70b-versatile",
                                         messages=st.session_state.chat_messages,
