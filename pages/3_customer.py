@@ -12,6 +12,7 @@ from utils.db_helpers import supabase, clear_data_cache, send_notification
 from utils.constants import REGIONS, SECTORS
 from utils.verification import check_verification_status, render_document_upload
 from utils.shared_ui import render_browse_tab, render_notifications_tab, render_profile_edit_tab
+from utils.pdf_generator import generate_agreement_pdf, generate_agreement_preview_html
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
@@ -271,9 +272,10 @@ if not verif_status["is_verified"]:
 # Tabs
 # ─────────────────────────────────────────────
 (tab_overview, tab_browse_tab, tab_orders,
- tab_history, tab_wishlist, tab_notif, tab_profile) = st.tabs([
+ tab_agree, tab_history, tab_wishlist, tab_notif, tab_profile) = st.tabs([
     "📊 Overview", "🛒 Browse & Buy", "📋 My Orders",
-    "📜 History", "❤️ Wishlist", "🔔 Notifications", "👤 Profile",
+    "📄 Agreements", "📜 History", "❤️ Wishlist",
+    "🔔 Notifications", "👤 Profile",
 ])
 
 # ══════════════════════════════════════════════
@@ -427,6 +429,124 @@ with tab_orders:
                             st.markdown('</div>', unsafe_allow_html=True)
                     elif status == "confirmed":
                         st.markdown('<div class="pill pill-info" style="display:block;text-align:center;margin-top:8px;">🚚 In Transit</div>', unsafe_allow_html=True)
+                        # Download agreement PDF once confirmed
+                        try:
+                            prod_info = o.get("products") or {}
+                            qty_c = float(o.get("quantity_ordered") or 0)
+                            tot_c = float(o.get("total_price_birr") or 0)
+                            ppu_c = float(prod_info.get("price_birr") or (tot_c / qty_c if qty_c else 0))
+                            pdf_cust = generate_agreement_pdf(
+                                producer_name="Producer",
+                                producer_phone="",
+                                producer_region=prod_info.get("region",""),
+                                merchant_name=profile.get("full_name",""),
+                                merchant_phone=profile.get("phone",""),
+                                merchant_region=profile.get("region",""),
+                                product_name=prod_info.get("product_name",""),
+                                sector=prod_info.get("sector",""),
+                                quality_grade=prod_info.get("quality_grade","A"),
+                                quantity=qty_c,
+                                unit=prod_info.get("unit",""),
+                                price_per_unit=ppu_c,
+                                total_price=tot_c,
+                                delivery_date=str(o.get("created_at",""))[:10],
+                                payment_method="Bank Transfer",
+                                producer_confirmed=True,
+                                merchant_confirmed=True,
+                                agreement_id=str(oid),
+                            )
+                            st.download_button("📥 Agreement PDF", data=pdf_cust,
+                                file_name=f"agreement_{prod_info.get('product_name','')}.pdf",
+                                mime="application/pdf", key=f"cust_agree_pdf_{oid}",
+                                use_container_width=True)
+                        except Exception:
+                            pass
+
+# ══════════════════════════════════════════════
+# TAB — AGREEMENTS
+# ══════════════════════════════════════════════
+with tab_agree:
+    st.markdown('<div class="section-title">My Agreements</div>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-box alert-purple">📄 Agreements are generated for all confirmed and delivered orders. Download them here for your records.</div>', unsafe_allow_html=True)
+    try:
+        agree_orders_c = supabase.table("orders").select(
+            "*, products(product_name, sector, quality_grade, unit, region, price_birr, producer_id)"
+        ).eq("buyer_id", user_id).in_("status",["confirmed","delivered"]).order("created_at", desc=True).execute().data or []
+    except Exception:
+        agree_orders_c = []
+
+    if not agree_orders_c:
+        st.markdown('<div class="alert-box alert-purple">📄 No confirmed agreements yet. Orders become agreements once confirmed.</div>', unsafe_allow_html=True)
+    else:
+        st.caption(f"**{len(agree_orders_c)} agreement(s)**")
+        for o in agree_orders_c:
+            prod = o.get("products") or {}
+            status = o.get("status","confirmed")
+            pill = "pill-success" if status == "delivered" else "pill-info"
+            oid = o["id"]
+            qty_a = float(o.get("quantity_ordered") or 0)
+            tot_a = float(o.get("total_price_birr") or 0)
+            ppu_a = float(prod.get("price_birr") or (tot_a / qty_a if qty_a else 0))
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 2])
+                with c1:
+                    st.markdown(f"**📄 {prod.get('product_name','Unknown')}** &nbsp; <span class='pill {pill}'>{status.capitalize()}</span>", unsafe_allow_html=True)
+                    st.caption(f"Sector: {prod.get('sector','')} · Grade: **{prod.get('quality_grade','')}** · 📍 {prod.get('region','N/A')}")
+                    st.caption(f"Qty: {qty_a:,.1f} {prod.get('unit','')} · Date: {str(o.get('created_at',''))[:10]}")
+                    with st.expander("👁️ Preview Agreement"):
+                        try:
+                            prev_html = generate_agreement_preview_html(
+                                producer_name="Producer",
+                                producer_phone="",
+                                producer_region=prod.get("region",""),
+                                merchant_name=profile.get("full_name",""),
+                                merchant_phone=profile.get("phone",""),
+                                merchant_region=profile.get("region",""),
+                                product_name=prod.get("product_name",""),
+                                sector=prod.get("sector",""),
+                                quality_grade=prod.get("quality_grade","A"),
+                                quantity=qty_a,
+                                unit=prod.get("unit",""),
+                                price_per_unit=ppu_a,
+                                total_price=tot_a,
+                                delivery_date=str(o.get("created_at",""))[:10],
+                                payment_method="Bank Transfer",
+                                producer_confirmed=True,
+                                merchant_confirmed=True,
+                                agreement_id=str(oid),
+                            )
+                            st.components.v1.html(prev_html, height=400, scrolling=True)
+                        except Exception as ex:
+                            st.caption(f"Preview error: {ex}")
+                with c2:
+                    st.markdown(f'<div class="price-tag">{tot_a:,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
+                    try:
+                        pdf_a = generate_agreement_pdf(
+                            producer_name="Producer",
+                            producer_phone="",
+                            producer_region=prod.get("region",""),
+                            merchant_name=profile.get("full_name",""),
+                            merchant_phone=profile.get("phone",""),
+                            merchant_region=profile.get("region",""),
+                            product_name=prod.get("product_name",""),
+                            sector=prod.get("sector",""),
+                            quality_grade=prod.get("quality_grade","A"),
+                            quantity=qty_a,
+                            unit=prod.get("unit",""),
+                            price_per_unit=ppu_a,
+                            total_price=tot_a,
+                            delivery_date=str(o.get("created_at",""))[:10],
+                            payment_method="Bank Transfer",
+                            producer_confirmed=True,
+                            merchant_confirmed=True,
+                            agreement_id=str(oid),
+                        )
+                        st.download_button("📥 Download PDF", data=pdf_a,
+                            file_name=f"agreement_{prod.get('product_name','')}.pdf",
+                            mime="application/pdf", key=f"cust_agr_dl_{oid}",
+                            use_container_width=True)
+                    except Exception:
+                        pass
 
 # ══════════════════════════════════════════════
 # TAB — HISTORY
