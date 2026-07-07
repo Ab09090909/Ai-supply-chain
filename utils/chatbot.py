@@ -1,4 +1,4 @@
-"""Floating AI Support Chatbot — Fixed Position & Updated UI."""
+"""Floating AI Support Chatbot — Top-Left Position, Fixed UI."""
 import os
 import json
 import streamlit as st
@@ -53,21 +53,21 @@ groq_tools = [
 # RENDER THE FLOATING CHATBOT UI
 # ─────────────────────────────────────────────
 def render_floating_chatbot(user_profile):
-    # 1. Inject Robust CSS for Fixed Positioning
+    # 1. Inject Robust CSS for Fixed Top-Left Positioning
     st.markdown("""
     <style>
-    /* ── Floating Action Button (FAB) - Fixed Bottom Right ─ */
+    /* ── Floating Action Button (FAB) - Fixed Top Left ── */
     .stButton > button[key="fab_chat_toggle"] {
         position: fixed !important;
-        bottom: 25px !important;
-        right: 25px !important;
+        top: 20px !important;
+        left: 20px !important;
         z-index: 999999 !important;
         background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
         color: #1B4332 !important;
         border-radius: 50% !important;
-        width: 60px !important;
-        height: 60px !important;
-        font-size: 28px !important;
+        width: 56px !important;
+        height: 56px !important;
+        font-size: 26px !important;
         padding: 0 !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important;
         border: none !important;
@@ -77,11 +77,28 @@ def render_floating_chatbot(user_profile):
         transform: scale(1.1) !important;
     }
 
-    /* ─ Chat Window - Fixed Above Button ── */
+    /* ─ Label Under Icon ── */
+    .chatbot-label {
+        position: fixed !important;
+        top: 82px !important;
+        left: 20px !important;
+        z-index: 999999 !important;
+        background: #1B4332 !important;
+        color: #F4C430 !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        padding: 3px 10px !important;
+        border-radius: 12px !important;
+        letter-spacing: 0.5px !important;
+        white-space: nowrap !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    }
+
+    /* ── Chat Window - Fixed Below Button (Top Left) ── */
     div[data-testid="stVerticalBlock"] > div:has(> div.floating-chat-box) {
         position: fixed !important;
-        bottom: 100px !important;
-        right: 25px !important;
+        top: 110px !important;
+        left: 20px !important;
         width: 380px !important;
         height: 550px !important;
         z-index: 999998 !important;
@@ -102,31 +119,43 @@ def render_floating_chatbot(user_profile):
     /* ── Header Styling ── */
     .chat-header-bar {
         background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-        padding: 15px 20px;
+        padding: 14px 18px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid #334155;
     }
     
-    /* ── Icon Buttons in Header ── */
+    /* ── Icon Buttons in Header - Fixed Size & Placement ── */
+    .header-icon-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
     .header-icon-btn > button {
-        background: transparent !important;
-        border: none !important;
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
         color: white !important;
-        font-size: 18px !important;
-        padding: 4px 8px !important;
+        font-size: 14px !important;
+        padding: 0 !important;
         margin: 0 !important;
-        min-height: auto !important;
-        width: auto !important;
+        min-height: 32px !important;
+        max-height: 32px !important;
+        width: 32px !important;
+        min-width: 32px !important;
+        max-width: 32px !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s !important;
     }
     .header-icon-btn > button:hover {
-        color: #F4C430 !important;
-        background: rgba(255,255,255,0.1) !important;
-        border-radius: 6px !important;
+        background: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.4) !important;
     }
 
-    /* ─ Chat Area ── */
+    /* ── Chat Area ── */
     .chat-messages-area {
         flex: 1;
         overflow-y: auto;
@@ -156,13 +185,15 @@ def render_floating_chatbot(user_profile):
             {"role": "system", "content": f"You are the Assistant AI for the Ethiopian AI Supply Chain Platform. The current user is a {role} named {name}. You have access to live database tools. Be helpful, concise, and professional."}
         ]
 
-    # 3. Render the Floating Action Button (FAB)
-    # This button stays fixed at the bottom right
+    # 3. Render the Floating Action Button (FAB) - Top Left
     if st.button("💬", key="fab_chat_toggle"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
 
-    # 4. Render the Chat Window (if open)
+    # 4. Render the Label Under the Icon
+    st.markdown('<div class="chatbot-label">Assistant AI</div>', unsafe_allow_html=True)
+
+    # 5. Render the Chat Window (if open)
     if st.session_state.chat_open:
         with st.container():
             st.markdown('<div class="floating-chat-box">', unsafe_allow_html=True)
@@ -171,18 +202,17 @@ def render_floating_chatbot(user_profile):
             st.markdown("""
             <div class="chat-header-bar">
                 <div>
-                    <div style="font-weight: 700; font-size: 16px; color: white;">💬 Assistant AI</div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.7);">Support Chatbot</div>
+                    <div style="font-weight: 700; font-size: 15px; color: white;">💬 Assistant AI</div>
+                    <div style="font-size: 10px; color: rgba(255,255,255,0.7);">Support Chatbot</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Icon Buttons Row (Clear and Close)
+            # Icon Buttons Row (Clear and Close) - Fixed Size & Aligned
             col_clear, col_close = st.columns([1, 1])
             with col_clear:
                 st.markdown('<div class="header-icon-btn">', unsafe_allow_html=True)
                 if st.button("️", key="clear_chat_icon", help="Clear Chat History"):
-                    # Keep the system prompt, clear the rest
                     st.session_state.chat_messages = [st.session_state.chat_messages[0]]
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -208,7 +238,7 @@ def render_floating_chatbot(user_profile):
             
             if prompt:
                 if not client:
-                    st.error("️ GROQ_API_KEY missing.")
+                    st.error("⚠️ GROQ_API_KEY missing.")
                 else:
                     st.session_state.chat_messages.append({"role": "user", "content": prompt})
                     
