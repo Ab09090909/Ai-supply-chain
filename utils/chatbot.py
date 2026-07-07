@@ -1,4 +1,4 @@
-"""Floating AI Support Chatbot — Top-Left Position, Fixed UI."""
+"""Floating AI Support Chatbot — Top-Right Position, Polished UI."""
 import os
 import json
 import streamlit as st
@@ -53,14 +53,15 @@ groq_tools = [
 # RENDER THE FLOATING CHATBOT UI
 # ─────────────────────────────────────────────
 def render_floating_chatbot(user_profile):
-    # 1. Inject Robust CSS for Fixed Top-Left Positioning
+    # 1. Inject CSS — fixed TOP-RIGHT positioning + polished visual design
     st.markdown("""
     <style>
-    /* ── Floating Action Button (FAB) - Fixed Top Left ── */
+    /* ── Floating Action Button (FAB) - Fixed Top Right ── */
     .stButton > button[key="fab_chat_toggle"] {
         position: fixed !important;
         top: 20px !important;
-        left: 20px !important;
+        right: 24px !important;
+        left: auto !important;
         z-index: 999999 !important;
         background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
         color: #1B4332 !important;
@@ -71,17 +72,18 @@ def render_floating_chatbot(user_profile):
         padding: 0 !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important;
         border: none !important;
-        transition: transform 0.2s !important;
+        transition: transform 0.2s ease !important;
     }
     .stButton > button[key="fab_chat_toggle"]:hover {
-        transform: scale(1.1) !important;
+        transform: scale(1.08) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
     }
 
-    /* ─ Label Under Icon ── */
+    /* ── Label Under Icon ── */
     .chatbot-label {
         position: fixed !important;
-        top: 82px !important;
-        left: 20px !important;
+        top: 80px !important;
+        right: 24px !important;
         z-index: 999999 !important;
         background: #1B4332 !important;
         color: #F4C430 !important;
@@ -92,84 +94,149 @@ def render_floating_chatbot(user_profile):
         letter-spacing: 0.5px !important;
         white-space: nowrap !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        text-align: center;
+        pointer-events: none;
     }
 
-    /* ── Chat Window - Fixed Below Button (Top Left) ── */
+    /* ── Chat Window - Fixed Below Button (Top Right) ── */
     div[data-testid="stVerticalBlock"] > div:has(> div.floating-chat-box) {
         position: fixed !important;
-        top: 110px !important;
-        left: 20px !important;
+        top: 112px !important;
+        right: 24px !important;
+        left: auto !important;
         width: 380px !important;
-        height: 550px !important;
+        height: 560px !important;
         z-index: 999998 !important;
         padding: 0 !important;
         margin: 0 !important;
     }
     .floating-chat-box {
-        background: #161b27;
-        border: 1px solid #334155;
-        border-radius: 16px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        background: #12161f;
+        border: 1px solid #2a3344;
+        border-radius: 18px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.55);
         display: flex;
         flex-direction: column;
         overflow: hidden;
         height: 100%;
+        animation: chatFadeIn 0.2s ease-out;
     }
-    
-    /* ── Header Styling ── */
+    @keyframes chatFadeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Header ── */
+    .chat-header-wrap { background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); }
     .chat-header-bar {
-        background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-        padding: 14px 18px;
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #334155;
+        gap: 10px;
+        padding: 14px 12px 14px 16px;
     }
-    
-    /* ── Icon Buttons in Header - Fixed Size & Placement ── */
-    .header-icon-btn {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+    .chat-avatar {
+        width: 34px; height: 34px; border-radius: 50%;
+        background: linear-gradient(135deg, #F4C430, #D4A017);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 17px; flex-shrink: 0;
     }
-    .header-icon-btn > button {
-        background: rgba(255,255,255,0.1) !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        color: white !important;
+    .chat-header-text { flex: 1; min-width: 0; }
+    .chat-header-title { font-weight: 700; font-size: 14.5px; color: #ffffff; line-height: 1.2; }
+    .chat-header-status { font-size: 11px; color: #B7E4C7; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; display: inline-block; box-shadow: 0 0 6px #4ADE80; }
+
+    /* Header icon buttons (Clear / Close) rendered via st.button inside header row */
+    div[data-testid="stHorizontalBlock"]:has(.header-anchor) { align-items: center !important; }
+    .header-icon-btn > button,
+    .stButton > button[key="clear_chat_icon"],
+    .stButton > button[key="close_chat_icon"] {
+        background: rgba(255,255,255,0.12) !important;
+        border: 1px solid rgba(255,255,255,0.22) !important;
+        color: #ffffff !important;
         font-size: 14px !important;
         padding: 0 !important;
-        margin: 0 !important;
-        min-height: 32px !important;
-        max-height: 32px !important;
-        width: 32px !important;
-        min-width: 32px !important;
-        max-width: 32px !important;
+        margin: 0 auto !important;
+        min-height: 30px !important;
+        max-height: 30px !important;
+        width: 30px !important;
+        min-width: 30px !important;
+        max-width: 30px !important;
         border-radius: 8px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         transition: all 0.2s !important;
     }
-    .header-icon-btn > button:hover {
-        background: rgba(255,255,255,0.2) !important;
-        border-color: rgba(255,255,255,0.4) !important;
+    .stButton > button[key="clear_chat_icon"]:hover,
+    .stButton > button[key="close_chat_icon"]:hover {
+        background: rgba(255,255,255,0.25) !important;
+        border-color: rgba(255,255,255,0.45) !important;
+    }
+    .stButton > button[key="close_chat_icon"] {
+        background: rgba(239,68,68,0.18) !important;
+        border-color: rgba(239,68,68,0.35) !important;
+    }
+    .stButton > button[key="close_chat_icon"]:hover {
+        background: rgba(239,68,68,0.35) !important;
+        border-color: rgba(239,68,68,0.55) !important;
     }
 
-    /* ── Chat Area ── */
+    /* ── Message Area ── */
     .chat-messages-area {
         flex: 1;
         overflow-y: auto;
-        padding: 15px;
-        background: #0f1117;
+        padding: 16px 14px;
+        background: #0d1017;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
     }
-    .floating-chat-box [data-testid="stChatMessage"] {
-        background: transparent !important;
-        border: none !important;
+    .chat-messages-area::-webkit-scrollbar { width: 5px; }
+    .chat-messages-area::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+    .msg-row { display: flex; width: 100%; }
+    .msg-row.user { justify-content: flex-end; }
+    .msg-row.assistant { justify-content: flex-start; }
+
+    .msg-bubble {
+        max-width: 80%;
+        padding: 9px 13px;
+        font-size: 13.5px;
+        line-height: 1.45;
+        word-wrap: break-word;
+        white-space: pre-wrap;
     }
+    .msg-bubble.user {
+        background: linear-gradient(135deg, #2D6A4F, #1B4332);
+        color: #ffffff;
+        border-radius: 14px 14px 3px 14px;
+    }
+    .msg-bubble.assistant {
+        background: #1e2532;
+        color: #e5e7eb;
+        border: 1px solid #2a3344;
+        border-radius: 14px 14px 14px 3px;
+    }
+    .msg-typing { display: flex; gap: 4px; padding: 4px 2px; }
+    .msg-typing span {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: #94a3b8; opacity: 0.6;
+        animation: typingBounce 1s infinite ease-in-out;
+    }
+    .msg-typing span:nth-child(2) { animation-delay: 0.15s; }
+    .msg-typing span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+    /* ── Input Area ── */
     .floating-chat-box .stChatInput {
-        padding: 12px !important;
-        background: #161b27 !important;
-        border-top: 1px solid #334155 !important;
+        padding: 10px 12px !important;
+        background: #12161f !important;
+        border-top: 1px solid #2a3344 !important;
+    }
+    .floating-chat-box .stChatInput textarea {
+        background: #1e2532 !important;
+        color: #e5e7eb !important;
+        border-radius: 10px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -185,7 +252,7 @@ def render_floating_chatbot(user_profile):
             {"role": "system", "content": f"You are the Assistant AI for the Ethiopian AI Supply Chain Platform. The current user is a {role} named {name}. You have access to live database tools. Be helpful, concise, and professional."}
         ]
 
-    # 3. Render the Floating Action Button (FAB) - Top Left
+    # 3. Render the Floating Action Button (FAB) - Top Right
     if st.button("💬", key="fab_chat_toggle"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
@@ -197,94 +264,92 @@ def render_floating_chatbot(user_profile):
     if st.session_state.chat_open:
         with st.container():
             st.markdown('<div class="floating-chat-box">', unsafe_allow_html=True)
-            
-            # ── Header with Title and Icon Buttons ──
-            st.markdown("""
-            <div class="chat-header-bar">
-                <div>
-                    <div style="font-weight: 700; font-size: 15px; color: white;">💬 Assistant AI</div>
-                    <div style="font-size: 10px; color: rgba(255,255,255,0.7);">Support Chatbot</div>
+
+            # ── Header: avatar + title/status + clear/close buttons ──
+            st.markdown('<div class="chat-header-wrap"><span class="header-anchor"></span>', unsafe_allow_html=True)
+            col_title, col_clear, col_close = st.columns([5, 1, 1])
+            with col_title:
+                st.markdown("""
+                <div class="chat-header-bar">
+                    <div class="chat-avatar">💬</div>
+                    <div class="chat-header-text">
+                        <div class="chat-header-title">Assistant AI</div>
+                        <div class="chat-header-status"><span class="status-dot"></span>Online now</div>
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Icon Buttons Row (Clear and Close) - Fixed Size & Aligned
-            col_clear, col_close = st.columns([1, 1])
+                """, unsafe_allow_html=True)
             with col_clear:
-                st.markdown('<div class="header-icon-btn">', unsafe_allow_html=True)
-                if st.button("️", key="clear_chat_icon", help="Clear Chat History"):
+                if st.button("🧹", key="clear_chat_icon", help="Clear chat history"):
                     st.session_state.chat_messages = [st.session_state.chat_messages[0]]
                     st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-                
             with col_close:
-                st.markdown('<div class="header-icon-btn">', unsafe_allow_html=True)
-                if st.button("❌", key="close_chat_icon", help="Close Chat"):
+                if st.button("✕", key="close_chat_icon", help="Close chat"):
                     st.session_state.chat_open = False
                     st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # ── Messages Area ──
-            with st.container():
-                st.markdown('<div class="chat-messages-area">', unsafe_allow_html=True)
-                for msg in st.session_state.chat_messages:
-                    if msg["role"] not in ("system", "tool"):
-                        with st.chat_message(msg["role"]):
-                            st.write(msg["content"])
-                st.markdown('</div>', unsafe_allow_html=True)
+            messages_html = '<div class="chat-messages-area">'
+            for msg in st.session_state.chat_messages:
+                if msg["role"] == "user":
+                    text = (msg.get("content") or "").replace("<", "&lt;").replace(">", "&gt;")
+                    messages_html += f'<div class="msg-row user"><div class="msg-bubble user">{text}</div></div>'
+                elif msg["role"] == "assistant" and msg.get("content"):
+                    text = (msg.get("content") or "").replace("<", "&lt;").replace(">", "&gt;")
+                    messages_html += f'<div class="msg-row assistant"><div class="msg-bubble assistant">{text}</div></div>'
+            messages_html += '</div>'
+            st.markdown(messages_html, unsafe_allow_html=True)
 
             # ── Input Area ──
             prompt = st.chat_input("Ask about products, producers...", key="floating_chat_input")
-            
+
             if prompt:
                 if not client:
                     st.error("⚠️ GROQ_API_KEY missing.")
                 else:
                     st.session_state.chat_messages.append({"role": "user", "content": prompt})
-                    
-                    with st.chat_message("assistant"):
-                        with st.spinner("🧠 Thinking..."):
-                            try:
-                                response = client.chat.completions.create(
+
+                    with st.spinner("Assistant is typing..."):
+                        try:
+                            response = client.chat.completions.create(
+                                model="llama-3.3-70b-versatile",
+                                messages=st.session_state.chat_messages,
+                                tools=groq_tools,
+                                tool_choice="auto",
+                                temperature=0.6,
+                                max_tokens=800
+                            )
+                            response_message = response.choices[0].message
+                            tool_calls = response_message.tool_calls
+
+                            if tool_calls:
+                                st.session_state.chat_messages.append({
+                                    "role": response_message.role,
+                                    "content": response_message.content or "",
+                                    "tool_calls": response_message.tool_calls
+                                })
+                                for tool_call in tool_calls:
+                                    function_name = tool_call.function.name
+                                    function_to_call = available_tools[function_name]
+                                    function_args = json.loads(tool_call.function.arguments)
+                                    function_response = function_to_call(**function_args)
+                                    st.session_state.chat_messages.append({
+                                        "tool_call_id": tool_call.id,
+                                        "role": "tool",
+                                        "name": function_name,
+                                        "content": function_response,
+                                    })
+                                second_response = client.chat.completions.create(
                                     model="llama-3.3-70b-versatile",
                                     messages=st.session_state.chat_messages,
-                                    tools=groq_tools,
-                                    tool_choice="auto",
-                                    temperature=0.6,
-                                    max_tokens=800
                                 )
-                                response_message = response.choices[0].message
-                                tool_calls = response_message.tool_calls
+                                ai_reply = second_response.choices[0].message.content
+                            else:
+                                ai_reply = response_message.content
 
-                                if tool_calls:
-                                    st.session_state.chat_messages.append({
-                                        "role": response_message.role,
-                                        "content": response_message.content or "",
-                                        "tool_calls": response_message.tool_calls
-                                    })
-                                    for tool_call in tool_calls:
-                                        function_name = tool_call.function.name
-                                        function_to_call = available_tools[function_name]
-                                        function_args = json.loads(tool_call.function.arguments)
-                                        function_response = function_to_call(**function_args)
-                                        st.session_state.chat_messages.append({
-                                            "tool_call_id": tool_call.id,
-                                            "role": "tool",
-                                            "name": function_name,
-                                            "content": function_response,
-                                        })
-                                    second_response = client.chat.completions.create(
-                                        model="llama-3.3-70b-versatile",
-                                        messages=st.session_state.chat_messages,
-                                    )
-                                    ai_reply = second_response.choices[0].message.content
-                                else:
-                                    ai_reply = response_message.content
-
-                                st.write(ai_reply)
-                                st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
-                            except Exception as e:
-                                st.error(f"Error: {e}")
+                            st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
+                        except Exception as e:
+                            st.error(f"Error: {e}")
                     st.rerun()
-                    
+
             st.markdown('</div>', unsafe_allow_html=True)
