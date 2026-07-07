@@ -860,15 +860,20 @@ with tab_analytics:
                 fraud_results = []
                 for o in all_orders[:20]:  # Limit for performance
                     try:
-                        fraud_score = detect_fraud({
-                            "total_price_birr": o.get("total_price_birr", 0),
-                            "buyer_id": o.get("buyer_id", ""),
-                            "status": o.get("status", "")
-                        })
+                        # Use the correct function name and parameters
+                        fraud_score = check_fraud_risk(
+                            sector="Unknown", 
+                            product="Unknown", 
+                            region="Unknown",
+                            payment_method="Bank Transfer", 
+                            quantity=1, 
+                            agreed_price_birr=o.get("total_price_birr", 0), 
+                            market_price_birr=o.get("total_price_birr", 0)
+                        )
                         fraud_results.append({
                             "order_id": str(o["id"])[:8],
                             "amount": o.get("total_price_birr", 0),
-                            "risk_score": fraud_score.get("risk_score", 0),
+                            "risk_score": fraud_score.get("fraud_probability", 0),
                             "risk_level": fraud_score.get("risk_level", "unknown")
                         })
                     except Exception:
