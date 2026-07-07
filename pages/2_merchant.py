@@ -746,3 +746,9 @@ with tab_notif:
 
 with tab_profile:
     render_profile_edit_tab(profile, user_id)
+
+# ═════════════════════════════════════════════════════════════
+# FLOATING CHATBOT (Add this at the end of 2_merchant.py)
+# ═════════════════════════════════════════════════════════════
+from utils.chatbot import render_floating_chatbot
+render_floating_chatbot(profile)
