@@ -56,25 +56,37 @@ def render_floating_chatbot(user_profile):
     # 1. Inject CSS — fixed TOP-RIGHT positioning + polished visual design
     st.markdown("""
     <style>
-    /* ── Floating Action Button (FAB) - Fixed Top Right ── */
-    .stButton > button[key="fab_chat_toggle"] {
+    /* ── Floating Action Button (FAB) - Fixed Top Right ──
+       Streamlit does not expose key="..." as a real HTML attribute on the
+       button element, so it must be targeted via the auto-generated
+       st-key-<key> class on the widget's wrapper div instead. */
+    div[class*="st-key-fab_chat_toggle"] {
         position: fixed !important;
         top: 20px !important;
         right: 24px !important;
         left: auto !important;
         z-index: 999999 !important;
+        width: 56px !important;
+        height: 56px !important;
+    }
+    div[class*="st-key-fab_chat_toggle"] > div,
+    div[class*="st-key-fab_chat_toggle"] .stButton {
+        width: 56px !important;
+        height: 56px !important;
+    }
+    div[class*="st-key-fab_chat_toggle"] button {
+        width: 56px !important;
+        height: 56px !important;
         background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
         color: #1B4332 !important;
         border-radius: 50% !important;
-        width: 56px !important;
-        height: 56px !important;
         font-size: 26px !important;
         padding: 0 !important;
         box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important;
         border: none !important;
         transition: transform 0.2s ease !important;
     }
-    .stButton > button[key="fab_chat_toggle"]:hover {
+    div[class*="st-key-fab_chat_toggle"] button:hover {
         transform: scale(1.08) !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
     }
@@ -98,8 +110,12 @@ def render_floating_chatbot(user_profile):
         pointer-events: none;
     }
 
-    /* ── Chat Window - Fixed Below Button (Top Right) ── */
-    div[data-testid="stVerticalBlock"] > div:has(> div.floating-chat-box) {
+    /* ── Chat Window - Fixed Below Button (Top Right) ──
+       :has() targets the nearest real ancestor block that contains the
+       .floating-chat-box marker div, which is what actually needs to be
+       pinned to the viewport (the marker div itself has no box). */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(div.floating-chat-box),
+    div[data-testid="stVerticalBlock"]:has(> div.floating-chat-box) {
         position: fixed !important;
         top: 112px !important;
         right: 24px !important;
@@ -145,11 +161,12 @@ def render_floating_chatbot(user_profile):
     .chat-header-status { font-size: 11px; color: #B7E4C7; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; display: inline-block; box-shadow: 0 0 6px #4ADE80; }
 
-    /* Header icon buttons (Clear / Close) rendered via st.button inside header row */
+    /* Header icon buttons (Clear / Close) rendered via st.button inside header row.
+       Same fix as the FAB: target the real st-key-<key> wrapper class. */
     div[data-testid="stHorizontalBlock"]:has(.header-anchor) { align-items: center !important; }
-    .header-icon-btn > button,
-    .stButton > button[key="clear_chat_icon"],
-    .stButton > button[key="close_chat_icon"] {
+
+    div[class*="st-key-clear_chat_icon"] button,
+    div[class*="st-key-close_chat_icon"] button {
         background: rgba(255,255,255,0.12) !important;
         border: 1px solid rgba(255,255,255,0.22) !important;
         color: #ffffff !important;
@@ -167,16 +184,16 @@ def render_floating_chatbot(user_profile):
         justify-content: center !important;
         transition: all 0.2s !important;
     }
-    .stButton > button[key="clear_chat_icon"]:hover,
-    .stButton > button[key="close_chat_icon"]:hover {
+    div[class*="st-key-clear_chat_icon"] button:hover,
+    div[class*="st-key-close_chat_icon"] button:hover {
         background: rgba(255,255,255,0.25) !important;
         border-color: rgba(255,255,255,0.45) !important;
     }
-    .stButton > button[key="close_chat_icon"] {
+    div[class*="st-key-close_chat_icon"] button {
         background: rgba(239,68,68,0.18) !important;
         border-color: rgba(239,68,68,0.35) !important;
     }
-    .stButton > button[key="close_chat_icon"]:hover {
+    div[class*="st-key-close_chat_icon"] button:hover {
         background: rgba(239,68,68,0.35) !important;
         border-color: rgba(239,68,68,0.55) !important;
     }
