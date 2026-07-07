@@ -443,13 +443,16 @@ with tab_products:
 # ══════════════════════════════════════════════
 # TAB — MY PRODUCTS
 # ══════════════════════════════════════════════
+ # ═════════════════════════════════════════════
+# TAB — MY PRODUCTS
+# ══════════════════════════════════════════════
 with tab_products:
     st.markdown('<div class="section-title">Product Listings</div>', unsafe_allow_html=True)
     my_products = cached_query("products", filters={"producer_id": user_id}, limit=200)
-
-    # ── Summary KPIs ──
+    
+    # Summary KPIs
     if my_products:
-        total_val2 = sum(p.get("price_birr", 0) * p.get("quantity", 0) for p in my_products)
+        total_val2 = sum(p.get("price_birr",0) * p.get("quantity",0) for p in my_products)
         active2 = sum(1 for p in my_products if p.get("is_available"))
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -459,13 +462,13 @@ with tab_products:
         with k3:
             st.markdown(f'<div class="kpi-card"><div class="kpi-label">Inventory Value</div><div class="kpi-value">{total_val2:,.0f}</div><div class="kpi-sub">Birr</div></div>', unsafe_allow_html=True)
         st.markdown("")
-
-    # ── Add Product Form ──
+    
+    # Add Product Form
     with st.expander("➕ Add New Product", expanded=not bool(my_products)):
         with st.form("add_product_form", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
-                new_name = st.text_input("Product Name *", placeholder="e.g. Teff, Coffee Beans")
+                new_name   = st.text_input("Product Name *", placeholder="e.g. Teff, Coffee Beans")
                 new_sector = st.selectbox("Sector *", SECTORS)
                 available_grades = get_grades_for_product(new_sector, new_name)
                 new_grade_ui = st.selectbox("Quality Grade *", available_grades)
@@ -473,36 +476,30 @@ with tab_products:
                 new_region = st.selectbox("Region *", REGIONS,
                     index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0)
             with c2:
-                new_qty = st.number_input("Quantity *", min_value=0.1, value=1.0, step=0.5)
-                new_unit = st.selectbox("Unit *", UNITS)
-
-                # UPDATE 1: AI Price Suggestion
-                use_ai_price = st.checkbox("🤖 Auto-suggest price using AI", value=False,
-                    help="Let AI analyze market data to recommend a price.")
+                new_qty   = st.number_input("Quantity *", min_value=0.1, value=1.0, step=0.5)
+                new_unit  = st.selectbox("Unit *", UNITS)
+                
+                # Update 1: AI Price Suggestion
+                use_ai_price = st.checkbox("🤖 Auto-suggest price using AI", value=False, help="Let AI analyze market data to recommend a price.")
                 new_price = st.number_input("Price (Birr) *", min_value=1.0, value=100.0, step=10.0)
                 new_avail = st.checkbox("List as Available", value=True)
-
-            # UPDATE 2: Image Upload (Prominent)
-            new_image = st.file_uploader("📷 Product Image (Recommended)",
-                type=["jpg", "jpeg", "png"], key="prod_img_upload",
-                help="High-quality images attract more buyers!")
+            
+            new_image = st.file_uploader("📷 Product Image (Recommended)", type=["jpg","jpeg","png"], key="prod_img_upload", help="High-quality images attract more buyers!")
             new_image_b64 = None
             if new_image:
                 try:
                     new_image_b64 = base64.b64encode(new_image.read()).decode("utf-8")
                 except Exception:
                     st.warning("Could not process image.")
-
-            new_desc = st.text_area("Description (optional)", height=80,
-                placeholder="Describe quality, harvest details, storage…")
+            new_desc = st.text_area("Description (optional)", height=80, placeholder="Describe quality, harvest details, storage…")
             submitted = st.form_submit_button("✅ Add Product", type="primary", use_container_width=True)
-
+            
             if submitted:
                 if not new_name.strip():
                     st.error("Product name is required.")
                 else:
                     final_price = new_price
-                    # UPDATE 1: Apply AI Price if checked
+                    # Update 1: Apply AI Price if checked
                     if use_ai_price:
                         with st.spinner("🤖 Analyzing market data for price recommendation..."):
                             try:
@@ -517,7 +514,7 @@ with tab_products:
                                 st.success(f"💡 AI Recommended Price: {final_price:,.0f} Birr/{new_unit}")
                             except Exception as e:
                                 st.warning(f"AI price suggestion failed, using manual price: {e}")
-
+                    
                     try:
                         data = {
                             "producer_id": user_id,
@@ -540,35 +537,33 @@ with tab_products:
                     except Exception as e:
                         st.error(f"Failed to add product: {e}")
 
-    # ── Filters ──
+    # Filters
     if my_products:
         pf1, pf2 = st.columns(2)
         with pf1:
             prod_search = st.text_input("🔍 Search products", key="prod_search_inp", placeholder="Product name…")
         with pf2:
-            avail_filter = st.selectbox("Availability", ["All", "Available", "Unavailable"], key="prod_avail_filter")
-
+            avail_filter = st.selectbox("Availability", ["All","Available","Unavailable"], key="prod_avail_filter")
+        
         filtered = my_products
         if prod_search:
-            filtered = [p for p in filtered if prod_search.lower() in p.get("product_name", "").lower()]
+            filtered = [p for p in filtered if prod_search.lower() in p.get("product_name","").lower()]
         if avail_filter == "Available":
             filtered = [p for p in filtered if p.get("is_available")]
         elif avail_filter == "Unavailable":
             filtered = [p for p in filtered if not p.get("is_available")]
-
+        
         st.caption(f"**{len(filtered)} product(s)**")
-
-        # ── Product Cards with Images ──
+        
         for p in filtered:
             pid = p["id"]
             avail = p.get("is_available", False)
             status_pill = '<span class="pill pill-success">● Available</span>' if avail else '<span class="pill pill-danger">● Unavailable</span>'
-
+            
             with st.container(border=True):
-                # UPDATE 2: Modern 2-Column Layout (Image + Info)
+                # FIX: Modern Image Layout using st.image for proper PNG/JPEG rendering
                 img_col, info_col = st.columns([1, 4])
-
-                # ── Image Column ──
+                
                 with img_col:
                     img_b64 = p.get("image_base64")
                     if img_b64:
@@ -576,65 +571,55 @@ with tab_products:
                             img_data = base64.b64decode(img_b64)
                             st.image(img_data, use_container_width=True)
                         except Exception:
-                            st.markdown("""
-                            <div style="background:#1e2a3a;border-radius:8px;height:120px;
-                                        display:flex;align-items:center;justify-content:center;
-                                        border:1px dashed #334155;color:#64748b;font-size:12px;">
-                                📷 Image Error
-                            </div>""", unsafe_allow_html=True)
+                            st.markdown("📷 *Image error*")
                     else:
-                        st.markdown("""
-                        <div style="background:#1e2a3a;border-radius:8px;height:120px;
-                                    display:flex;align-items:center;justify-content:center;
-                                    border:1px dashed #334155;color:#64748b;font-size:12px;">
-                            📷 No Image
-                        </div>""", unsafe_allow_html=True)
-
-                # ── Info Column ──
+                        st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
+                
                 with info_col:
                     c1, c2, c3 = st.columns([5, 2, 3])
-
                     with c1:
                         st.markdown(f"**📦 {p['product_name']}** &nbsp; {status_pill}", unsafe_allow_html=True)
                         st.caption(f"Sector: {p.get('sector','—')} · Grade: **{p.get('quality_grade','—')}** · 📍 {p.get('region','—')}")
                         st.caption(f"Stock: {p.get('quantity','—')} {p.get('unit','')} · Listed: {p.get('created_at','')[:10]}")
-
                     with c2:
                         st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
-
                     with c3:
-                        # Activate / Deactivate Button
-                        tog_label = "🔴 Deactivate" if avail else "🟢 Activate"
-                        if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
-                            try:
-                                supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
-                                clear_data_cache()
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed: {e}")
-
-                        # Delete Button with Confirmation
-                        if st.session_state.get(f"confirm_del_prod_{pid}"):
-                            st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
-                            if st.button("🗑️ Yes, Delete", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+                        ba, bb = st.columns(2)
+                        with ba:
+                            tog_label = "🔴 Deactivate" if avail else "🟢 Activate"
+                            if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
                                 try:
-                                    supabase.table("products").delete().eq("id", pid).execute()
+                                    supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
                                     clear_data_cache()
-                                    st.session_state.pop(f"confirm_del_prod_{pid}", None)
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Delete failed: {e}")
-                            if st.button("Cancel", key=f"cancel_del_prod_{pid}", use_container_width=True):
-                                st.session_state.pop(f"confirm_del_prod_{pid}", None)
-                                st.rerun()
-                        else:
-                            st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
-                            if st.button("🗑️ Delete", key=f"del_prod_{pid}", use_container_width=True):
-                                st.session_state[f"confirm_del_prod_{pid}"] = True
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
+                                    st.error(f"Failed: {e}")
+                        
+                        # FIX: Removed nested columns to prevent StreamlitAPIException
+                        with bb:
+                            if st.session_state.get(f"confirm_del_prod_{pid}"):
+                                st.markdown('<div class="confirm-box">⚠️ Delete this product permanently?</div>', unsafe_allow_html=True)
+                                # Buttons are stacked vertically with full width
+                                if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+                                    try:
+                                        supabase.table("products").delete().eq("id", pid).execute()
+                                        clear_data_cache()
+                                        st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Delete failed: {e}")
+                                if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
+                                    st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                                    st.rerun()
+                            else:
+                                st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
+                                if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
+                                    st.session_state[f"confirm_del_prod_{pid}"] = True
+                                    st.rerun()
+                                st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)                           
+                        
 # ══════════════════════════════════════════════
 # TAB — DEMAND FORECAST
 # ══════════════════════════════════════════════
