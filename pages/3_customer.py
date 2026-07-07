@@ -682,9 +682,9 @@ with tab_ai_insights:
                  'borderwidth': 2,
                  'bordercolor': "#334155",
                  'steps': [
-                     {'range': [0, 50], 'color': "#7f1d1d44"},
-                     {'range': [50, 80], 'color': "#78350f44"},
-                     {'range': [80, 100], 'color': "#3b1a6044"}],
+                     {'range': [0, 50], 'color': "#7f1d1d"},
+                     {'range': [50, 80], 'color': "#78350f"},
+                     {'range': [80, 100], 'color': "#3b1a60"}],
                  'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
     ))
     fig_score.update_layout(paper_bgcolor="#161b27", font={'color': "#94a3b8", 'family': "Inter"}, height=300)
