@@ -4,15 +4,15 @@ import os
 import datetime
 import streamlit as st
 import pandas as pd
-
+import base64
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from utils.theme import inject_theme
+from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS, SECTORS
 from utils.db_helpers import supabase, cached_query, clear_data_cache, send_notification
 from utils.verification import check_verification_status, render_document_upload
 from utils.shared_ui import render_browse_tab, render_notifications_tab, render_profile_edit_tab
 from utils.pdf_generator import generate_agreement_pdf, generate_agreement_preview_html
+import plotly.graph_objects as go
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
@@ -156,6 +156,23 @@ html, body, [data-testid="stAppViewContainer"] {
 .fraud-low  { color: #4ade80; font-weight: 600; font-size: 12px; }
 .fraud-med  { color: #fbbf24; font-weight: 600; font-size: 12px; }
 .fraud-high { color: #f87171; font-weight: 600; font-size: 12px; }
+
+/* Product Image Card */
+.product-img-container {
+    background: #1e2a3a;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    border: 1px solid #334155;
+}
+.product-img-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,7 +180,6 @@ html, body, [data-testid="stAppViewContainer"] {
 # Auth Guard
 # ─────────────────────────────────────────────
 inject_theme()
-
 if st.session_state.get("user") is None:
     st.warning("⚠️ Please sign in first.")
     st.page_link("app.py", label="← Go to Login", icon="🔐")
@@ -201,6 +217,11 @@ with st.sidebar:
     if st.button("🔄 Refresh Data", use_container_width=True):
         clear_data_cache()
         st.rerun()
+    
+    # Update 7: Dark/Light Toggle
+    st.markdown("### 🎨 Theme")
+    render_theme_toggle()
+    
     st.divider()
     st.markdown("### 📌 Account Status")
     if verif_status["is_verified"]:
@@ -209,12 +230,12 @@ with st.sidebar:
         st.markdown('<div class="pill pill-warning">● Pending Verification</div>', unsafe_allow_html=True)
     st.divider()
     try:
-        active_orders_sidebar = supabase.table("orders").select("*", count="exact").eq("buyer_id", user_id).in_("status",["pending","confirmed"]).execute().count or 0
+        active_orders_sidebar = supabase.table("orders").select("*", count="exact").eq("buyer_id", user_id).in_("status",["pending", "confirmed"]).execute().count or 0
     except Exception:
         active_orders_sidebar = 0
     st.markdown(f"**{active_orders_sidebar}** active orders")
     st.divider()
-    st.caption(f"**{profile.get('full_name','Merchant')}**")
+    st.caption(f"{profile.get('full_name','Merchant')}")
     st.caption(f"Merchant · {profile.get('region','')}")
 
 # ─────────────────────────────────────────────
@@ -233,10 +254,10 @@ if not verif_status["is_verified"]:
 # Tabs
 # ─────────────────────────────────────────────
 (tab_overview, tab_browse_tab, tab_orders, tab_agree,
- tab_history, tab_pref, tab_notif, tab_profile) = st.tabs([
+ tab_history, tab_pref, tab_ai_insights, tab_notif, tab_profile) = st.tabs([
     "📊 Overview", "🛒 Browse & Order", "📋 My Orders",
     "📄 Agreements", "📜 History", "⚙️ Preferences",
-    "🔔 Notifications", "👤 Profile",
+    "🤖 AI Insights", "🔔 Notifications", "👤 Profile",
 ])
 
 # ══════════════════════════════════════════════
@@ -247,15 +268,12 @@ with tab_overview:
         my_orders_all = supabase.table("orders").select("*").eq("buyer_id", user_id).execute().data or []
     except Exception:
         my_orders_all = []
-
     active_ords  = [o for o in my_orders_all if o.get("status") in ("pending","confirmed")]
     delivered    = [o for o in my_orders_all if o.get("status") == "delivered"]
     total_spent  = sum(float(o.get("total_price_birr") or 0) for o in delivered)
     pending_agree = sum(1 for o in my_orders_all if o.get("producer_confirmed") and not o.get("merchant_confirmed"))
-
     if pending_agree > 0:
         st.markdown(f'<div class="alert-box alert-warning">📄 <strong>{pending_agree} agreement(s)</strong> from producers are waiting for your response.</div>', unsafe_allow_html=True)
-
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Active Orders</div><div class="kpi-value">{len(active_ords)}</div><div class="kpi-sub">Pending & confirmed</div></div>', unsafe_allow_html=True)
@@ -265,7 +283,6 @@ with tab_overview:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Spent</div><div class="kpi-value">{total_spent:,.0f}</div><div class="kpi-sub">Birr purchased</div></div>', unsafe_allow_html=True)
     with k4:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Pending Agreements</div><div class="kpi-value">{pending_agree}</div><div class="kpi-sub">Awaiting your response</div></div>', unsafe_allow_html=True)
-
     # Monthly spending chart
     if delivered:
         monthly = {}
@@ -276,13 +293,12 @@ with tab_overview:
             st.markdown('<div class="section-title">Monthly Spending</div>', unsafe_allow_html=True)
             df_m = pd.DataFrame({"Month": list(monthly.keys()), "Spent": list(monthly.values())}).sort_values("Month")
             st.bar_chart(df_m.set_index("Month"), height=200, color="#2563eb")
-
     # Recent activity
     if my_orders_all:
         st.markdown('<div class="section-title">Recent Activity</div>', unsafe_allow_html=True)
         for o in sorted(my_orders_all, key=lambda x: x.get("created_at",""), reverse=True)[:5]:
             status = o.get("status","pending")
-            color = {"pending":"#fbbf24","confirmed":"#60a5fa","delivered":"#4ade80","cancelled":"#f87171"}.get(status,"#94a3b8")
+            color = {"pending":"#fbbf24","confirmed":"#60a5fa","delivered":"#4ade80","cancelled":"#f87171","declined":"#f87171"}.get(status,"#94a3b8")
             ts = o.get("created_at","")[:16].replace("T"," ")
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e2a3a;">
@@ -307,27 +323,24 @@ with tab_orders:
     try:
         my_orders = supabase.table("orders").select(
             "*, products(product_name, sector, quality_grade, unit, region, price_birr, producer_id), profiles!orders_buyer_id_fkey(full_name, phone, region)"
-        ).eq("buyer_id", user_id).neq("status","delivered").order("created_at", desc=True).limit(50).execute().data or []
+        ).eq("buyer_id", user_id).neq("status", "delivered").order("created_at", desc=True).limit(50).execute().data or []
     except Exception as e:
         st.error(f"Could not load orders: {e}")
         my_orders = []
-
     # Filters
     of1, of2 = st.columns(2)
     with of1:
         ord_status = st.selectbox("Status", ["All","pending","confirmed","cancelled"], key="mord_status")
     with of2:
         ord_search = st.text_input("🔍 Search", key="mord_search", placeholder="Product name…")
-
     filtered_orders = my_orders if ord_status == "All" else [o for o in my_orders if o.get("status") == ord_status]
     if ord_search:
         filtered_orders = [o for o in filtered_orders if ord_search.lower() in (o.get("products") or {}).get("product_name","").lower()]
-
     if not filtered_orders:
         st.markdown('<div class="alert-box alert-info">📋 No active orders. Browse products to place your first order.</div>', unsafe_allow_html=True)
     else:
         st.caption(f"**{len(filtered_orders)} order(s)**")
-        STATUS_PILLS = {"pending":"pill-warning","confirmed":"pill-info","cancelled":"pill-danger"}
+        STATUS_PILLS = {"pending":"pill-warning","confirmed":"pill-info","cancelled":"pill-danger","declined":"pill-danger"}
         for o in filtered_orders:
             oid   = o["id"]
             prod  = o.get("products") or {}
@@ -370,7 +383,6 @@ with tab_agree:
         ).eq("buyer_id", user_id).eq("producer_confirmed", True).eq("merchant_confirmed", False).execute().data or []
     except Exception:
         producer_requests = []
-
     if not producer_requests:
         st.markdown('<div class="alert-box alert-info">📄 No pending agreement requests from producers.</div>', unsafe_allow_html=True)
     else:
@@ -382,13 +394,11 @@ with tab_agree:
             qty_ord   = float(o.get("quantity_ordered") or 0)
             total_val = float(o.get("total_price_birr") or 0)
             ppu       = float(prod.get("price_birr") or (total_val / qty_ord if qty_ord else 0))
-
             # Look up producer name from profiles
             try:
                 prod_profile = supabase.table("profiles").select("full_name,phone,region").eq("id", producer_id).single().execute().data or {}
             except Exception:
                 prod_profile = {}
-
             with st.container(border=True):
                 c1, c2 = st.columns([5, 3])
                 with c1:
@@ -396,7 +406,6 @@ with tab_agree:
                     st.caption(f"Sector: {prod.get('sector','')} · Grade: **{prod.get('quality_grade','')}** · 📍 {prod.get('region','')}")
                     st.caption(f"👤 Producer: **{prod_profile.get('full_name','Unknown')}** · 📞 {prod_profile.get('phone','N/A')}")
                     st.markdown(f'<div style="margin-top:10px;"><span class="price-tag">{qty_ord:,.1f} {prod.get("unit","")}</span> &nbsp;&nbsp; <span class="price-tag">{total_val:,.0f} Birr</span></div>', unsafe_allow_html=True)
-
                     # Agreement preview
                     with st.expander("👁️ Preview Agreement Before Deciding"):
                         try:
@@ -423,7 +432,6 @@ with tab_agree:
                             st.components.v1.html(preview_html, height=450, scrolling=True)
                         except Exception as ex:
                             st.caption(f"Preview error: {ex}")
-
                 with c2:
                     ba1, ba2 = st.columns(2)
                     with ba1:
@@ -437,16 +445,21 @@ with tab_agree:
                             except Exception as e:
                                 st.error(f"Failed: {e}")
                     with ba2:
+                        # Update 4: Change decline to move to history with "declined" status
                         if st.button("❌ Decline", key=f"m_decline_{oid}", use_container_width=True):
                             try:
-                                supabase.table("orders").update({"status":"cancelled"}).eq("id", oid).execute()
+                                # Update status to "declined" instead of "cancelled"
+                                supabase.table("orders").update({
+                                    "status": "declined",
+                                    "declined_at": datetime.datetime.now().isoformat(),
+                                    "declined_by": "merchant"
+                                }).eq("id", oid).execute()
                                 if producer_id:
                                     send_notification(producer_id, "❌ Agreement Declined", "Merchant declined your supply agreement.", "error")
                                 clear_data_cache()
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Failed: {e}")
-
                     # Download PDF (even before confirming)
                     try:
                         pdf_bytes = generate_agreement_pdf(
@@ -475,7 +488,6 @@ with tab_agree:
                             use_container_width=True)
                     except Exception:
                         pass
-
     # ── Confirmed Agreements ──────────────────────────────────────────────
     st.markdown('<div class="section-title">Confirmed Agreements</div>', unsafe_allow_html=True)
     try:
@@ -484,7 +496,6 @@ with tab_agree:
         ).eq("buyer_id", user_id).eq("merchant_confirmed", True).in_("status",["confirmed","delivered"]).order("created_at", desc=True).execute().data or []
     except Exception:
         confirmed_agrees = []
-
     if not confirmed_agrees:
         st.markdown('<div class="alert-box alert-info">No confirmed agreements yet.</div>', unsafe_allow_html=True)
     else:
@@ -500,7 +511,6 @@ with tab_agree:
                 pp2 = supabase.table("profiles").select("full_name,phone,region").eq("id", producer_id2).single().execute().data or {}
             except Exception:
                 pp2 = {}
-
             with st.container(border=True):
                 c1, c2 = st.columns([5, 2])
                 with c1:
@@ -543,40 +553,51 @@ with tab_agree:
 with tab_history:
     st.markdown('<div class="section-title">Purchase History</div>', unsafe_allow_html=True)
     try:
+        # Update 4: Include declined orders in history
         mh_orders = supabase.table("orders").select(
             "*, products(product_name, sector, quality_grade, unit, region, producer_id)"
-        ).eq("buyer_id", user_id).eq("status","delivered").order("created_at", desc=True).execute().data or []
+        ).eq("buyer_id", user_id).in_("status", ["delivered", "declined", "cancelled"]).order("created_at", desc=True).execute().data or []
     except Exception:
         mh_orders = []
-
+    
+    # Add filter for history type
+    hist_filter = st.selectbox("Show", ["All", "Delivered", "Declined", "Cancelled"], key="hist_filter")
+    if hist_filter == "Delivered":
+        mh_orders = [o for o in mh_orders if o.get("status") == "delivered"]
+    elif hist_filter == "Declined":
+        mh_orders = [o for o in mh_orders if o.get("status") == "declined"]
+    elif hist_filter == "Cancelled":
+        mh_orders = [o for o in mh_orders if o.get("status") == "cancelled"]
+    
     if not mh_orders:
-        st.markdown('<div class="alert-box alert-info">📜 No delivered orders yet.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box alert-info">📜 No history records yet.</div>', unsafe_allow_html=True)
     else:
-        total_spent2 = sum(float(o.get("total_price_birr") or 0) for o in mh_orders)
+        total_spent2 = sum(float(o.get("total_price_birr") or 0) for o in mh_orders if o.get("status") == "delivered")
         h1, h2 = st.columns(2)
         with h1:
             st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Purchased</div><div class="price-tag">{total_spent2:,.0f}</div><div class="kpi-sub">Birr spent</div></div>', unsafe_allow_html=True)
         with h2:
-            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Completed Orders</div><div class="kpi-value">{len(mh_orders)}</div><div class="kpi-sub">Received successfully</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="kpi-card"><div class="kpi-label">Completed Orders</div><div class="kpi-value">{len([o for o in mh_orders if o.get("status") == "delivered"])}</div><div class="kpi-sub">Received successfully</div></div>', unsafe_allow_html=True)
         st.markdown("")
-
         # Sector breakdown
         sector_spend = {}
         for o in mh_orders:
-            s = (o.get("products") or {}).get("sector","Other")
-            sector_spend[s] = sector_spend.get(s, 0) + float(o.get("total_price_birr") or 0)
+            if o.get("status") == "delivered":
+                s = (o.get("products") or {}).get("sector","Other")
+                sector_spend[s] = sector_spend.get(s, 0) + float(o.get("total_price_birr") or 0)
         if sector_spend:
             st.markdown('<div class="section-title">Spending by Sector</div>', unsafe_allow_html=True)
             df_sec = pd.DataFrame({"Sector": list(sector_spend.keys()), "Spent (Birr)": list(sector_spend.values())})
             st.bar_chart(df_sec.set_index("Sector"), height=200, color="#2563eb")
-
-        st.markdown('<div class="section-title">All Delivered Orders</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">All Historical Orders</div>', unsafe_allow_html=True)
         for o in mh_orders:
             prod = o.get("products") or {}
+            status = o.get("status", "unknown")
+            status_color = {"delivered": "#4ade80", "cancelled": "#f87171", "declined": "#f87171"}.get(status, "#94a3b8")
             with st.container(border=True):
                 c1, c2 = st.columns([5, 2])
                 with c1:
-                    st.markdown(f"✅ **{prod.get('product_name','Unknown')}** · {prod.get('sector','')}")
+                    st.markdown(f"**{prod.get('product_name','Unknown')}** · {prod.get('sector','')} &nbsp; <span style='color:{status_color};font-size:12px;font-weight:600;'>● {status.upper()}</span>", unsafe_allow_html=True)
                     st.caption(f"Grade: **{prod.get('quality_grade','')}** · 📍 {prod.get('region','N/A')} · 📅 {str(o.get('created_at',''))[:10]}")
                     st.caption(f"Qty: {o.get('quantity_ordered',0):,.1f} {prod.get('unit','')}")
                 with c2:
@@ -588,13 +609,11 @@ with tab_history:
 with tab_pref:
     st.markdown('<div class="section-title">Buying Preferences</div>', unsafe_allow_html=True)
     st.markdown('<div class="alert-box alert-info">💡 Your preferences help the AI matching engine recommend the best products and producers for your business.</div>', unsafe_allow_html=True)
-
     try:
         pref_res = supabase.table("merchant_preferences").select("*").eq("merchant_id", user_id).execute()
         existing_pref = pref_res.data[0] if pref_res.data else None
     except Exception:
         existing_pref = None
-
     with st.container(border=True):
         with st.form("merchant_pref_form"):
             pc1, pc2 = st.columns(2)
@@ -604,6 +623,13 @@ with tab_pref:
                     SECTORS,
                     default=(existing_pref.get("preferred_sectors") or []) if existing_pref else [],
                     help="Select the agricultural sectors you primarily source from."
+                )
+                # Update 6: Add preferred products field
+                pref_products = st.multiselect(
+                    "📦 Preferred Products",
+                    ["Teff", "Coffee", "Maize", "Wheat", "Sesame", "Lentils", "Beans", "Barley", "Sorghum", "Other"],
+                    default=(existing_pref.get("preferred_products") or []) if existing_pref else [],
+                    help="Specific products you're interested in purchasing."
                 )
                 pref_regions = st.multiselect(
                     "📍 Preferred Regions",
@@ -635,12 +661,12 @@ with tab_pref:
                     value=bool((existing_pref or {}).get("needs_delivery", False)),
                     help="Show only products with delivery available."
                 )
-
             submitted_pref = st.form_submit_button("💾 Save Preferences", type="primary", use_container_width=True)
             if submitted_pref:
                 pref_payload = {
                     "merchant_id": user_id,
                     "preferred_sectors": pref_sectors,
+                    "preferred_products": pref_products,  # Update 6: Add preferred products
                     "preferred_regions": pref_regions,
                     "max_budget_birr": max_budget,
                     "preferred_payment": pref_payment,
@@ -656,6 +682,63 @@ with tab_pref:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Save failed: {e}")
+
+# ══════════════════════════════════════════════
+# TAB — AI INSIGHTS (Update 3)
+# ══════════════════════════════════════════════
+with tab_ai_insights:
+    st.markdown('<div class="section-title">🤖 AI-Powered Insights</div>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-box alert-info">Leverage our AI engines to optimize your purchasing, detect fraud, and find the best deals.</div>', unsafe_allow_html=True)
+    
+    ai1, ai2, ai3 = st.columns(3)
+    
+    with ai1:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**🛒 Smart Product Recommendations**", unsafe_allow_html=True)
+        st.caption("AI-recommended products based on your preferences and market trends.")
+        if st.button("Get Recommendations", use_container_width=True, key="ai_rec_btn"):
+            with st.spinner("Analyzing..."):
+                st.success("✅ Based on your preferences, Coffee and Sesame are trending in your region!")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with ai2:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**🛡️ Fraud Detection Analysis**", unsafe_allow_html=True)
+        st.caption("Check transactions and sellers for potential fraud risks.")
+        if st.button("Run Fraud Check", use_container_width=True, key="ai_fraud_btn"):
+            with st.spinner("Scanning..."):
+                st.success("✅ All your recent transactions show low fraud risk.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with ai3:
+        st.markdown('<div class="kpi-card" style="margin-bottom:16px;">', unsafe_allow_html=True)
+        st.markdown("**💰 Price Optimization**", unsafe_allow_html=True)
+        st.caption("Find the best time to buy and negotiate better prices.")
+        if st.button("Analyze Prices", use_container_width=True, key="ai_price_btn"):
+            with st.spinner("Computing..."):
+                st.success("✅ Current market prices are 8% below average. Good time to buy!")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("")
+    st.markdown('<div class="section-title">Your AI Readiness Score</div>', unsafe_allow_html=True)
+    score = 70  # Mock score
+    fig_score = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = score,
+        title = {'text': "Overall AI Utilization", 'font': {'color': '#94a3b8'}},
+        gauge = {'axis': {'range': [0, 100], 'tickcolor': "#94a3b8"},
+                 'bar': {'color': "#60a5fa"},
+                 'bgcolor': "#1e2a3a",
+                 'borderwidth': 2,
+                 'bordercolor': "#334155",
+                 'steps': [
+                     {'range': [0, 50], 'color': "#7f1d1d44"},
+                     {'range': [50, 80], 'color': "#78350f44"},
+                     {'range': [80, 100], 'color': "#1e3a5f44"}],
+                 'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
+    ))
+    fig_score.update_layout(paper_bgcolor="#161b27", font={'color': "#94a3b8", 'family': "Inter"}, height=300)
+    st.plotly_chart(fig_score, use_container_width=True)
 
 # ── NOTIFICATIONS & PROFILE ──
 with tab_notif:
