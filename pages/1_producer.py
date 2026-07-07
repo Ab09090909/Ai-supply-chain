@@ -16,7 +16,11 @@ from utils.shared_ui import (
     get_grades_for_product, map_grade_to_db, render_browse_tab,
     render_notifications_tab, render_profile_edit_tab,
 )
-from utils.pdf_generator import generate_agreement_pdf
+from utils.pdf_generator import (
+    generate_agreement_pdf,
+    generate_agreement_preview_html,
+    build_agreement_payload,
+)
 from src.matching_engine import rank_merchants
 from src.price_engine import recommend_price
 from src.demand_engine import forecast_demand
@@ -737,28 +741,122 @@ with tab_match:
                                     </div>
                                 </div>""", unsafe_allow_html=True)
                             with c2:
-                                if st.button("📄 Request Agreement", key=f"req_agree_{r['id']}_{p['id']}", use_container_width=True, type="primary"):
-                                    try:
-                                        pdf_bytes = generate_agreement_pdf(
-                                            producer_name=profile.get("full_name",""),
-                                            merchant_name=r["name"],
-                                            product_name=p["product_name"],
-                                            quantity=p["quantity"],
-                                            unit=p["unit"],
-                                            price=p["price_birr"],
-                                            region=p["region"],
-                                        )
+                                # ── Agreement workflow ──────────────────────
+                                agree_key = f"agree_state_{r['id']}_{p['id']}"
+                                agree_state = st.session_state.get(agree_key, "idle")
+
+                                if agree_state == "idle":
+                                    if st.button("📄 Request Agreement", key=f"req_agree_{r['id']}_{p['id']}", use_container_width=True, type="primary"):
+                                        st.session_state[agree_key] = "preview"
+                                        st.rerun()
+
+                                elif agree_state == "preview":
+                                    st.markdown("**✏️ Review & Edit Before Sending**")
+                                    # Editable fields
+                                    agree_qty = st.number_input("Quantity to supply", min_value=0.1, value=float(p.get("quantity", 1)), step=0.5, key=f"aq_{r['id']}")
+                                    agree_price = st.number_input("Price per unit (Birr)", min_value=1.0, value=float(p.get("price_birr", 0)), step=10.0, key=f"ap_{r['id']}")
+                                    agree_delivery = st.text_input("Delivery date", value="", placeholder="e.g. 2024-09-01", key=f"ad_{r['id']}")
+                                    agree_payment = st.selectbox("Payment method", ["Bank Transfer","Cash on Delivery","Mobile Money","Letter of Credit"], key=f"apay_{r['id']}")
+                                    agree_notes = st.text_area("Special notes (optional)", height=60, key=f"an_{r['id']}")
+
+                                    # Live HTML preview in expander
+                                    with st.expander("👁️ Preview Agreement", expanded=True):
+                                        try:
+                                            preview_html = generate_agreement_preview_html(
+                                                producer_name=profile.get("full_name",""),
+                                                producer_phone=profile.get("phone",""),
+                                                producer_region=profile.get("region",""),
+                                                merchant_name=r["name"],
+                                                merchant_phone=r.get("phone",""),
+                                                merchant_region=r.get("region",""),
+                                                product_name=p["product_name"],
+                                                sector=p.get("sector",""),
+                                                quality_grade=p.get("quality_grade","A"),
+                                                quantity=agree_qty,
+                                                unit=p.get("unit","kg"),
+                                                price=agree_price,
+                                                total_price=agree_price * agree_qty,
+                                                delivery_date=agree_delivery,
+                                                payment_method=agree_payment,
+                                                notes=agree_notes,
+                                                producer_confirmed=True,
+                                                merchant_confirmed=False,
+                                            )
+                                            st.components.v1.html(preview_html, height=500, scrolling=True)
+                                        except Exception as ex:
+                                            st.warning(f"Preview error: {ex}")
+
+                                    ba, bb = st.columns(2)
+                                    with ba:
+                                        if st.button("📤 Send to Merchant", key=f"send_agree_{r['id']}_{p['id']}", type="primary", use_container_width=True):
+                                            try:
+                                                import uuid as _uuid
+                                                agree_id = str(_uuid.uuid4())
+                                                # Build full payload & PDF
+                                                payload = build_agreement_payload(
+                                                    match=r,
+                                                    producer={"id": user_id, **profile},
+                                                    product={**p, "price_per_unit": agree_price, "grade": p.get("quality_grade","A")},
+                                                    quantity=agree_qty,
+                                                    delivery_date=agree_delivery,
+                                                    payment_method=agree_payment,
+                                                    notes=agree_notes,
+                                                )
+                                                pdf_bytes = generate_agreement_pdf(**{
+                                                    k: v for k, v in payload.items()
+                                                    if k in generate_agreement_pdf.__code__.co_varnames
+                                                })
+                                                # Save agreement to DB
+                                                try:
+                                                    supabase.table("agreements").upsert({
+                                                        "id": payload["agreement_id"],
+                                                        "producer_id": user_id,
+                                                        "merchant_id": r["id"],
+                                                        "product_id": p["id"],
+                                                        "quantity": agree_qty,
+                                                        "price_per_unit": agree_price,
+                                                        "total_price": agree_price * agree_qty,
+                                                        "delivery_date": agree_delivery or None,
+                                                        "payment_method": agree_payment,
+                                                        "notes": agree_notes,
+                                                        "status": "pending_merchant",
+                                                        "producer_confirmed": True,
+                                                        "merchant_confirmed": False,
+                                                    }).execute()
+                                                except Exception:
+                                                    pass  # agreements table may not exist yet; notification still fires
+                                                # Auto-send notification to merchant
+                                                send_notification(
+                                                    r["id"], "📄 New Agreement Request",
+                                                    f"{profile.get('full_name','')} sent you a supply agreement for {p['product_name']} ({agree_qty:,.1f} {p.get('unit','')}) — {agree_price * agree_qty:,.0f} Birr total.",
+                                                    "info",
+                                                )
+                                                st.session_state[agree_key] = "sent"
+                                                st.session_state[f"agree_pdf_{r['id']}_{p['id']}"] = pdf_bytes
+                                                clear_data_cache()
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"Failed: {e}")
+                                    with bb:
+                                        if st.button("✏️ Cancel", key=f"cancel_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                            st.session_state[agree_key] = "idle"
+                                            st.rerun()
+
+                                elif agree_state == "sent":
+                                    st.markdown('<div class="alert-box alert-success">✅ Agreement sent to merchant!</div>', unsafe_allow_html=True)
+                                    saved_pdf = st.session_state.get(f"agree_pdf_{r['id']}_{p['id']}")
+                                    if saved_pdf:
                                         st.download_button(
-                                            "📥 Download Agreement PDF",
-                                            data=pdf_bytes,
+                                            "📥 Download Your Copy",
+                                            data=saved_pdf,
                                             file_name=f"agreement_{p['product_name']}_{r['name']}.pdf",
                                             mime="application/pdf",
-                                            key=f"dl_agree_{r['id']}",
+                                            key=f"dl_agree_{r['id']}_{p['id']}",
+                                            use_container_width=True,
                                         )
-                                        send_notification(r["id"], "📄 Agreement Request", f"{profile.get('full_name','')} wants to supply {p['product_name']} to you.", "info")
-                                        st.success("Agreement PDF ready & notification sent.")
-                                    except Exception as e:
-                                        st.error(f"Failed: {e}")
+                                    if st.button("🔁 New Agreement", key=f"reset_agree_{r['id']}_{p['id']}", use_container_width=True):
+                                        st.session_state[agree_key] = "idle"
+                                        st.rerun()
 
 # ══════════════════════════════════════════════
 # TAB — AGREEMENTS
@@ -767,7 +865,7 @@ with tab_agree:
     st.markdown('<div class="section-title">Supply Agreements</div>', unsafe_allow_html=True)
     try:
         agree_orders = supabase.table("orders").select(
-            "*, products(product_name, sector, quality_grade, unit, region, producer_id), profiles!orders_buyer_id_fkey(full_name, phone, region)"
+            "*, products(product_name, sector, quality_grade, unit, region, price_birr, producer_id), profiles!orders_buyer_id_fkey(full_name, phone, region)"
         ).in_("product_id", [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]).in_("status",["confirmed","delivered"]).order("created_at", desc=True).execute().data or []
     except Exception:
         agree_orders = []
@@ -792,21 +890,61 @@ with tab_agree:
                 with c3:
                     st.markdown(f'<div class="price-tag">{o.get("total_price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
 
-                try:
-                    pdf_bytes = generate_agreement_pdf(
-                        producer_name=profile.get("full_name",""),
-                        merchant_name=buyer.get("full_name",""),
-                        product_name=prod.get("product_name",""),
-                        quantity=o.get("quantity_ordered",0),
-                        unit=prod.get("unit",""),
-                        price=o.get("total_price_birr",0),
-                        region=prod.get("region",""),
-                    )
-                    st.download_button("📥 Download PDF", data=pdf_bytes,
-                        file_name=f"agreement_{prod.get('product_name','')}.pdf",
-                        mime="application/pdf", key=f"agree_pdf_{o['id']}")
-                except Exception:
-                    pass
+                # Preview + Download
+                with st.expander("👁️ Preview & Download Agreement"):
+                    try:
+                        qty_ord   = float(o.get("quantity_ordered") or 0)
+                        total_val = float(o.get("total_price_birr") or 0)
+                        ppu       = float(prod.get("price_birr") or (total_val / qty_ord if qty_ord else 0))
+                        preview_html = generate_agreement_preview_html(
+                            producer_name=profile.get("full_name",""),
+                            producer_phone=profile.get("phone",""),
+                            producer_region=profile.get("region",""),
+                            merchant_name=buyer.get("full_name",""),
+                            merchant_phone=buyer.get("phone",""),
+                            merchant_region=buyer.get("region",""),
+                            product_name=prod.get("product_name",""),
+                            sector=prod.get("sector",""),
+                            quality_grade=prod.get("quality_grade","A"),
+                            quantity=qty_ord,
+                            unit=prod.get("unit",""),
+                            price_per_unit=ppu,
+                            total_price=total_val,
+                            delivery_date=str(o.get("created_at",""))[:10],
+                            payment_method="Bank Transfer",
+                            producer_confirmed=True,
+                            merchant_confirmed=o.get("merchant_confirmed", False),
+                            agreement_id=str(o.get("id",""))
+                        )
+                        st.components.v1.html(preview_html, height=400, scrolling=True)
+                    except Exception as ex:
+                        st.caption(f"Preview unavailable: {ex}")
+                    try:
+                        pdf_bytes = generate_agreement_pdf(
+                            producer_name=profile.get("full_name",""),
+                            producer_phone=profile.get("phone",""),
+                            producer_region=profile.get("region",""),
+                            merchant_name=buyer.get("full_name",""),
+                            merchant_phone=buyer.get("phone",""),
+                            merchant_region=buyer.get("region",""),
+                            product_name=prod.get("product_name",""),
+                            sector=prod.get("sector",""),
+                            quality_grade=prod.get("quality_grade","A"),
+                            quantity=qty_ord,
+                            unit=prod.get("unit",""),
+                            price_per_unit=ppu,
+                            total_price=total_val,
+                            delivery_date=str(o.get("created_at",""))[:10],
+                            payment_method="Bank Transfer",
+                            producer_confirmed=True,
+                            merchant_confirmed=o.get("merchant_confirmed", False),
+                            agreement_id=str(o.get("id","")),
+                        )
+                        st.download_button("📥 Download PDF", data=pdf_bytes,
+                            file_name=f"agreement_{prod.get('product_name','')}.pdf",
+                            mime="application/pdf", key=f"agree_pdf_{o['id']}")
+                    except Exception:
+                        pass
 
 # ══════════════════════════════════════════════
 # TAB — HISTORY
