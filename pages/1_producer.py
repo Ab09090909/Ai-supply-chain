@@ -30,11 +30,7 @@ try:
         get_grades_for_product, map_grade_to_db, render_browse_tab,
         render_notifications_tab, render_profile_editor_modal,
     )
-    from utils.pdf_generator import (
-        generate_agreement_pdf,
-        generate_agreement_preview_html,
-        build_agreement_payload,
-    )
+    from utils.pdf_generator import generate_agreement_pdf, generate_agreement_preview_html
     from src.matching_engine import rank_merchants
     from src.price_engine import recommend_price
     from src.demand_engine import forecast_demand
@@ -69,7 +65,7 @@ if "initialized_producer" not in st.session_state:
 inject_theme()
 
 # ─────────────────────────────────────────────────────────────
-# CSS - HIDE SIDEBAR, SHOW HAMBURGER MENU
+# CSS - HIDE SIDEBAR, CUSTOM HAMBURGER MENU
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -92,23 +88,45 @@ st.markdown("""
     display: none !important;
 }
 
+/* ─── HAMBURGER MENU CONTAINER ─── */
+.hamburger-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 999997;
+    background: #0f1117;
+    padding: 8px 12px;
+    border-bottom: 1px solid #1e2a3a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 /* ─── HAMBURGER MENU BUTTON ─── */
 .hamburger-btn {
-    position: fixed;
-    top: 12px;
-    left: 12px;
-    z-index: 999997;
     background: #1B4332;
     color: white;
     border: 2px solid #2D6A4F;
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 24px;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: all 0.2s;
 }
 .hamburger-btn:hover {
     background: #2D6A4F;
+}
+
+/* ─── HAMBURGER TITLE ─── */
+.hamburger-title {
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+.hamburger-title span {
+    color: #D4A017;
 }
 
 /* ─── SIDEBAR OVERLAY ─── */
@@ -151,7 +169,7 @@ st.markdown("""
     background: transparent;
     border: none;
     color: #e2e8f0;
-    font-size: 24px;
+    font-size: 22px;
     cursor: pointer;
     float: right;
     padding: 5px 10px;
@@ -214,7 +232,6 @@ st.markdown("""
     border-color: #D4A017;
     color: #D4A017;
 }
-
 .sidebar-nav-btn-logout {
     width: 100%;
     padding: 10px 14px;
@@ -233,7 +250,6 @@ st.markdown("""
     background: #7f1d1d66;
     border-color: #ef4444;
 }
-
 .sidebar-section-title {
     font-weight: 600;
     color: #94a3b8;
@@ -262,7 +278,7 @@ st.markdown("""
 
 /* ─── MAIN CONTENT ─── */
 [data-testid="stAppViewBlockContainer"] {
-    padding-top: 70px !important;
+    padding-top: 60px !important;
     padding-left: 16px !important;
     padding-right: 16px !important;
 }
@@ -319,69 +335,54 @@ st.markdown("""
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
     [data-testid="stAppViewBlockContainer"] {
-        padding-top: 70px !important;
+        padding-top: 60px !important;
         padding-left: 10px !important;
         padding-right: 10px !important;
     }
-    [data-testid="stTabs"] > div > div > div > button {
-        font-size: 12px !important;
-        padding: 6px 10px !important;
-        white-space: nowrap !important;
-    }
-    [data-testid="stTabs"] > div > div {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch;
-    }
-    div.stButton > button {
-        width: 100% !important;
-    }
-}
-
-@media (min-width: 769px) {
-    [data-testid="stAppViewBlockContainer"] {
-        padding-top: 80px !important;
-        padding-left: 24px !important;
-        padding-right: 24px !important;
+    .hamburger-title {
+        font-size: 14px !important;
     }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# HAMBURGER MENU - Using Streamlit Button + Session State
+# HAMBURGER MENU - HTML + JavaScript
 # ─────────────────────────────────────────────────────────────
-def render_hamburger_button():
-    """Render the hamburger menu button using Streamlit."""
-    # Use HTML button with onclick that toggles the sidebar
-    st.markdown(f'''
-    <button class="hamburger-btn" onclick="
-        var sidebar = document.getElementById('mobileSidebar');
-        var overlay = document.getElementById('mobileOverlay');
-        if (sidebar.classList.contains('open')) {{
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-        }} else {{
-            sidebar.classList.add('open');
-            overlay.classList.add('active');
-        }}
-    ">☰</button>
-    ''', unsafe_allow_html=True)
+def render_hamburger_menu():
+    """Render the hamburger menu bar."""
     
-    return st.session_state.get("menu_open", False)
+    # Get profile
+    profile = st.session_state.get("profile", {})
+    name = profile.get("full_name", "User") if profile else "User"
+    
+    # HTML for hamburger bar
+    st.markdown(f'''
+    <div class="hamburger-container">
+        <button class="hamburger-btn" onclick="
+            var sidebar = document.getElementById('mobileSidebar');
+            var overlay = document.getElementById('mobileOverlay');
+            if (sidebar.classList.contains('open')) {{
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }} else {{
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            }}
+        ">☰</button>
+        <div class="hamburger-title">🌾 <span>AI Supply Chain</span> · {name}</div>
+    </div>
+    ''', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # CUSTOM SIDEBAR
 # ─────────────────────────────────────────────────────────────
 def render_custom_sidebar(profile, user_id, role):
-    """Render custom sidebar with hamburger menu."""
-    
-    is_open = st.session_state.get("menu_open", False)
-    open_class = "open" if is_open else ""
-    overlay_class = "active" if is_open else ""
+    """Render custom sidebar."""
     
     if not profile:
-        sidebar_html = f'''
-        <div class="mobile-sidebar {open_class}" id="mobileSidebar">
+        st.markdown('''
+        <div class="mobile-sidebar" id="mobileSidebar">
             <button class="close-sidebar-btn" onclick="
                 document.getElementById('mobileSidebar').classList.remove('open');
                 document.getElementById('mobileOverlay').classList.remove('active');
@@ -394,20 +395,31 @@ def render_custom_sidebar(profile, user_id, role):
             <hr class="sidebar-divider">
             <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
         </div>
-        <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+        <div class="mobile-overlay" id="mobileOverlay" onclick="
             document.getElementById('mobileSidebar').classList.remove('open');
             this.classList.remove('active');
         "></div>
-        '''
-        st.markdown(sidebar_html, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
         return
     
     name = profile.get("full_name", "User")
     region = profile.get("region", "N/A")
     role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
     
+    # Verification status
+    try:
+        verif_status = check_verification_status(user_id)
+        if verif_status.get("is_verified", False):
+            status_html = '<span class="pill pill-success">✅ Verified</span>'
+        elif verif_status.get("has_documents", False):
+            status_html = '<span class="pill pill-warning">⏳ Pending</span>'
+        else:
+            status_html = '<span class="pill pill-info">📄 Verify</span>'
+    except Exception:
+        status_html = '<span class="pill pill-neutral">⚠️ Unknown</span>'
+    
     sidebar_html = f'''
-    <div class="mobile-sidebar {open_class}" id="mobileSidebar">
+    <div class="mobile-sidebar" id="mobileSidebar">
         <button class="close-sidebar-btn" onclick="
             document.getElementById('mobileSidebar').classList.remove('open');
             document.getElementById('mobileOverlay').classList.remove('active');
@@ -436,17 +448,6 @@ def render_custom_sidebar(profile, user_id, role):
         label, page = nav_pages[role]
         sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.location.href=\'{page}\'">{label}</button>'
     
-    try:
-        verif_status = check_verification_status(user_id)
-        if verif_status.get("is_verified", False):
-            status_html = '<span class="pill pill-success">✅ Verified</span>'
-        elif verif_status.get("has_documents", False):
-            status_html = '<span class="pill pill-warning">⏳ Pending</span>'
-        else:
-            status_html = '<span class="pill pill-info">📄 Verify</span>'
-    except Exception:
-        status_html = '<span class="pill pill-neutral">⚠️ Unknown</span>'
-    
     sidebar_html += f'''
         <hr class="sidebar-divider">
         <div class="sidebar-section-title">📌 Status</div>
@@ -454,7 +455,7 @@ def render_custom_sidebar(profile, user_id, role):
         <hr class="sidebar-divider">
         <button class="sidebar-nav-btn-logout" onclick="window.location.href = window.location.pathname + '?logout=true';">🚪 Log Out</button>
     </div>
-    <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+    <div class="mobile-overlay" id="mobileOverlay" onclick="
         document.getElementById('mobileSidebar').classList.remove('open');
         this.classList.remove('active');
     "></div>
@@ -471,7 +472,6 @@ def render_custom_sidebar(profile, user_id, role):
             st.session_state.profile = None
             st.session_state.authenticated = False
             st.session_state.user_role = None
-            st.session_state.menu_open = False
             clear_data_cache()
             st.query_params.clear()
             st.rerun()
@@ -509,9 +509,9 @@ verif_status = check_verification_status(user_id)
 now_str = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
 
 # ─────────────────────────────────────────────────────────────
-# RENDER HAMBURGER AND SIDEBAR
+# RENDER HAMBURGER MENU AND SIDEBAR
 # ─────────────────────────────────────────────────────────────
-render_hamburger_button()
+render_hamburger_menu()
 render_custom_sidebar(profile, user_id, "producer")
 
 # ─────────────────────────────────────────────────────────────
@@ -521,21 +521,18 @@ verif_badge = '<span class="pill pill-success">✓ Verified</span>' if verif_sta
 
 profile_pic = profile.get("profile_image")
 if profile_pic:
-    profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">'
+    profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 50px; height: 50px; border-radius: 50%; border: 2px solid #D4A017; object-fit: cover;">'
 else:
-    profile_pic_html = f'<div style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #f1f5f9; font-weight: 700;">{profile.get("full_name", "U")[0].upper()}</div>'
+    profile_pic_html = f'<div style="width: 50px; height: 50px; border-radius: 50%; border: 2px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #f1f5f9; font-weight: 700;">{profile.get("full_name", "U")[0].upper()}</div>'
 
 st.markdown(f"""
-<div style="background: linear-gradient(135deg, #0d2b1e 0%, #0f1117 60%, #122010 100%);
-            border: 1px solid #1a3d2b; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
+<div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
             display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-    <div style="flex-shrink: 0; width: 50px; height: 50px;">
-        {profile_pic_html.replace('width: 60px; height: 60px;', 'width: 50px; height: 50px;')}
-    </div>
-    <div style="flex: 1; min-width: 150px;">
+    <div style="flex-shrink: 0;">{profile_pic_html}</div>
+    <div style="flex: 1; min-width: 120px;">
         <h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #f1f5f9;">🚜 Producer Dashboard</h1>
         <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">
-            {profile.get('full_name', 'Producer')} · 📍 {profile.get('region', 'N/A')}
+            {profile.get('full_name', 'Producer')} · 📍 {profile.get('region', 'N/A')} · {now_str}
         </p>
     </div>
     <div>{verif_badge}</div>
@@ -555,7 +552,7 @@ if not verif_status.get("is_verified", False):
     st.stop()
 
 # ─────────────────────────────────────────────────────────────
-# TABS - Simplified for clarity
+# TABS
 # ─────────────────────────────────────────────────────────────
 (tab_overview, tab_products, tab_demand, tab_incoming,
  tab_match, tab_agree, tab_history, tab_notif, tab_profile) = st.tabs([
@@ -571,7 +568,6 @@ with tab_overview:
     try:
         my_products_all = cached_query("products", filters={"producer_id": user_id}, limit=500)
         
-        # Get orders
         product_ids = [p["id"] for p in my_products_all] if my_products_all else []
         if product_ids:
             orders_response = supabase.table("orders").select(
@@ -615,6 +611,7 @@ with tab_overview:
 # ─── PRODUCTS TAB ───
 with tab_products:
     try:
+        st.markdown("### 📦 My Products")
         my_products = cached_query("products", filters={"producer_id": user_id}, limit=200)
         
         if my_products:
