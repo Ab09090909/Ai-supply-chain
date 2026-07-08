@@ -34,10 +34,7 @@ html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', sans-serif;
 }
 
-[data-testid="stSidebar"] {
-    background: #161b27 !important;
-    border-right: 1px solid #1e2a3a;
-}
+/* Sidebar colours controlled by inject_theme() in utils/theme.py */
 
 /* ── Hide Streamlit branding ── */
 #MainMenu, footer, header { visibility: hidden; }
