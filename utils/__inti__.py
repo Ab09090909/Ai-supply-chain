@@ -12,7 +12,24 @@ from . import shared_ui
 from . import theme
 from . import verification
 
-# Export commonly used functions
+# Export commonly used constants
+from .constants import (
+    REGIONS,
+    SECTORS,
+    UNITS,
+    GRADES_DICT,
+    SESSION_KEYS,
+    USER_ROLES,
+    ROLE_ICONS,
+    ROLE_NAMES,
+    ORDER_STATUS,
+    PRODUCT_STATUS,
+    CURRENCY_SYMBOL,
+    PLATFORM_NAME,
+    PLATFORM_VERSION
+)
+
+# Export commonly used db functions
 from .db_helpers import (
     supabase,
     get_client,
@@ -22,8 +39,7 @@ from .db_helpers import (
     clear_data_cache,
     send_notification,
     reduce_product_stock,
-    check_db_connection,
-    get_db_status
+    check_db_connection
 )
 
 __all__ = [
@@ -35,7 +51,21 @@ __all__ = [
     'shared_ui',
     'theme',
     'verification',
-    # Exported functions
+    # Constants
+    'REGIONS',
+    'SECTORS',
+    'UNITS',
+    'GRADES_DICT',
+    'SESSION_KEYS',
+    'USER_ROLES',
+    'ROLE_ICONS',
+    'ROLE_NAMES',
+    'ORDER_STATUS',
+    'PRODUCT_STATUS',
+    'CURRENCY_SYMBOL',
+    'PLATFORM_NAME',
+    'PLATFORM_VERSION',
+    # DB functions
     'supabase',
     'get_client',
     'cached_query',
@@ -44,6 +74,5 @@ __all__ = [
     'clear_data_cache',
     'send_notification',
     'reduce_product_stock',
-    'check_db_connection',
-    'get_db_status'
+    'check_db_connection'
 ]
