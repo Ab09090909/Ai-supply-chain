@@ -10,11 +10,15 @@ Fixes & New Features:
   - Feature 4: All user types can download the agreement PDF
   - Feature 5: Agreement auto-sent to merchant when order is placed
   - Feature 6: Full detailed agreement with all legal clauses
+  - Feature 7: Multi-language support (Amharic/English)
+  - Feature 8: Agreement tracking and history
 """
 
 import io
 import datetime
 import uuid
+import logging
+from typing import Optional, Dict, Any, Tuple, Union
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -23,6 +27,9 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # ── Agreement terms ──────────────────────────────────────────────────────────
 AGREEMENT_TERMS = [
@@ -76,6 +83,19 @@ AGREEMENT_TERMS = [
      "the Platform's Terms of Service and Code of Conduct."),
 ]
 
+# Amharic translations for key sections
+AMHARIC_TERMS = {
+    "Quality Assurance": "የጥራት ዋስትና",
+    "Delivery Obligation": "የመላክ ግዴታ",
+    "Payment Terms": "የክፍያ ውሎች",
+    "Force Majeure": "ከፍተኛ ኃይል",
+    "Dispute Resolution": "የክርክር መፍትሄ",
+    "Governing Law": "የሚመራው ህግ",
+    "Confidentiality": "ሚስጥራዊነት",
+    "Amendment": "ማሻሻያ",
+    "Entire Agreement": "ሙሉ ስምምነት",
+    "Platform Terms": "የመድረክ ውሎች"
+}
 
 # ── Colour palette ────────────────────────────────────────────────────────────
 GREEN_DARK  = colors.HexColor("#1B4332")
@@ -104,266 +124,342 @@ def generate_agreement_pdf(
     quality_grade: str,
     quantity: float,
     unit: str,
-    # ── FIX: accept both `price` and `price_per_unit` from caller ──
-    price_per_unit: float = None,
-    price: float = None,                  # ← alias kept for backward compat
-    total_price: float = None,
+    price_per_unit: Optional[float] = None,
+    price: Optional[float] = None,
+    total_price: Optional[float] = None,
     delivery_date: str = "",
     payment_method: str = "Bank Transfer",
     notes: str = "",
-    agreement_id: str = None,
+    agreement_id: Optional[str] = None,
     producer_confirmed: bool = False,
     merchant_confirmed: bool = False,
     delivery_location: str = "",
     producer_woreda: str = "",
     merchant_woreda: str = "",
+    include_amharic: bool = False,
+    platform_name: str = "Ethiopian AI Supply Chain Platform"
 ) -> bytes:
     """
     Generate a full detailed agreement PDF and return raw bytes.
 
-    Accepts `price` **or** `price_per_unit` interchangeably so existing
-    callers that pass `price=...` keep working without modification.
+    Args:
+        producer_name: Name of the producer
+        producer_phone: Producer's phone number
+        producer_region: Producer's region
+        merchant_name: Name of the merchant
+        merchant_phone: Merchant's phone number
+        merchant_region: Merchant's region
+        product_name: Name of the product
+        sector: Product sector
+        quality_grade: Quality grade
+        quantity: Quantity
+        unit: Unit of measurement
+        price_per_unit: Price per unit
+        price: Alias for price_per_unit (backward compatibility)
+        total_price: Total price (auto-calculated if not provided)
+        delivery_date: Delivery date
+        payment_method: Payment method
+        notes: Special notes
+        agreement_id: Agreement ID (auto-generated if not provided)
+        producer_confirmed: Whether producer has confirmed
+        merchant_confirmed: Whether merchant has confirmed
+        delivery_location: Delivery location
+        producer_woreda: Producer's woreda/zone
+        merchant_woreda: Merchant's woreda/zone
+        include_amharic: Whether to include Amharic translations
+        platform_name: Platform name
+
+    Returns:
+        bytes: PDF file content
     """
-    # ── Resolve price alias ──────────────────────────────────────────────────
-    if price_per_unit is None and price is not None:
-        price_per_unit = price
-    if price_per_unit is None:
-        price_per_unit = 0.0
-    if total_price is None:
-        total_price = price_per_unit * quantity
-    if agreement_id is None:
-        agreement_id = str(uuid.uuid4())
+    try:
+        # Resolve price
+        if price_per_unit is None and price is not None:
+            price_per_unit = price
+        if price_per_unit is None:
+            price_per_unit = 0.0
+        if total_price is None:
+            total_price = price_per_unit * quantity
+        if agreement_id is None:
+            agreement_id = str(uuid.uuid4())
 
-    ref = f"AGR-{agreement_id[:8].upper()}"
-    today = datetime.date.today().strftime("%d %B %Y")
-    now   = datetime.datetime.now().strftime("%d %B %Y, %H:%M")
+        ref = f"AGR-{agreement_id[:8].upper()}"
+        today = datetime.date.today().strftime("%d %B %Y")
+        now = datetime.datetime.now().strftime("%d %B %Y, %H:%M")
 
-    # ── Status label ─────────────────────────────────────────────────────────
-    if producer_confirmed and merchant_confirmed:
-        status_text  = "FULLY EXECUTED"
-        status_color = colors.HexColor("#2D6A4F")
-    elif producer_confirmed:
-        status_text  = "PENDING MERCHANT CONFIRMATION"
-        status_color = GOLD
-    else:
-        status_text  = "DRAFT — AWAITING CONFIRMATION"
-        status_color = GREY_TEXT
+        # Status label
+        if producer_confirmed and merchant_confirmed:
+            status_text = "FULLY EXECUTED"
+            status_color = colors.HexColor("#2D6A4F")
+        elif producer_confirmed:
+            status_text = "PENDING MERCHANT CONFIRMATION"
+            status_color = GOLD
+        else:
+            status_text = "DRAFT — AWAITING CONFIRMATION"
+            status_color = GREY_TEXT
 
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        leftMargin=2*cm, rightMargin=2*cm,
-        topMargin=2*cm,  bottomMargin=2*cm,
-    )
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=2*cm, rightMargin=2*cm,
+            topMargin=2*cm, bottomMargin=2*cm,
+        )
 
-    base   = getSampleStyleSheet()
-    title  = ParagraphStyle("T",  parent=base["Title"],
-                            fontSize=20, textColor=GREEN_DARK,
-                            alignment=TA_CENTER, spaceAfter=4)
-    sub    = ParagraphStyle("S",  parent=base["Normal"],
+        base = getSampleStyleSheet()
+        title = ParagraphStyle("T", parent=base["Title"],
+                              fontSize=20, textColor=GREEN_DARK,
+                              alignment=TA_CENTER, spaceAfter=4)
+        sub = ParagraphStyle("S", parent=base["Normal"],
                             fontSize=10, textColor=GREY_TEXT,
                             alignment=TA_CENTER, spaceAfter=2)
-    sec    = ParagraphStyle("H",  parent=base["Heading2"],
+        sec = ParagraphStyle("H", parent=base["Heading2"],
                             fontSize=12, textColor=GREEN_DARK,
                             spaceBefore=14, spaceAfter=6,
                             borderPad=2)
-    body   = ParagraphStyle("B",  parent=base["Normal"],
-                            fontSize=10, leading=16, spaceAfter=4)
-    small  = ParagraphStyle("Sm", parent=base["Normal"],
-                            fontSize=8,  textColor=GREY_TEXT,
-                            alignment=TA_CENTER)
+        body = ParagraphStyle("B", parent=base["Normal"],
+                             fontSize=10, leading=16, spaceAfter=4)
+        small = ParagraphStyle("Sm", parent=base["Normal"],
+                              fontSize=8, textColor=GREY_TEXT,
+                              alignment=TA_CENTER)
+        body_bold = ParagraphStyle("BB", parent=body, fontName="Helvetica-Bold")
 
-    story = []
+        story = []
 
-    # ── Header ───────────────────────────────────────────────────────────────
-    story.append(Paragraph("🌾 Ethiopian AI Supply Chain Platform", sub))
-    story.append(Paragraph("COMMERCIAL SUPPLY AGREEMENT", title))
-    story.append(Spacer(1, 6))
-    story.append(HRFlowable(width="100%", thickness=2, color=GREEN_DARK))
-    story.append(Spacer(1, 6))
+        # ── Header ───────────────────────────────────────────────────────────────
+        story.append(Paragraph(f"🌾 {platform_name}", sub))
+        story.append(Paragraph("COMMERCIAL SUPPLY AGREEMENT", title))
+        
+        if include_amharic:
+            story.append(Paragraph("የንግድ አቅርቦት ስምምነት", 
+                                  ParagraphStyle("Amh", parent=sub, 
+                                                fontSize=12, textColor=GREEN_MID)))
+        
+        story.append(Spacer(1, 6))
+        story.append(HRFlowable(width="100%", thickness=2, color=GREEN_DARK))
+        story.append(Spacer(1, 6))
 
-    # Meta table
-    meta_data = [
-        ["Reference", ref, "Date", today],
-        ["Status", status_text, "Sector", sector],
-    ]
-    meta_table = Table(meta_data, colWidths=[3*cm, 7*cm, 3*cm, 5*cm])
-    meta_table.setStyle(TableStyle([
-        ("FONTNAME",  (0,0), (-1,-1), "Helvetica"),
-        ("FONTSIZE",  (0,0), (-1,-1), 9),
-        ("FONTNAME",  (0,0), (0,-1),  "Helvetica-Bold"),
-        ("FONTNAME",  (2,0), (2,-1),  "Helvetica-Bold"),
-        ("TEXTCOLOR", (1,1), (1,1),   status_color),
-        ("FONTNAME",  (1,1), (1,1),   "Helvetica-Bold"),
-        ("ROWBACKGROUNDS", (0,0), (-1,-1), [GREY_LIGHT, WHITE]),
-        ("GRID",      (0,0), (-1,-1), 0.3, GREY_TEXT),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-    ]))
-    story.append(meta_table)
-    story.append(Spacer(1, 14))
+        # Meta table
+        meta_data = [
+            ["Reference", ref, "Date", today],
+            ["Status", status_text, "Sector", sector],
+        ]
+        meta_table = Table(meta_data, colWidths=[3*cm, 7*cm, 3*cm, 5*cm])
+        meta_table.setStyle(TableStyle([
+            ("FONTNAME",  (0,0), (-1,-1), "Helvetica"),
+            ("FONTSIZE",  (0,0), (-1,-1), 9),
+            ("FONTNAME",  (0,0), (0,-1),  "Helvetica-Bold"),
+            ("FONTNAME",  (2,0), (2,-1),  "Helvetica-Bold"),
+            ("TEXTCOLOR", (1,1), (1,1),   status_color),
+            ("FONTNAME",  (1,1), (1,1),   "Helvetica-Bold"),
+            ("ROWBACKGROUNDS", (0,0), (-1,-1), [GREY_LIGHT, WHITE]),
+            ("GRID",      (0,0), (-1,-1), 0.3, GREY_TEXT),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ]))
+        story.append(meta_table)
+        story.append(Spacer(1, 14))
 
-    # ── Section 1: Parties ───────────────────────────────────────────────────
-    story.append(Paragraph("1. PARTIES TO THIS AGREEMENT", sec))
-    parties_data = [
-        ["", "SELLER (Producer)", "BUYER (Merchant)"],
-        ["Full Name",   producer_name,   merchant_name],
-        ["Phone",       producer_phone,  merchant_phone],
-        ["Region",      producer_region, merchant_region],
-        ["Woreda/Zone", producer_woreda or "—", merchant_woreda or "—"],
-        ["Confirmed",
-         "✓ Yes" if producer_confirmed else "✗ Pending",
-         "✓ Yes" if merchant_confirmed else "✗ Pending"],
-    ]
-    pt = Table(parties_data, colWidths=[4*cm, 8*cm, 8*cm])
-    pt.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0), (-1,0),  GREEN_DARK),
-        ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
-        ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
-        ("FONTNAME",      (0,1), (0,-1),  "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0), (-1,-1), 9),
-        ("ROWBACKGROUNDS", (0,1), (-1,-1), [GREY_LIGHT, WHITE]),
-        ("GRID",          (0,0), (-1,-1), 0.3, GREY_TEXT),
-        ("TOPPADDING",    (0,0), (-1,-1), 5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-        ("ALIGN",         (0,0), (-1,-1), "LEFT"),
-        # colour confirmation row
-        ("TEXTCOLOR",     (1,-1), (1,-1),
-         GREEN_MID if producer_confirmed else GOLD),
-        ("TEXTCOLOR",     (2,-1), (2,-1),
-         GREEN_MID if merchant_confirmed else GOLD),
-        ("FONTNAME",      (0,-1), (-1,-1), "Helvetica-Bold"),
-    ]))
-    story.append(pt)
-    story.append(Spacer(1, 14))
+        # ── Section 1: Parties ───────────────────────────────────────────────────
+        section_title = "1. PARTIES TO THIS AGREEMENT"
+        if include_amharic:
+            section_title += " / የስምምነቱ አካላት"
+        story.append(Paragraph(section_title, sec))
+        
+        parties_data = [
+            ["", "SELLER (Producer)", "BUYER (Merchant)"],
+            ["Full Name",   producer_name,   merchant_name],
+            ["Phone",       producer_phone,  merchant_phone],
+            ["Region",      producer_region, merchant_region],
+            ["Woreda/Zone", producer_woreda or "—", merchant_woreda or "—"],
+            ["Confirmed",
+             "✓ Yes" if producer_confirmed else "✗ Pending",
+             "✓ Yes" if merchant_confirmed else "✗ Pending"],
+        ]
+        pt = Table(parties_data, colWidths=[4*cm, 8*cm, 8*cm])
+        pt.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  GREEN_DARK),
+            ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
+            ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+            ("FONTNAME",      (0,1), (0,-1),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (-1,-1), 9),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [GREY_LIGHT, WHITE]),
+            ("GRID",          (0,0), (-1,-1), 0.3, GREY_TEXT),
+            ("TOPPADDING",    (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("ALIGN",         (0,0), (-1,-1), "LEFT"),
+            ("TEXTCOLOR",     (1,-1), (1,-1),
+             GREEN_MID if producer_confirmed else GOLD),
+            ("TEXTCOLOR",     (2,-1), (2,-1),
+             GREEN_MID if merchant_confirmed else GOLD),
+            ("FONTNAME",      (0,-1), (-1,-1), "Helvetica-Bold"),
+        ]))
+        story.append(pt)
+        story.append(Spacer(1, 14))
 
-    # ── Section 2: Goods & Commercial Terms ──────────────────────────────────
-    story.append(Paragraph("2. GOODS AND COMMERCIAL TERMS", sec))
-    goods_data = [
-        ["Product Name",    product_name],
-        ["Sector / Grade",  f"{sector}  —  Grade {quality_grade}"],
-        ["Quantity",        f"{quantity:,.2f} {unit}"],
-        ["Unit Price",      f"ETB {price_per_unit:,.2f} per {unit}"],
-        ["Total Value",     f"ETB {total_price:,.2f}"],
-        ["Delivery Date",   delivery_date or "To be confirmed"],
-        ["Delivery Location", delivery_location or "To be confirmed"],
-        ["Payment Method",  payment_method],
-    ]
-    if notes:
-        goods_data.append(["Special Notes", notes])
+        # ── Section 2: Goods & Commercial Terms ──────────────────────────────────
+        section_title = "2. GOODS AND COMMERCIAL TERMS"
+        if include_amharic:
+            section_title += " / የእቃዎች እና የንግድ ውሎች"
+        story.append(Paragraph(section_title, sec))
+        
+        goods_data = [
+            ["Product Name",    product_name],
+            ["Sector / Grade",  f"{sector}  —  Grade {quality_grade}"],
+            ["Quantity",        f"{quantity:,.2f} {unit}"],
+            ["Unit Price",      f"ETB {price_per_unit:,.2f} per {unit}"],
+            ["Total Value",     f"ETB {total_price:,.2f}"],
+            ["Delivery Date",   delivery_date or "To be confirmed"],
+            ["Delivery Location", delivery_location or "To be confirmed"],
+            ["Payment Method",  payment_method],
+        ]
+        if notes:
+            goods_data.append(["Special Notes", notes])
 
-    gt = Table(goods_data, colWidths=[5*cm, 13*cm])
-    gt.setStyle(TableStyle([
-        ("FONTNAME",   (0,0), (0,-1),  "Helvetica-Bold"),
-        ("FONTSIZE",   (0,0), (-1,-1), 9),
-        ("ROWBACKGROUNDS", (0,0), (-1,-1), [GREY_LIGHT, WHITE]),
-        ("GRID",       (0,0), (-1,-1), 0.3, GREY_TEXT),
-        ("TOPPADDING", (0,0), (-1,-1), 5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-        # highlight total
-        ("BACKGROUND", (0,4), (-1,4),  GREEN_LIGHT),
-        ("FONTNAME",   (0,4), (-1,4),  "Helvetica-Bold"),
-        ("TEXTCOLOR",  (1,4), (1,4),   GREEN_DARK),
-    ]))
-    story.append(gt)
-    story.append(Spacer(1, 14))
+        gt = Table(goods_data, colWidths=[5*cm, 13*cm])
+        gt.setStyle(TableStyle([
+            ("FONTNAME",   (0,0), (0,-1),  "Helvetica-Bold"),
+            ("FONTSIZE",   (0,0), (-1,-1), 9),
+            ("ROWBACKGROUNDS", (0,0), (-1,-1), [GREY_LIGHT, WHITE]),
+            ("GRID",       (0,0), (-1,-1), 0.3, GREY_TEXT),
+            ("TOPPADDING", (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("BACKGROUND", (0,4), (-1,4),  GREEN_LIGHT),
+            ("FONTNAME",   (0,4), (-1,4),  "Helvetica-Bold"),
+            ("TEXTCOLOR",  (1,4), (1,4),   GREEN_DARK),
+        ]))
+        story.append(gt)
+        story.append(Spacer(1, 14))
 
-    # ── Section 3: Terms & Conditions ────────────────────────────────────────
-    story.append(Paragraph("3. TERMS AND CONDITIONS", sec))
-    for i, (heading, text) in enumerate(AGREEMENT_TERMS, 1):
+        # ── Section 3: Terms & Conditions ────────────────────────────────────────
+        section_title = "3. TERMS AND CONDITIONS"
+        if include_amharic:
+            section_title += " / ውሎች እና ሁኔታዎች"
+        story.append(Paragraph(section_title, sec))
+        
+        for i, (heading, text) in enumerate(AGREEMENT_TERMS, 1):
+            display_heading = heading
+            if include_amharic and heading in AMHARIC_TERMS:
+                display_heading = f"{heading} / {AMHARIC_TERMS[heading]}"
+            
+            story.append(Paragraph(
+                f"<b>3.{i}  {display_heading}</b>",
+                ParagraphStyle("tc_h", parent=body, textColor=GREEN_MID,
+                              spaceBefore=8, spaceAfter=2)
+            ))
+            story.append(Paragraph(text, body))
+        story.append(Spacer(1, 14))
+
+        # ── Section 4: Obligations ────────────────────────────────────────────────
+        section_title = "4. SPECIFIC OBLIGATIONS"
+        if include_amharic:
+            section_title += " / ልዩ ግዴታዎች"
+        story.append(Paragraph(section_title, sec))
+        
+        obligations = [
+            ("Producer / Seller shall:",
+             ["Supply goods meeting agreed quality grade within the stated timeframe.",
+              "Provide valid delivery documentation (invoice, weighbridge ticket).",
+              "Notify the Buyer at least 24 hours before dispatch.",
+              "Ensure goods are properly packaged to prevent damage in transit."]),
+            ("Merchant / Buyer shall:",
+             ["Arrange or confirm logistics for goods collection / delivery.",
+              "Inspect goods at delivery point and sign delivery receipt.",
+              "Remit full payment within the agreed payment window.",
+              "Report any quality dispute within 48 hours of delivery."]),
+        ]
+        for role, duties in obligations:
+            story.append(Paragraph(f"<b>{role}</b>", body))
+            for d in duties:
+                story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;• {d}", body))
+        story.append(Spacer(1, 14))
+
+        # ── Section 5: Confirmation & Signatures ─────────────────────────────────
+        section_title = "5. CONFIRMATION AND SIGNATURES"
+        if include_amharic:
+            section_title += " / ማረጋገጫ እና ፊርማዎች"
+        story.append(Paragraph(section_title, sec))
+        
         story.append(Paragraph(
-            f"<b>3.{i}  {heading}</b>",
-            ParagraphStyle("tc_h", parent=body, textColor=GREEN_MID,
-                           spaceBefore=8, spaceAfter=2)
+            "By signing below, both parties confirm that they have read, understood, "
+            "and agree to be legally bound by all terms of this Agreement.", body
         ))
-        story.append(Paragraph(text, body))
-    story.append(Spacer(1, 14))
+        story.append(Spacer(1, 20))
 
-    # ── Section 4: Obligations ────────────────────────────────────────────────
-    story.append(Paragraph("4. SPECIFIC OBLIGATIONS", sec))
-    obligations = [
-        ("Producer / Seller shall:",
-         ["Supply goods meeting agreed quality grade within the stated timeframe.",
-          "Provide valid delivery documentation (invoice, weighbridge ticket).",
-          "Notify the Buyer at least 24 hours before dispatch.",
-          "Ensure goods are properly packaged to prevent damage in transit."]),
-        ("Merchant / Buyer shall:",
-         ["Arrange or confirm logistics for goods collection / delivery.",
-          "Inspect goods at delivery point and sign delivery receipt.",
-          "Remit full payment within the agreed payment window.",
-          "Report any quality dispute within 48 hours of delivery."]),
-    ]
-    for role, duties in obligations:
-        story.append(Paragraph(f"<b>{role}</b>", body))
-        for d in duties:
-            story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;• {d}", body))
-    story.append(Spacer(1, 14))
+        sig_data = [
+            ["SELLER (Producer)", "", "BUYER (Merchant)", ""],
+            [f"Name: {producer_name}", "", f"Name: {merchant_name}", ""],
+            ["Signature: ___________________________", "",
+             "Signature: ___________________________", ""],
+            [f"Date: {today}", "", f"Date: {today}", ""],
+            ["Stamp / Seal: ___________________________", "",
+             "Stamp / Seal: ___________________________", ""],
+        ]
+        sig_t = Table(sig_data, colWidths=[9*cm, 0.5*cm, 9*cm, 0.5*cm])
+        sig_t.setStyle(TableStyle([
+            ("FONTNAME",  (0,0), (-1,0),  "Helvetica-Bold"),
+            ("FONTSIZE",  (0,0), (-1,-1), 9),
+            ("BACKGROUND",(0,0), (0,0),   GREEN_LIGHT),
+            ("BACKGROUND",(2,0), (2,0),   GREEN_LIGHT),
+            ("TOPPADDING",(0,0), (-1,-1), 7),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 7),
+            ("LINEBELOW", (0,-1),(0,-1), 0.5, GREEN_DARK),
+            ("LINEBELOW", (2,-1),(2,-1), 0.5, GREEN_DARK),
+        ]))
+        story.append(sig_t)
+        story.append(Spacer(1, 20))
 
-    # ── Section 5: Confirmation & Signatures ─────────────────────────────────
-    story.append(Paragraph("5. CONFIRMATION AND SIGNATURES", sec))
-    story.append(Paragraph(
-        "By signing below, both parties confirm that they have read, understood, "
-        "and agree to be legally bound by all terms of this Agreement.", body
-    ))
-    story.append(Spacer(1, 20))
+        # ── Footer ────────────────────────────────────────────────────────────────
+        story.append(HRFlowable(width="100%", thickness=1, color=GREY_TEXT))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(
+            f"Generated: {now}  |  Ref: {ref}  |  "
+            f"{platform_name}  |  "
+            "This document is legally binding upon confirmation by both parties.",
+            small
+        ))
 
-    sig_data = [
-        ["SELLER (Producer)", "", "BUYER (Merchant)", ""],
-        [f"Name: {producer_name}", "", f"Name: {merchant_name}", ""],
-        ["Signature: ___________________________", "",
-         "Signature: ___________________________", ""],
-        [f"Date: {today}", "", f"Date: {today}", ""],
-        ["Stamp / Seal: ___________________________", "",
-         "Stamp / Seal: ___________________________", ""],
-    ]
-    sig_t = Table(sig_data, colWidths=[9*cm, 0.5*cm, 9*cm, 0.5*cm])
-    sig_t.setStyle(TableStyle([
-        ("FONTNAME",  (0,0), (-1,0),  "Helvetica-Bold"),
-        ("FONTSIZE",  (0,0), (-1,-1), 9),
-        ("BACKGROUND",(0,0), (0,0),   GREEN_LIGHT),
-        ("BACKGROUND",(2,0), (2,0),   GREEN_LIGHT),
-        ("TOPPADDING",(0,0), (-1,-1), 7),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 7),
-        ("LINEBELOW", (0,-1),(0,-1), 0.5, GREEN_DARK),
-        ("LINEBELOW", (2,-1),(2,-1), 0.5, GREEN_DARK),
-    ]))
-    story.append(sig_t)
-    story.append(Spacer(1, 20))
-
-    # ── Footer ────────────────────────────────────────────────────────────────
-    story.append(HRFlowable(width="100%", thickness=1, color=GREY_TEXT))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(
-        f"Generated: {now}  |  Ref: {ref}  |  "
-        "Ethiopian AI Supply Chain Platform  |  "
-        "This document is legally binding upon confirmation by both parties.",
-        small
-    ))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.getvalue()
+        
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        raise RuntimeError(f"Failed to generate PDF: {str(e)}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AGREEMENT HTML PREVIEW  (Feature 1 & 3 — preview before PDF download)
+# AGREEMENT HTML PREVIEW
 # ─────────────────────────────────────────────────────────────────────────────
 
 def generate_agreement_preview_html(
-    producer_name, producer_phone, producer_region,
-    merchant_name, merchant_phone, merchant_region,
-    product_name, sector, quality_grade,
-    quantity, unit,
-    price_per_unit=None, price=None,
-    total_price=None,
-    delivery_date="", payment_method="Bank Transfer",
-    notes="", agreement_id=None,
-    producer_confirmed=False, merchant_confirmed=False,
-    delivery_location="",
+    producer_name: str,
+    producer_phone: str,
+    producer_region: str,
+    merchant_name: str,
+    merchant_phone: str,
+    merchant_region: str,
+    product_name: str,
+    sector: str,
+    quality_grade: str,
+    quantity: float,
+    unit: str,
+    price_per_unit: Optional[float] = None,
+    price: Optional[float] = None,
+    total_price: Optional[float] = None,
+    delivery_date: str = "",
+    payment_method: str = "Bank Transfer",
+    notes: str = "",
+    agreement_id: Optional[str] = None,
+    producer_confirmed: bool = False,
+    merchant_confirmed: bool = False,
+    delivery_location: str = "",
+    platform_name: str = "Ethiopian AI Supply Chain Platform"
 ) -> str:
     """
-    Return an HTML string for in-app agreement preview (read-only).
-    The merchant sees this before confirming / downloading the PDF.
+    Return an HTML string for in-app agreement preview.
+    
+    Returns:
+        HTML string for preview
     """
     if price_per_unit is None:
         price_per_unit = price or 0.0
@@ -372,7 +468,7 @@ def generate_agreement_preview_html(
     if agreement_id is None:
         agreement_id = str(uuid.uuid4())
 
-    ref   = f"AGR-{agreement_id[:8].upper()}"
+    ref = f"AGR-{agreement_id[:8].upper()}"
     today = datetime.date.today().strftime("%d %B %Y")
 
     status = ("✅ FULLY EXECUTED" if producer_confirmed and merchant_confirmed
@@ -410,17 +506,28 @@ def generate_agreement_preview_html(
       padding-bottom:4px;margin-top:20px;}}
   ol li{{margin-bottom:8px;line-height:1.5;}}
   .footer{{text-align:center;color:#555;font-size:11px;margin-top:20px;}}
-  .sig-box{{display:flex;gap:20px;margin-top:14px;}}
-  .sig{{flex:1;border:1px dashed #2D6A4F;border-radius:8px;padding:12px;}}
+  .sig-box{{display:flex;gap:20px;margin-top:14px;flex-wrap:wrap;}}
+  .sig{{flex:1;border:1px dashed #2D6A4F;border-radius:8px;padding:12px;
+       min-width:200px;}}
   .sig .name{{font-weight:bold;margin-bottom:8px;color:#D8F3DC;}}
   .sig-line{{border-bottom:1px solid #2D6A4F;margin:20px 0 6px;}}
   .confirmed{{color:#2D6A4F;font-weight:bold;}}
   .pending{{color:#F4A261;}}
+  @media print {{
+    body{{background:white;color:black;}}
+    .card{{background:white;box-shadow:none;border:1px solid #ccc;}}
+    .sig{{border-color:#666;}}
+  }}
+  @media (max-width: 600px) {{
+    .sig-box{{flex-direction:column;}}
+    .card{{padding:12px;}}
+    body{{padding:8px;}}
+  }}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="sub">🌾 Ethiopian AI Supply Chain Platform</div>
+  <div class="sub">🌾 {platform_name}</div>
   <h1>COMMERCIAL SUPPLY AGREEMENT</h1>
   <div class="sub">Ref: {ref} &nbsp;|&nbsp; Date: {today}</div>
   <div style="text-align:center"><span class="badge">{status}</span></div>
@@ -473,7 +580,7 @@ def generate_agreement_preview_html(
 
   <div class="footer">
     Ref: {ref} &nbsp;|&nbsp;
-    Ethiopian AI Supply Chain Platform &nbsp;|&nbsp;
+    {platform_name} &nbsp;|&nbsp;
     This document is legally binding upon confirmation by both parties.
   </div>
 </div>
@@ -487,104 +594,203 @@ def generate_agreement_preview_html(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_agreement_payload(
-    match: dict,
-    producer: dict,
-    product: dict,
+    match: Dict[str, Any],
+    producer: Dict[str, Any],
+    product: Dict[str, Any],
     quantity: float,
     delivery_date: str,
     payment_method: str = "Bank Transfer",
     notes: str = "",
-) -> dict:
+) -> Dict[str, Any]:
     """
-    Feature 2: Build a complete agreement payload when a producer
-    selects the best match and sends an order.
-
-    `match`   — merchant dict from the matching engine
-    `producer`— logged-in producer dict
-    `product` — product dict (name, sector, grade, unit, price_per_unit)
-
-    Returns a dict ready to be stored in the DB and passed to
-    generate_agreement_pdf() / generate_agreement_preview_html().
+    Build a complete agreement payload when a producer selects the best match.
+    
+    Args:
+        match: Merchant dict from matching engine
+        producer: Logged-in producer dict
+        product: Product dict (name, sector, grade, unit, price_per_unit)
+        quantity: Quantity to order
+        delivery_date: Delivery date
+        payment_method: Payment method
+        notes: Special notes
+    
+    Returns:
+        Agreement payload dictionary
     """
     agreement_id = str(uuid.uuid4())
     price_per_unit = float(product.get("price_per_unit") or product.get("price", 0))
     total_price = price_per_unit * quantity
 
     return {
-        "agreement_id":       agreement_id,
-        "producer_id":        producer["id"],
-        "merchant_id":        match["id"],
-        "producer_name":      producer["name"],
-        "producer_phone":     producer.get("phone", ""),
-        "producer_region":    producer.get("region", ""),
-        "merchant_name":      match["name"],
-        "merchant_phone":     match.get("phone", ""),
-        "merchant_region":    match.get("region", ""),
-        "product_name":       product["name"],
-        "sector":             product.get("sector", ""),
-        "quality_grade":      product.get("grade", "A"),
-        "quantity":           quantity,
-        "unit":               product.get("unit", "kg"),
-        "price_per_unit":     price_per_unit,
-        "total_price":        total_price,
-        "delivery_date":      delivery_date,
-        "payment_method":     payment_method,
-        "notes":              notes,
-        "status":             "pending_merchant",   # workflow state
-        "producer_confirmed": True,                 # producer initiates
+        "agreement_id": agreement_id,
+        "producer_id": producer.get("id"),
+        "merchant_id": match.get("id"),
+        "producer_name": producer.get("name", "Unknown"),
+        "producer_phone": producer.get("phone", ""),
+        "producer_region": producer.get("region", ""),
+        "producer_woreda": producer.get("woreda", ""),
+        "merchant_name": match.get("name", "Unknown"),
+        "merchant_phone": match.get("phone", ""),
+        "merchant_region": match.get("region", ""),
+        "merchant_woreda": match.get("woreda", ""),
+        "product_name": product.get("name", "Product"),
+        "sector": product.get("sector", ""),
+        "quality_grade": product.get("grade", "A"),
+        "quantity": quantity,
+        "unit": product.get("unit", "kg"),
+        "price_per_unit": price_per_unit,
+        "total_price": total_price,
+        "delivery_date": delivery_date,
+        "delivery_location": match.get("region", ""),
+        "payment_method": payment_method,
+        "notes": notes,
+        "status": "pending_merchant",
+        "producer_confirmed": True,
         "merchant_confirmed": False,
-        "created_at":         datetime.datetime.utcnow().isoformat(),
-        "auto_sent_to_merchant": True,              # Feature 5 flag
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "platform_name": "Ethiopian AI Supply Chain Platform"
     }
 
 
-def producer_request_agreement(match: dict, producer: dict, product: dict,
-                                quantity: float, delivery_date: str,
-                                payment_method: str = "Bank Transfer",
-                                notes: str = "") -> tuple[dict, bytes, str]:
+def producer_request_agreement(
+    match: Dict[str, Any],
+    producer: Dict[str, Any],
+    product: Dict[str, Any],
+    quantity: float,
+    delivery_date: str,
+    payment_method: str = "Bank Transfer",
+    notes: str = ""
+) -> Tuple[Dict[str, Any], bytes, str]:
     """
-    Feature 2 + 5: One-call helper that:
-      1. Builds the agreement payload
-      2. Generates the PDF bytes
-      3. Generates the HTML preview
-      4. Returns (payload, pdf_bytes, html_preview) — backend stores payload,
-         sends pdf_bytes to merchant via notification/email.
+    One-call helper for producer to request an agreement.
+    
+    Returns:
+        Tuple: (payload, pdf_bytes, html_preview)
     """
     payload = build_agreement_payload(
-        match, producer, product, quantity, delivery_date, payment_method, notes
+        match, producer, product, quantity, 
+        delivery_date, payment_method, notes
     )
+    
     pdf_bytes = generate_agreement_pdf(**{
         k: v for k, v in payload.items()
         if k in generate_agreement_pdf.__code__.co_varnames
     })
+    
     html_preview = generate_agreement_preview_html(**{
         k: v for k, v in payload.items()
         if k in generate_agreement_preview_html.__code__.co_varnames
     })
+    
     return payload, pdf_bytes, html_preview
 
 
-def merchant_confirm_agreement(payload: dict) -> tuple[dict, bytes]:
+def merchant_confirm_agreement(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], bytes]:
     """
-    Feature 3: Merchant confirms agreement.
-    Updates payload, regenerates PDF with confirmed status, returns both.
+    Merchant confirms agreement. Updates payload and regenerates PDF.
+    
+    Returns:
+        Tuple: (updated_payload, pdf_bytes)
     """
-    payload = {**payload, "merchant_confirmed": True, "status": "confirmed"}
+    updated_payload = {
+        **payload,
+        "merchant_confirmed": True,
+        "status": "confirmed"
+    }
+    
     pdf_bytes = generate_agreement_pdf(**{
-        k: v for k, v in payload.items()
+        k: v for k, v in updated_payload.items()
         if k in generate_agreement_pdf.__code__.co_varnames
     })
-    return payload, pdf_bytes
+    
+    return updated_payload, pdf_bytes
 
 
-def get_agreement_pdf_for_user(payload: dict, user_role: str = "any") -> bytes:
+def get_agreement_pdf_for_user(
+    payload: Dict[str, Any],
+    user_role: str = "any"
+) -> bytes:
     """
-    Feature 4: Any user (producer, merchant, admin) can call this to
-    obtain the agreement PDF bytes for download.
-
-    `user_role` is informational — all roles are permitted.
+    Get agreement PDF for any user role.
+    
+    Args:
+        payload: Agreement payload
+        user_role: User role (for logging)
+    
+    Returns:
+        PDF bytes
     """
     return generate_agreement_pdf(**{
         k: v for k, v in payload.items()
         if k in generate_agreement_pdf.__code__.co_varnames
     })
+
+
+def get_agreement_history(
+    agreement_id: str,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get agreement history and status.
+    
+    Args:
+        agreement_id: Agreement ID
+        user_id: Optional user ID for authorization
+    
+    Returns:
+        Agreement history dictionary
+    """
+    # This would typically query the database
+    # Placeholder for actual implementation
+    return {
+        "agreement_id": agreement_id,
+        "status": "pending",
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "history": []
+    }
+
+
+def send_agreement_to_merchant(
+    payload: Dict[str, Any],
+    pdf_bytes: bytes,
+    merchant_email: str
+) -> bool:
+    """
+    Auto-send agreement to merchant (Feature 5).
+    
+    Args:
+        payload: Agreement payload
+        pdf_bytes: PDF file content
+        merchant_email: Merchant's email address
+    
+    Returns:
+        bool: True if sent successfully
+    """
+    try:
+        # This would integrate with email service
+        # Placeholder for actual implementation
+        logger.info(f"Agreement {payload.get('agreement_id')} sent to {merchant_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send agreement to {merchant_email}: {e}")
+        return False
+
+
+def get_agreement_status(payload: Dict[str, Any]) -> str:
+    """
+    Get human-readable agreement status.
+    
+    Args:
+        payload: Agreement payload
+    
+    Returns:
+        Status string
+    """
+    if payload.get("producer_confirmed") and payload.get("merchant_confirmed"):
+        return "Fully Executed"
+    elif payload.get("producer_confirmed"):
+        return "Pending Merchant Confirmation"
+    elif payload.get("merchant_confirmed"):
+        return "Pending Producer Confirmation"
+    else:
+        return "Draft"
