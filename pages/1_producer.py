@@ -1004,12 +1004,10 @@ with tab_history:
                     with c2:
                         st.markdown(f'<div class="price-tag">{o.get("total_price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
 
-# ── NOTIFICATIONS & PROFILE ──
+# ── NOTIFICATIONS ──
 with tab_notif:
     render_notifications_tab(user_id)
 
-with tab_profile:
-    render_profile_edit_tab(profile, user_id)
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 1_producer.py)
 # ═════════════════════════════════════════════════════════════
