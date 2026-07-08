@@ -6,6 +6,8 @@ from supabase import create_client, Client
 # ─────────────────────────────────────────────────────────────
 # STREAMLIT CLOUD SECRETS BRIDGE
 # ─────────────────────────────────────────────────────────────
+# Streamlit Cloud stores secrets in st.secrets, not .env files.
+# This block checks st.secrets first, then falls back to os.getenv().
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", ""))
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", os.getenv("SUPABASE_KEY", ""))
 
@@ -91,7 +93,7 @@ def send_notification(recipient_id, title, message, notif_type="info", order_id=
         supabase.table("notifications").insert(payload).execute()
         cached_unread_count.clear()
     except Exception as e:
-        st.toast(f"Notification failed: {e}", icon="⚠️")
+        st.toast(f"Notification failed: {e}", icon="️")
 
 
 def reduce_product_stock(product_id, qty_sold):
@@ -108,4 +110,4 @@ def reduce_product_stock(product_id, qty_sold):
         supabase.table("products").update(update_payload).eq("id", product_id).execute()
         cached_query.clear()
     except Exception as e:
-        st.toast(f"Stock update failed: {e}", icon="⚠️")
+        st.toast(f"Stock update failed: {e}", icon="️")
