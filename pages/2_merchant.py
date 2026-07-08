@@ -235,7 +235,7 @@ with st.sidebar:
     
     # Update 7: Dark/Light Toggle
     st.markdown("### 🎨 Theme")
-       render_theme_toggle()
+    render_theme_toggle()
     
     st.divider()
     st.markdown("### 📌 Account Status")
