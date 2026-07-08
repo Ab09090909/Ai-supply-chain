@@ -12,7 +12,23 @@ from . import shared_ui
 from . import theme
 from . import verification
 
-# Export commonly used functions from shared_ui
+# Export from verification
+from .verification import (
+    check_verification_status,
+    upload_document,
+    render_document_upload,
+    render_document_list,
+    render_verification_status,
+    render_verification_badge,
+    get_verified_documents,
+    get_pending_documents,
+    get_pending_verifications,
+    render_admin_verification_panel,
+    DOCUMENT_TYPE_LABELS,
+    DOCUMENT_TYPE_DESCRIPTIONS
+)
+
+# Export from shared_ui
 from .shared_ui import (
     render_browse_tab,
     render_notifications_tab,
@@ -22,10 +38,7 @@ from .shared_ui import (
     render_fraud_badge,
     get_fraud_risk,
     get_grades_for_product,
-    map_grade_to_db,
-    render_verification_status,
-    render_empty_state,
-    render_loading_state
+    map_grade_to_db
 )
 
 # Export constants
@@ -67,6 +80,19 @@ __all__ = [
     'shared_ui',
     'theme',
     'verification',
+    # Verification functions
+    'check_verification_status',
+    'upload_document',
+    'render_document_upload',
+    'render_document_list',
+    'render_verification_status',
+    'render_verification_badge',
+    'get_verified_documents',
+    'get_pending_documents',
+    'get_pending_verifications',
+    'render_admin_verification_panel',
+    'DOCUMENT_TYPE_LABELS',
+    'DOCUMENT_TYPE_DESCRIPTIONS',
     # Shared UI functions
     'render_browse_tab',
     'render_notifications_tab',
@@ -77,9 +103,6 @@ __all__ = [
     'get_fraud_risk',
     'get_grades_for_product',
     'map_grade_to_db',
-    'render_verification_status',
-    'render_empty_state',
-    'render_loading_state',
     # Constants
     'REGIONS',
     'SECTORS',
