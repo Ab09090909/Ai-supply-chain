@@ -486,13 +486,19 @@ with tab_products:
                     img_b64 = p.get("image_base64")
                     if img_b64:
                         try:
-                            # Clean the base64 string (remove any whitespace/newlines)
-                            img_b64 = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
-                            img_data = base64.b64decode(img_b64)
-                            st.image(img_data, use_container_width=True, caption=p.get("product_name", ""))
+                            # Clean the base64 string
+                            img_b64_clean = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
+                            # Detect image type from header bytes
+                            raw = base64.b64decode(img_b64_clean[:16])
+                            mime = "image/png" if raw[:4] == b'\x89PNG' else "image/jpeg"
+                            st.markdown(
+                                f'<img src="data:{mime};base64,{img_b64_clean}" '
+                                f'style="width:100%;border-radius:8px;object-fit:cover;max-height:120px;" '
+                                f'alt="{p.get("product_name","")}">',
+                                unsafe_allow_html=True
+                            )
                         except Exception as img_err:
-                            st.error(f"Image decode error: {str(img_err)[:50]}...")
-                            st.caption("Base64 length: " + str(len(img_b64) if img_b64 else 0))
+                            st.markdown('<div style="background:#1e2a3a;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;font-size:11px;padding:4px;">📷 Error</div>', unsafe_allow_html=True)
                     else:
                         st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
 
@@ -505,10 +511,20 @@ with tab_products:
                     with c2:
                         st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
                     with c3:
-                        # Stack buttons vertically instead of using nested columns
+                        # ── Edit button ──
+                        if st.button("✏️ Edit", key=f"edit_prod_{pid}", use_container_width=True):
+                            # Toggle inline edit form
+                            if st.session_state.get(f"editing_prod_{pid}"):
+                                st.session_state.pop(f"editing_prod_{pid}", None)
+                            else:
+                                st.session_state[f"editing_prod_{pid}"] = True
+                                # clear any delete confirm
+                                st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                            st.rerun()
+                        # ── Delete button ──
                         if st.session_state.get(f"confirm_del_prod_{pid}"):
                             st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
-                            if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+                            if st.button("🗑️ Yes, Delete", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
                                 try:
                                     supabase.table("products").delete().eq("id", pid).execute()
                                     clear_data_cache()
@@ -516,14 +532,78 @@ with tab_products:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Delete failed: {e}")
-                            if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
+                            if st.button("Cancel", key=f"cancel_del_prod_{pid}", use_container_width=True):
                                 st.session_state.pop(f"confirm_del_prod_{pid}", None)
                                 st.rerun()
                         else:
                             st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
-                            if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
+                            if st.button("🗑️ Delete", key=f"del_prod_{pid}", use_container_width=True):
                                 st.session_state[f"confirm_del_prod_{pid}"] = True
+                                st.session_state.pop(f"editing_prod_{pid}", None)
                                 st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+                # ── Inline Edit Form (expands below the card) ──
+                if st.session_state.get(f"editing_prod_{pid}"):
+                    st.markdown("---")
+                    st.markdown("**✏️ Edit Product**")
+                    with st.form(key=f"edit_form_{pid}", clear_on_submit=False):
+                        ef1, ef2 = st.columns(2)
+                        with ef1:
+                            e_name   = st.text_input("Product Name *", value=p.get("product_name",""), max_chars=100)
+                            e_sector = st.selectbox("Sector *", SECTORS,
+                                index=SECTORS.index(p.get("sector", SECTORS[0])) if p.get("sector") in SECTORS else 0)
+                            e_grades = get_grades_for_product(e_sector, e_name)
+                            # Try to match current grade display
+                            cur_grade_db = p.get("quality_grade","B")
+                            e_grade_ui = st.selectbox("Quality Grade *", e_grades)
+                            e_region = st.selectbox("Region *", REGIONS,
+                                index=REGIONS.index(p.get("region", REGIONS[0])) if p.get("region") in REGIONS else 0)
+                        with ef2:
+                            e_qty   = st.number_input("Quantity *", min_value=0.1, value=float(p.get("quantity",1)), step=0.5)
+                            e_unit  = st.selectbox("Unit *", UNITS,
+                                index=UNITS.index(p.get("unit", UNITS[0])) if p.get("unit") in UNITS else 0)
+                            e_price = st.number_input("Price (Birr) *", min_value=1.0, value=float(p.get("price_birr",100)), step=10.0)
+                            e_avail = st.checkbox("Available", value=bool(p.get("is_available", True)))
+                        e_desc = st.text_area("Description (optional)", value=p.get("description",""), height=70)
+                        e_img  = st.file_uploader("📷 Replace Image (optional)", type=["jpg","jpeg","png"], key=f"edit_img_{pid}")
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            save_edit = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+                        with ec2:
+                            cancel_edit = st.form_submit_button("✖ Cancel", use_container_width=True)
+                        if save_edit:
+                            if not e_name.strip():
+                                st.error("Product name is required.")
+                            else:
+                                try:
+                                    upd = {
+                                        "product_name": e_name.strip(),
+                                        "sector": e_sector,
+                                        "quality_grade": map_grade_to_db(e_grade_ui),
+                                        "region": e_region,
+                                        "quantity": e_qty,
+                                        "unit": e_unit,
+                                        "price_birr": e_price,
+                                        "is_available": e_avail,
+                                        "description": e_desc.strip() or None,
+                                    }
+                                    if e_img:
+                                        try:
+                                            upd["image_base64"] = base64.b64encode(e_img.read()).decode("utf-8")
+                                        except Exception:
+                                            pass
+                                    supabase.table("products").update(upd).eq("id", pid).execute()
+                                    clear_data_cache()
+                                    st.session_state.pop(f"editing_prod_{pid}", None)
+                                    st.success(f"✅ '{e_name}' updated!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Update failed: {e}")
+                        if cancel_edit:
+                            st.session_state.pop(f"editing_prod_{pid}", None)
+                            st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)                           
