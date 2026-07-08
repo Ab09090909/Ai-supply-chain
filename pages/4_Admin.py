@@ -661,10 +661,20 @@ with tab_products:
         filtered_prods = [p for p in filtered_prods if p.get("region") == prod_region]
     
     st.caption(f"**{len(filtered_prods)} product(s)**")
-    for p in filtered_prods:
+        for p in filtered_prods:
         pid = p["id"]
         with st.container(border=True):
-            c1, c2, c3 = st.columns([5, 2, 3])
+            img_col, c1, c2, c3 = st.columns([1, 4, 2, 3])
+            with img_col:
+                img_b64 = p.get("image_base64")
+                if img_b64:
+                    try:
+                        img_data = base64.b64decode(img_b64)
+                        st.image(img_data, use_container_width=True)
+                    except:
+                        st.caption("📷 No img")
+                else:
+                    st.caption("📷 No img")
             with c1:
                 st.markdown(f"**📦 {p.get('product_name','Unknown')}**")
                 st.caption(f"👤 {p.get('profiles',{}).get('full_name','Unknown')}  ·  📍 {p.get('region','N/A')}  ·  Sector: {p.get('sector','—')}")
