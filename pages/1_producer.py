@@ -229,14 +229,25 @@ user_id = st.session_state.user.id
 verif_status = check_verification_status(user_id)
 now_str = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
 
-# ─────────────────────────────────────────────
-# Header
+# ────────────────────────────────────────────
+# Header with Profile Picture
 # ─────────────────────────────────────────────
 verif_badge = '<span class="dash-badge">✓ Verified</span>' if verif_status["is_verified"] else '<span class="dash-badge" style="background:#78350f44;border-color:#d9770644;color:#fbbf24;">⏳ Pending</span>'
+
+# Get profile picture
+profile_pic = profile.get("profile_image")
+profile_pic_html = ""
+if profile_pic:
+    profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">'
+else:
+    profile_pic_html = f'<div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #f1f5f9; font-weight: 700;">{profile.get("full_name", "U")[0].upper()}</div>'
+
 st.markdown(f"""
 <div class="dash-header">
-    <div class="dash-header-icon">🚜</div>
-    <div>
+    <div style="flex-shrink: 0;">
+        {profile_pic_html}
+    </div>
+    <div style="flex: 1; margin-left: 20px;">
         <h1>Producer Dashboard</h1>
         <p>Welcome back, <strong>{profile.get('full_name','Producer')}</strong> · 📍 {profile.get('region','')} · {now_str}</p>
     </div>
