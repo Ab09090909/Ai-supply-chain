@@ -1,4 +1,4 @@
-"""Producer Dashboard — Professional dark design with Hamburger Menu."""
+"""Producer Dashboard — Working Hamburger Menu."""
 import sys
 import os
 import base64
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # IMPORTS
 # ─────────────────────────────────────────────
 try:
-    from utils.theme import inject_theme, render_theme_toggle
+    from utils.theme import inject_theme
     from utils.constants import REGIONS, SECTORS, UNITS
     from utils.db_helpers import supabase, cached_query, clear_data_cache, send_notification
     from utils.verification import check_verification_status, render_document_upload
@@ -61,16 +61,16 @@ if "initialized_producer" not in st.session_state:
     st.session_state.match_product = None
     st.session_state.forecast_result = None
     st.session_state.forecast_params = None
-    st.session_state.mobile_menu_open = False
+    st.session_state.menu_open = False
 
 # ─────────────────────────────────────────────
 # THEME INJECTION
 # ─────────────────────────────────────────────
 inject_theme()
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # CSS - HIDE SIDEBAR, SHOW HAMBURGER MENU
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 /* ─── HIDE DEFAULT STREAMLIT SIDEBAR ─── */
@@ -267,35 +267,6 @@ st.markdown("""
     padding-right: 16px !important;
 }
 
-/* ─── RESPONSIVE ─── */
-@media (max-width: 768px) {
-    [data-testid="stAppViewBlockContainer"] {
-        padding-top: 70px !important;
-        padding-left: 10px !important;
-        padding-right: 10px !important;
-    }
-    [data-testid="stTabs"] > div > div > div > button {
-        font-size: 12px !important;
-        padding: 6px 10px !important;
-        white-space: nowrap !important;
-    }
-    [data-testid="stTabs"] > div > div {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch;
-    }
-    div.stButton > button {
-        width: 100% !important;
-    }
-}
-
-@media (min-width: 769px) {
-    [data-testid="stAppViewBlockContainer"] {
-        padding-top: 80px !important;
-        padding-left: 24px !important;
-        padding-right: 24px !important;
-    }
-}
-
 /* ─── BUTTONS ─── */
 .stButton > button {
     border-radius: 8px !important;
@@ -345,91 +316,49 @@ st.markdown("""
     border-bottom: 2px solid #D4A017 !important;
 }
 
-/* ─── KPI CARDS ─── */
-.kpi-card {
-    background: #161b27 !important;
-    border: 1px solid #1e2a3a !important;
-    border-radius: 10px;
-    padding: 16px 20px;
-    height: 100%;
-}
-.kpi-label { font-size: 11px; font-weight: 600; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-.kpi-value { font-size: 24px; font-weight: 700; color: #f1f5f9 !important; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.kpi-sub { font-size: 12px; color: #64748b !important; margin-top: 6px; }
-
-/* ─── ALERT BOXES ─── */
-.alert-box { border-radius: 8px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; border: 1px solid; }
-.alert-warning { background: #78350f22; border-color: #d9770666; color: #fbbf24; }
-.alert-danger { background: #7f1d1d22; border-color: #ef444466; color: #f87171; }
-.alert-info { background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }
-.alert-success { background: #14532d22; border-color: #16a34a66; color: #4ade80; }
-
-/* ─── SECTION TITLE ─── */
-.section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #475569 !important;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 20px 0 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1e2a3a;
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 70px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    [data-testid="stTabs"] > div > div > div > button {
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+        white-space: nowrap !important;
+    }
+    [data-testid="stTabs"] > div > div {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    div.stButton > button {
+        width: 100% !important;
+    }
 }
 
-/* ─── PRICE TAG ─── */
-.price-tag { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: #D4A017 !important; }
-
-/* ─── CONFIRM BOX ─── */
-.confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
-
-/* ─── MATCH BAR ─── */
-.match-bar-bg { background: #1e2a3a; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }
-.match-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-
-/* ─── RECORD CARDS ─── */
-.record-card {
-    background: #161b27;
-    border: 1px solid #1e2a3a;
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 10px;
-    transition: border-color 0.15s;
-}
-.record-card:hover { border-color: #D4A01755; }
-
-/* ─── FORECAST CONTAINER ─── */
-.forecast-container {
-    background: #161b27;
-    border: 1px solid #1e2a3a;
-    border-radius: 10px;
-    padding: 20px;
-    margin-top: 16px;
+@media (min-width: 769px) {
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 80px !important;
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# HAMBURGER MENU BUTTON
+# HAMBURGER MENU - Using Streamlit Button + Session State
 # ─────────────────────────────────────────────────────────────
 def render_hamburger_button():
-    """Render the hamburger menu button."""
-    st.markdown('''
-    <button class="hamburger-btn" onclick="
-        var sidebar = document.getElementById('mobileSidebar');
-        var overlay = document.getElementById('mobileOverlay');
-        if (sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-        } else {
-            sidebar.classList.add('open');
-            overlay.classList.add('active');
-        }
-    ">☰</button>
-    <div class="mobile-overlay" id="mobileOverlay" onclick="
-        document.getElementById('mobileSidebar').classList.remove('open');
-        this.classList.remove('active');
-    "></div>
-    ''', unsafe_allow_html=True)
+    """Render the hamburger menu button using Streamlit."""
+    col1, col2, col3 = st.columns([1, 10, 1])
+    with col1:
+        menu_label = "☰" if not st.session_state.menu_open else "✕"
+        if st.button(menu_label, key="hamburger_btn", help="Toggle Menu"):
+            st.session_state.menu_open = not st.session_state.menu_open
+            st.rerun()
+    return st.session_state.menu_open
 
 # ─────────────────────────────────────────────────────────────
 # CUSTOM SIDEBAR
@@ -437,10 +366,17 @@ def render_hamburger_button():
 def render_custom_sidebar(profile, user_id, role):
     """Render custom sidebar with hamburger menu."""
     
+    is_open = st.session_state.get("menu_open", False)
+    open_class = "open" if is_open else ""
+    overlay_class = "active" if is_open else ""
+    
     if not profile:
-        sidebar_html = '''
-        <div class="mobile-sidebar" id="mobileSidebar">
-            <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
+        sidebar_html = f'''
+        <div class="mobile-sidebar {open_class}" id="mobileSidebar">
+            <button class="close-sidebar-btn" onclick="
+                document.getElementById('mobileSidebar').classList.remove('open');
+                document.getElementById('mobileOverlay').classList.remove('active');
+            ">✕</button>
             <div class="sidebar-profile">
                 <div class="sidebar-avatar">🔐</div>
                 <div class="sidebar-name">Not Signed In</div>
@@ -449,6 +385,10 @@ def render_custom_sidebar(profile, user_id, role):
             <hr class="sidebar-divider">
             <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
         </div>
+        <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+            document.getElementById('mobileSidebar').classList.remove('open');
+            this.classList.remove('active');
+        "></div>
         '''
         st.markdown(sidebar_html, unsafe_allow_html=True)
         return
@@ -458,8 +398,11 @@ def render_custom_sidebar(profile, user_id, role):
     role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
     
     sidebar_html = f'''
-    <div class="mobile-sidebar" id="mobileSidebar">
-        <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
+    <div class="mobile-sidebar {open_class}" id="mobileSidebar">
+        <button class="close-sidebar-btn" onclick="
+            document.getElementById('mobileSidebar').classList.remove('open');
+            document.getElementById('mobileOverlay').classList.remove('active');
+        ">✕</button>
         
         <div class="sidebar-profile">
             <div class="sidebar-avatar">{name[0].upper()}</div>
@@ -473,7 +416,6 @@ def render_custom_sidebar(profile, user_id, role):
         <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
     '''
     
-    # Role-specific pages
     nav_pages = {
         "producer": ("🚜 Producer", "pages/1_producer.py"),
         "merchant": ("🏬 Merchant", "pages/2_merchant.py"),
@@ -485,38 +427,33 @@ def render_custom_sidebar(profile, user_id, role):
         label, page = nav_pages[role]
         sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.location.href=\'{page}\'">{label}</button>'
     
-    sidebar_html += f'''
-        <hr class="sidebar-divider">
-        <div class="sidebar-section-title">📌 Status</div>
-    '''
-    
-    # Verification status
     try:
         verif_status = check_verification_status(user_id)
         if verif_status.get("is_verified", False):
-            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-success">✅ Verified</span></div>'
+            status_html = '<span class="pill pill-success">✅ Verified</span>'
         elif verif_status.get("has_documents", False):
-            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-warning">⏳ Pending</span></div>'
+            status_html = '<span class="pill pill-warning">⏳ Pending</span>'
         else:
-            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-info">📄 Verify</span></div>'
+            status_html = '<span class="pill pill-info">📄 Verify</span>'
     except Exception:
-        sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-neutral">⚠️ Unknown</span></div>'
+        status_html = '<span class="pill pill-neutral">⚠️ Unknown</span>'
     
     sidebar_html += f'''
         <hr class="sidebar-divider">
-        <button class="sidebar-nav-btn-logout" onclick="document.getElementById('logoutForm').submit();">🚪 Log Out</button>
+        <div class="sidebar-section-title">📌 Status</div>
+        <div style="margin-bottom: 8px;">{status_html}</div>
+        <hr class="sidebar-divider">
+        <button class="sidebar-nav-btn-logout" onclick="window.location.href = window.location.pathname + '?logout=true';">🚪 Log Out</button>
     </div>
+    <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+        document.getElementById('mobileSidebar').classList.remove('open');
+        this.classList.remove('active');
+    "></div>
     '''
     
     st.markdown(sidebar_html, unsafe_allow_html=True)
     
-    # Logout form
-    st.markdown('''
-    <form id="logoutForm" method="post" action="">
-        <input type="hidden" name="logout" value="true">
-    </form>
-    ''', unsafe_allow_html=True)
-    
+    # Handle logout
     if st.query_params.get("logout") == "true":
         try:
             from utils.auth import sign_out
@@ -525,6 +462,7 @@ def render_custom_sidebar(profile, user_id, role):
             st.session_state.profile = None
             st.session_state.authenticated = False
             st.session_state.user_role = None
+            st.session_state.menu_open = False
             clear_data_cache()
             st.query_params.clear()
             st.rerun()
@@ -666,7 +604,9 @@ with tab_overview:
     except Exception as e:
         st.error(f"⚠️ Error loading overview: {str(e)}")
 
-# ─── PRODUCTS TAB ───
+# ══════════════════════════════════════════════
+# TAB — MY PRODUCTS
+# ══════════════════════════════════════════════
 with tab_products:
     try:
         st.markdown('<div class="section-title">Product Listings</div>', unsafe_allow_html=True)
@@ -808,7 +748,9 @@ with tab_products:
     except Exception as e:
         st.error(f"⚠️ Error loading products: {str(e)}")
 
-# ─── DEMAND FORECAST TAB ───
+# ══════════════════════════════════════════════
+# TAB — DEMAND FORECAST
+# ══════════════════════════════════════════════
 with tab_demand:
     try:
         st.markdown('<div class="section-title">AI Demand Forecasting</div>', unsafe_allow_html=True)
@@ -891,7 +833,9 @@ with tab_demand:
     except Exception as e:
         st.error(f"⚠️ Error running forecast: {str(e)}")
 
-# ─── INCOMING ORDERS TAB ───
+# ══════════════════════════════════════════════
+# TAB — INCOMING ORDERS
+# ══════════════════════════════════════════════
 with tab_incoming:
     try:
         st.markdown('<div class="section-title">Incoming Orders</div>', unsafe_allow_html=True)
@@ -972,7 +916,9 @@ with tab_incoming:
     except Exception as e:
         st.error(f"⚠️ Error loading orders: {str(e)}")
 
-# ─── AI MATCHING TAB ───
+# ══════════════════════════════════════════════
+# TAB — AI MATCHING
+# ══════════════════════════════════════════════
 with tab_match:
     try:
         st.markdown('<div class="section-title">AI Merchant Matching</div>', unsafe_allow_html=True)
@@ -1078,8 +1024,9 @@ with tab_match:
                                         agree_notes = st.text_area("Notes (optional)", height=60, key=f"an_{r.get('id')}")
                                         if st.button("📤 Send to Merchant", key=f"send_agree_{r.get('id')}_{p['id']}", type="primary", use_container_width=True):
                                             try:
+                                                import uuid
                                                 payload = {
-                                                    "agreement_id": str(datetime.datetime.now().timestamp()),
+                                                    "agreement_id": str(uuid.uuid4()),
                                                     "producer_id": user_id,
                                                     "merchant_id": r["id"],
                                                     "product_id": p["id"],
@@ -1133,7 +1080,9 @@ with tab_match:
     except Exception as e:
         st.error(f"⚠️ Error in matching: {str(e)}")
 
-# ─── AGREEMENTS TAB ───
+# ══════════════════════════════════════════════
+# TAB — AGREEMENTS
+# ══════════════════════════════════════════════
 with tab_agree:
     try:
         st.markdown('<div class="section-title">Supply Agreements</div>', unsafe_allow_html=True)
@@ -1223,7 +1172,9 @@ with tab_agree:
     except Exception as e:
         st.error(f"⚠️ Error loading agreements: {str(e)}")
 
-# ─── HISTORY TAB ───
+# ══════════════════════════════════════════════
+# TAB — HISTORY
+# ══════════════════════════════════════════════
 with tab_history:
     try:
         st.markdown('<div class="section-title">Delivery History</div>', unsafe_allow_html=True)
