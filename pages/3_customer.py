@@ -694,9 +694,6 @@ with tab_ai_insights:
 with tab_notif:
     render_notifications_tab(user_id)
 
-with tab_profile:
-    render_profile_edit_tab(profile, user_id)
-
 # ════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 3_customer.py)
 # ═════════════════════════════════════════════════════════════
