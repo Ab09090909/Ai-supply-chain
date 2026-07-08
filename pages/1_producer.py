@@ -43,10 +43,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #e2e8f0;
     font-family: 'Inter', sans-serif;
 }
-[data-testid="stSidebar"] {
-    background: #161b27 !important;
-    border-right: 1px solid #1e2a3a;
-}
+/* Sidebar colours are controlled by inject_theme() in utils/theme.py */
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stToolbar"] { display: none; }
 
@@ -191,14 +188,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #f87171 !important;
 }
 
-/* ── Sidebar ── */
-[data-testid="stSidebar"] .stButton > button {
-    background: #1e2a3a !important;
-    border-color: #334155 !important;
-    color: #e2e8f0 !important;
-    width: 100% !important;
-    margin-bottom: 6px !important;
-}
+/* Sidebar button styles controlled by inject_theme() */
 
 /* ─ Forecast chart container ── */
 .forecast-container {
@@ -265,6 +255,9 @@ with _hcol3:
 # Sidebar
 # ─────────────────────────────────────────────
 with st.sidebar:
+    from utils.theme import render_theme_toggle
+    render_theme_toggle()
+    st.divider()
     st.markdown("### 🚜 Quick Actions")
     if st.button("🔄 Refresh Data", use_container_width=True):
         clear_data_cache()
@@ -614,13 +607,27 @@ with tab_products:
 with tab_demand:
     st.markdown('<div class="section-title">AI Demand Forecasting</div>', unsafe_allow_html=True)
     st.markdown('<div class="alert-box alert-info">🤖 The AI model analyzes historical patterns and market signals to forecast demand for your products over the next 12 weeks.</div>', unsafe_allow_html=True)
-    fc1, fc2, fc3 = st.columns(3)
+
+    # ── Product name selector (from producer's own listings) ──
+    _my_prods_for_fc = cached_query("products", filters={"producer_id": user_id}, limit=200)
+    _prod_names = [p["product_name"] for p in _my_prods_for_fc if p.get("product_name")]
+    _prod_name_options = ["(All / General)"] + sorted(set(_prod_names))
+
+    fc_prod_col, fc1, fc2, fc3 = st.columns([2, 2, 2, 1])
+    with fc_prod_col:
+        fc_product = st.selectbox("Product", _prod_name_options, key="fc_product",
+                                  help="Select one of your products to focus the forecast")
     with fc1:
-        fc_sector = st.selectbox("Sector", SECTORS, key="fc_sector")
+        # Auto-fill sector from selected product
+        _selected_prod_obj = next((p for p in _my_prods_for_fc if p["product_name"] == fc_product), None)
+        _default_sector_idx = SECTORS.index(_selected_prod_obj["sector"]) if _selected_prod_obj and _selected_prod_obj.get("sector") in SECTORS else 0
+        fc_sector = st.selectbox("Sector", SECTORS, index=_default_sector_idx, key="fc_sector")
     with fc2:
-        fc_region = st.selectbox("Region", REGIONS, key="fc_region")
+        _default_region_idx = REGIONS.index(_selected_prod_obj["region"]) if _selected_prod_obj and _selected_prod_obj.get("region") in REGIONS else 0
+        fc_region = st.selectbox("Region", REGIONS, index=_default_region_idx, key="fc_region")
     with fc3:
-        fc_horizon = st.selectbox("Forecast Weeks", [4, 8, 12, 16], index=2, key="fc_horizon")
+        fc_horizon = st.selectbox("Weeks", [4, 8, 12, 16], index=2, key="fc_horizon")
+
     if st.button("📈 Run Demand Forecast", type="primary", use_container_width=True, key="run_forecast"):
         with st.spinner("Running AI demand model…"):
             try:
@@ -630,14 +637,19 @@ with tab_demand:
                     horizon=fc_horizon,
                 )
                 st.session_state["forecast_result"] = forecast_result
-                st.session_state["forecast_params"] = (fc_sector, fc_region, fc_horizon)
+                st.session_state["forecast_params"] = (fc_product, fc_sector, fc_region, fc_horizon)
             except Exception as e:
                 st.error(f"Forecast failed: {e}")
     result = st.session_state.get("forecast_result")
     params = st.session_state.get("forecast_params")
     if result is not None and params:
-        sector_p, region_p, horizon_p = params
-        st.markdown(f'<div class="section-title">Forecast: {sector_p} · {region_p} · {horizon_p} Weeks</div>', unsafe_allow_html=True)
+        # Support both old 3-tuple and new 4-tuple params
+        if len(params) == 4:
+            prod_p, sector_p, region_p, horizon_p = params
+        else:
+            prod_p, sector_p, region_p, horizon_p = "(All)", params[0], params[1], params[2]
+        _prod_label = f" · {prod_p}" if prod_p and prod_p != "(All / General)" else ""
+        st.markdown(f'<div class="section-title">Forecast: {sector_p}{_prod_label} · {region_p} · {horizon_p} Weeks</div>', unsafe_allow_html=True)
         # Summary metrics
         if isinstance(result, list) and len(result) > 0:
             avg_demand = sum(result) / len(result)
