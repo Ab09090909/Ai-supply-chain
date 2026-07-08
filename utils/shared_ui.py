@@ -216,3 +216,219 @@ def render_profile_edit_tab(profile, user_id):
                         st.rerun()
                     except Exception as e:
                         st.error(f"Update failed: {e}")
+
+def render_profile_editor_modal(profile, user_id):
+    """Render profile editor modal with image upload."""
+    st.markdown("""
+    <style>
+    .profile-editor-modal {
+        background: #161b27;
+        border: 1px solid #1e2a3a;
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+    }
+    .profile-pic-upload {
+        text-align: center;
+        margin: 20px 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    with st.container():
+        st.markdown('<div class="profile-editor-modal">', unsafe_allow_html=True)
+        
+        st.markdown("### 👤 Edit Profile")
+        
+        # Profile Picture Upload Section
+        st.markdown('<div class="profile-pic-upload">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            # Current profile picture
+            profile_pic = profile.get("profile_image")
+            if profile_pic:
+                st.markdown(f"""
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <img src="data:image/jpeg;base64,{profile_pic}" 
+                         style="width: 120px; height: 120px; border-radius: 50%; border: 4px solid #D4A017; object-fit: cover;">
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <div style="width: 120px; height: 120px; border-radius: 50%; border: 4px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 48px; color: #f1f5f9;">
+                        {profile.get('full_name', 'U')[0].upper()}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Upload new profile picture
+            uploaded_image = st.file_uploader(
+                "📷 Upload Profile Picture",
+                type=["jpg", "jpeg", "png"],
+                key="profile_pic_upload",
+                help="Upload a profile picture (JPG, JPEG, or PNG)"
+            )
+            
+            if uploaded_image:
+                try:
+                    # Process and save the image
+                    image_bytes = uploaded_image.read()
+                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                    
+                    # Update profile with new image
+                    supabase.table("profiles").update({
+                        "profile_image": image_base64
+                    }).eq("id", user_id).execute()
+                    
+                    clear_data_cache()
+                    st.success("✅ Profile picture updated!")
+                    st.session_state.profile = None  # Force refresh
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to upload image: {e}")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # Profile Information Form
+        with st.form("profile_info_form"):
+            st.markdown("#### 📝 Profile Information")
+            
+            pe1, pe2 = st.columns(2)
+            with pe1:
+                new_full_name = st.text_input(
+                    "Full Name / Company Name *",
+                    value=profile.get("full_name", ""),
+                    max_chars=100,
+                    help="Enter your full name or company name"
+                )
+                new_phone = st.text_input(
+                    "Phone",
+                    value=profile.get("phone") or "",
+                    placeholder="+251 9xx xxx xxx",
+                    max_chars=20
+                )
+                new_region = st.selectbox(
+                    "Region",
+                    REGIONS,
+                    index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0
+                )
+            
+            with pe2:
+                st.text_input(
+                    "Email (Read-only)",
+                    value=st.session_state.user.email if st.session_state.user else "",
+                    disabled=True
+                )
+                st.text_input(
+                    "Role (Read-only)",
+                    value=profile.get("role", "").capitalize(),
+                    disabled=True
+                )
+                new_company = st.text_input(
+                    "Company/Organization",
+                    value=profile.get("company", ""),
+                    placeholder="Your company name"
+                )
+            
+            st.markdown("")
+            col_save, col_cancel = st.columns(2)
+            with col_save:
+                submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not new_full_name.strip():
+                    st.error("Full name cannot be empty.")
+                else:
+                    phone_val = new_phone.strip()
+                    if phone_val and not _re.match(r"^\+?[\d\s-]{7,20}$", phone_val):
+                        st.error("Invalid phone number format.")
+                    else:
+                        try:
+                            update_data = {
+                                "full_name": new_full_name.strip(),
+                                "phone": phone_val or None,
+                                "region": new_region,
+                                "company": new_company.strip() if new_company else None,
+                            }
+                            supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+                            clear_data_cache()
+                            st.session_state.profile = None
+                            st.success("✅ Profile updated successfully!")
+                            st.session_state.show_profile_editor = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Update failed: {e}")
+        
+        with col_cancel:
+            if st.button("❌ Cancel", use_container_width=True):
+                st.session_state.show_profile_editor = False
+                st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_notifications_tab(user_id):
+    st.subheader("🔔 Notifications")
+    if st.button("✅ Mark All Read", use_container_width=True):
+        try:
+            supabase.table("notifications").update({"is_read": True}).eq("recipient_id", user_id).eq("is_read", False).execute()
+            cached_unread_count.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed: {e}")
+    try:
+        notifs = supabase.table("notifications").select("*").eq("recipient_id", user_id).order("created_at", desc=True).limit(30).execute().data or []
+    except Exception as e:
+        st.error(f"Could not load notifications: {e}")
+        notifs = []
+    if not notifs:
+        st.info("No notifications yet.")
+        return
+    for n in notifs:
+        icon = {"success": "✅", "warning": "⚠️", "error": "❌", "info": "ℹ️"}.get(n.get("type", "info"), "🔔")
+        with st.container(border=True):
+            st.markdown(f"{icon} **{n.get('title', '')}**")
+            st.caption(n.get("message", ""))
+            st.caption(f"🕐 {str(n.get('created_at', ''))[:16]}")
+
+
+def render_profile_edit_tab(profile, user_id):
+    st.subheader("👤 Edit Profile")
+    with st.form("profile_edit_form"):
+        pe1, pe2 = st.columns(2)
+        with pe1:
+            new_full_name = st.text_input("Full Name", value=profile.get("full_name", ""), max_chars=100)
+            new_phone = st.text_input("Phone", value=profile.get("phone") or "", placeholder="+251 9xx xxx xxx", max_chars=20)
+        with pe2:
+            current_region = profile.get("region", REGIONS[0])
+            new_region = st.selectbox(
+                "Region", REGIONS,
+                index=REGIONS.index(current_region) if current_region in REGIONS else 0,
+            )
+            st.text_input("Role (read-only)", value=profile.get("role", "").capitalize(), disabled=True)
+        st.caption("Email cannot be changed here. Contact support if needed.")
+        save_profile = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+        if save_profile:
+            if not new_full_name.strip():
+                st.error("Full name cannot be empty.")
+            else:
+                phone_val = new_phone.strip()
+                if phone_val and not _re.match(r"^\+?[\d\s-]{7,20}$", phone_val):
+                    st.error("Invalid phone number format.")
+                else:
+                    try:
+                        supabase.table("profiles").update({
+                            "full_name": new_full_name.strip(),
+                            "phone": phone_val or None,
+                            "region": new_region,
+                        }).eq("id", user_id).execute()
+                        clear_data_cache()
+                        st.session_state.profile = None
+                        st.success("✅ Profile updated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Update failed: {e}")
