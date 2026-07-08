@@ -23,7 +23,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ─────────────────────────────────────────────────────────────
 # CACHED QUERIES
 # ─────────────────────────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def cached_query(table_name, filters=None, order_by="created_at", desc=True, limit=200):
     """Fetch data from Supabase with caching."""
     try:
@@ -48,7 +48,7 @@ def cached_query(table_name, filters=None, order_by="created_at", desc=True, lim
         return []
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def cached_get_profile(user_id):
     """Get user profile with caching."""
     try:
@@ -58,7 +58,7 @@ def cached_get_profile(user_id):
         return None
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def cached_unread_count(user_id):
     """Get unread notification count with caching."""
     try:
@@ -71,6 +71,7 @@ def cached_unread_count(user_id):
 
 def clear_data_cache():
     """Clear all cached queries."""
+    st.cache_data.clear()
     cached_query.clear()
     cached_get_profile.clear()
     cached_unread_count.clear()
