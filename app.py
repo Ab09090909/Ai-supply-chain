@@ -32,7 +32,7 @@ st.set_page_config(
     page_title="AI Supply Chain Platform",
     page_icon="🌾",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded",  # Keep sidebar expanded by default
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -51,6 +51,242 @@ if "auth_redirect" not in st.session_state:
 
 # Inject theme
 inject_theme()
+
+# ─────────────────────────────────────────────────────────────
+# CUSTOM CSS FOR MOBILE SIDEBAR
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ─── FIX MOBILE SIDEBAR ─── */
+/* Make sure sidebar is always accessible on mobile */
+@media (max-width: 768px) {
+    /* Ensure sidebar hamburger menu is visible */
+    [data-testid="stSidebar"] {
+        min-width: 280px !important;
+        max-width: 300px !important;
+        width: 280px !important;
+    }
+    
+    /* Make sure the sidebar toggle button is visible */
+    [data-testid="collapsedControl"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 999999 !important;
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        background: #1B4332 !important;
+        color: white !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        border: none !important;
+        cursor: pointer !important;
+        font-size: 18px !important;
+    }
+    
+    /* Sidebar overlay for mobile */
+    [data-testid="stSidebarOverlay"] {
+        display: block !important;
+    }
+    
+    /* Make sidebar content scrollable on mobile */
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        overflow-y: auto !important;
+        max-height: 100vh !important;
+    }
+    
+    /* Adjust main content padding for mobile */
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 60px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    
+    /* Fix hamburger menu button */
+    button[kind="header"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 999999 !important;
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        background: #1B4332 !important;
+        color: white !important;
+        padding: 10px 14px !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-size: 20px !important;
+    }
+}
+
+/* ─── SIDEBAR STYLES ─── */
+[data-testid="stSidebar"] {
+    background: #161b27 !important;
+    border-right: 1px solid #1e2a3a !important;
+    padding-top: 20px !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #e2e8f0 !important;
+}
+
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] small {
+    color: #64748b !important;
+}
+
+[data-testid="stSidebar"] .stButton > button {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+    width: 100% !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s !important;
+    padding: 10px 14px !important;
+    margin-bottom: 4px !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    border-color: #D4A017 !important;
+    color: #D4A017 !important;
+}
+
+[data-testid="stSidebar"] hr {
+    border-color: #1e2a3a !important;
+    margin: 12px 0 !important;
+}
+
+[data-testid="stSidebar"] .stInfo {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+}
+
+/* ─── PILL STYLES ─── */
+.pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+    margin: 2px 0;
+}
+.pill-success { background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }
+.pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
+.pill-danger { background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }
+.pill-info { background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }
+.pill-neutral { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+
+/* ─── HIDE STREAMLIT BRANDING ─── */
+#MainMenu, footer, header { visibility: hidden !important; }
+[data-testid="stToolbar"] { display: none !important; }
+
+/* ─── BUTTONS ─── */
+.stButton > button {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+    background: #1e2a3a !important;
+    border: 1px solid #334155 !important;
+    color: #e2e8f0 !important;
+    cursor: pointer !important;
+}
+
+.stButton > button:hover {
+    border-color: #D4A01755 !important;
+    color: #D4A017 !important;
+}
+
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
+    border-color: #D4A017 !important;
+    color: #1B4332 !important;
+}
+
+/* ─── INPUTS ─── */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+
+[data-testid="stSelectbox"] > div > div {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+
+/* ─── TABS ─── */
+[data-testid="stTabs"] > div > div > div > button {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #64748b !important;
+    padding: 8px 16px !important;
+}
+
+[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
+    color: #D4A017 !important;
+    border-bottom: 2px solid #D4A017 !important;
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] {
+        width: 280px !important;
+        min-width: 280px !important;
+    }
+    .kpi-value { font-size: 22px !important; }
+    .kpi-card { padding: 14px 16px !important; }
+    div.stButton > button { width: 100% !important; }
+    [data-testid="stTabs"] > div > div > div > button {
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+    }
+    [data-testid="column"] {
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 60px !important;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+    
+    /* Make hamburger menu clearly visible */
+    button[data-testid="baseButton-header"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 999999 !important;
+        background: #1B4332 !important;
+        color: white !important;
+        padding: 8px 14px !important;
+        border-radius: 8px !important;
+        border: 1px solid #2D6A4F !important;
+        font-size: 20px !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* Sidebar overlay fix */
+    [data-testid="stSidebarOverlay"] {
+        display: block !important;
+        background: rgba(0,0,0,0.5) !important;
+        z-index: 99999 !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -191,6 +427,19 @@ def show_landing():
                     st.rerun()
                 else:
                     st.error(msg)
+        
+        with st.expander("🔑 Forgot Password?"):
+            reset_email = st.text_input("Enter your email", key="reset_email")
+            if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
+                if not reset_email:
+                    st.warning("Please enter your email address.")
+                else:
+                    with st.spinner("Sending..."):
+                        ok, msg = forgot_password(reset_email)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
     
     with tab2:
         name = st.text_input("Full Name", key="reg_name")
@@ -269,12 +518,17 @@ def main():
                         border-radius: 16px; padding: 40px; text-align: center; color: white;">
                 <div style="font-size: 48px;">{emojis.get(role, "👤")}</div>
                 <h1 style="color: white; margin: 10px 0;">Welcome to Your Dashboard</h1>
-                <p style="opacity: 0.9;">👈 Use the sidebar to navigate to your dashboard.</p>
+                <p style="opacity: 0.9; font-size: 16px;">
+                    👆 Tap the <strong>☰</strong> icon in the top-left corner to open the sidebar.
+                </p>
                 <p style="opacity: 0.7; font-size: 14px; margin-top: 8px;">
                     {profile.get('full_name', 'User')} · {role.capitalize()}
                 </p>
             </div>
             """, unsafe_allow_html=True)
+            
+            # Mobile instructions
+            st.info("📱 On mobile: Tap the **☰** (hamburger) icon in the top-left corner to open the sidebar menu.")
         else:
             st.warning("⚠️ Could not load profile. Please sign out and try again.")
 
