@@ -4,6 +4,9 @@ app.py — Ethiopian AI Supply Chain Platform (Main Entry)
 import sys
 import os
 import streamlit as st
+for key, value in st.secrets.items():
+    os.environ[key] = str(value)
+# ─────────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 
 from utils.theme import inject_theme, render_page_header
