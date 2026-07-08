@@ -591,11 +591,48 @@ with tab_docs:
                     else:
                         st.success("✅ Approved")
                 
-                if st.session_state.get(f"preview_{doc_id}"):
-                    st.markdown('<div class="doc-preview-container">', unsafe_allow_html=True)
-                    file_url = doc.get("file_url") or doc.get("storage_path") or ""
-                    st.markdown(f"**Preview: {doc.get('document_name','')}**")
-                    if file_url:
+            if st.session_state.get(f"preview_{doc_id}"):
+                 st.markdown('<div class="doc-preview-container">', unsafe_allow_html=True)
+                 st.markdown(f"**Preview: {doc.get('document_name','')}**")
+                 
+                 # 1. Try Base64 first (if saved directly in DB)
+                 doc_b64 = doc.get("file_base64") or doc.get("image_base64")
+                 if doc_b64:
+                     try:
+                         img_data = base64.b64decode(doc_b64)
+                         st.image(img_data, use_container_width=True, caption=doc.get("document_name",""))
+                     except Exception:
+                         st.info("Could not decode base64 image.")
+                 else:
+                     # 2. Try Storage URL / Path
+                     file_url = doc.get("file_url") or doc.get("storage_path") or ""
+                     if file_url:
+                         if file_url.startswith("http"):
+                             if any(ext in file_url.lower() for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
+                                 st.image(file_url, caption=doc.get("document_name",""), use_container_width=True)
+                             elif ".pdf" in file_url.lower():
+                                 st.components.v1.iframe(file_url, height=500, scrolling=True)
+                             else:
+                                 st.markdown(f"[📥 Open Document]({file_url})")
+                         else:
+                             try:
+                                 bucket = "verification-documents"
+                                 res = supabase.storage.from_(bucket).download(file_url)
+                                 fname = file_url.split("/")[-1].lower()
+                                 if fname.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                                     st.image(res, caption=doc.get("document_name",""), use_container_width=True)
+                                 elif fname.endswith(".pdf"):
+                                     b64 = base64.b64encode(res).decode()
+                                     pdf_display = f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="500px"></iframe>'
+                                     st.markdown(pdf_display, unsafe_allow_html=True)
+                                 else:
+                                     st.info("Preview not available for this file type.")
+                             except Exception as pe:
+                                 st.info(f"Preview unavailable (Storage error): {pe}")
+                     else:
+                         st.info("No file URL or path found.")
+                         
+                 st.markdown('</div>', unsafe_allow_html=True)
                         if any(ext in file_url.lower() for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
                             st.image(file_url, caption=doc.get("document_name",""), use_container_width=True)
                         elif ".pdf" in file_url.lower():
