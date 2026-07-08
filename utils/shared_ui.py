@@ -57,10 +57,17 @@ def render_product_image(product, height=150):
     img_b64 = product.get("image_base64")
     if img_b64:
         try:
-            img_data = base64.b64decode(img_b64)
-            st.image(img_data, use_container_width=True, caption=product.get("product_name", ""))
+            img_b64_clean = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
+            raw = base64.b64decode(img_b64_clean[:16])
+            mime = "image/png" if raw[:4] == b'\x89PNG' else "image/jpeg"
+            st.markdown(
+                f'<img src="data:{mime};base64,{img_b64_clean}" '
+                f'style="width:100%;border-radius:8px;object-fit:cover;max-height:{height}px;" '
+                f'alt="{product.get("product_name","")}">',
+                unsafe_allow_html=True
+            )
         except Exception:
-            st.markdown(" *Image unavailable*")
+            st.markdown(f'<div style="background:#1e2a3a;border-radius:8px;height:{height}px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;">📷 Error</div>', unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div style="background: #1e2a3a; border-radius: 8px; height: {height}px; 
