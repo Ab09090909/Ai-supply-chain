@@ -12,7 +12,7 @@ from utils.db_helpers import supabase, cached_query, clear_data_cache, reduce_pr
 from utils.verification import check_verification_status, render_document_upload
 from utils.shared_ui import (
     get_grades_for_product, map_grade_to_db, render_browse_tab,
-    render_notifications_tab, render_profile_edit_tab,
+    render_notifications_tab, render_profile_edit_tab, render_profile_editor_modal,
 )
 from utils.pdf_generator import (
     generate_agreement_pdf,
@@ -236,7 +236,6 @@ verif_badge = '<span class="dash-badge">✓ Verified</span>' if verif_status["is
 
 # Get profile picture
 profile_pic = profile.get("profile_image")
-profile_pic_html = ""
 if profile_pic:
     profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">'
 else:
@@ -244,8 +243,9 @@ else:
 
 st.markdown(f"""
 <div class="dash-header">
-    <div style="flex-shrink: 0;">
+    <div style="flex-shrink: 0; position: relative; width: 80px; height: 80px;">
         {profile_pic_html}
+        <div style="position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; background: #16a34a; border-radius: 50%; border: 2px solid #0f1117; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer;" title="Edit Profile">✏️</div>
     </div>
     <div style="flex: 1; margin-left: 20px;">
         <h1>Producer Dashboard</h1>
@@ -254,6 +254,12 @@ st.markdown(f"""
     {verif_badge}
 </div>
 """, unsafe_allow_html=True)
+
+# Edit profile button below header (clickable Streamlit button)
+_hcol1, _hcol2, _hcol3 = st.columns([1, 6, 1])
+with _hcol3:
+    if st.button("✏️ Edit Profile", key="header_edit_profile_btn", use_container_width=True):
+        st.session_state.show_profile_editor = True
 
 # ─────────────────────────────────────────────
 # Sidebar
@@ -477,19 +483,19 @@ with tab_products:
                 img_col, info_col = st.columns([1, 4])
                 
                 with img_col:
-    img_b64 = p.get("image_base64")
-    if img_b64:
-        try:
-            # Clean the base64 string (remove any whitespace/newlines)
-            img_b64 = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
-            img_data = base64.b64decode(img_b64)
-            st.image(img_data, use_container_width=True, caption=p.get("product_name", ""))
-        except Exception as img_err:
-            st.error(f"Image decode error: {str(img_err)[:50]}...")
-            st.caption("Base64 length: " + str(len(img_b64) if img_b64 else 0))
-    else:
-        st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
-        
+                    img_b64 = p.get("image_base64")
+                    if img_b64:
+                        try:
+                            # Clean the base64 string (remove any whitespace/newlines)
+                            img_b64 = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
+                            img_data = base64.b64decode(img_b64)
+                            st.image(img_data, use_container_width=True, caption=p.get("product_name", ""))
+                        except Exception as img_err:
+                            st.error(f"Image decode error: {str(img_err)[:50]}...")
+                            st.caption("Base64 length: " + str(len(img_b64) if img_b64 else 0))
+                    else:
+                        st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
+
                 with info_col:
                     c1, c2, c3 = st.columns([5, 2, 3])
                     with c1:
@@ -499,25 +505,25 @@ with tab_products:
                     with c2:
                         st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
                     with c3:
-    # Stack buttons vertically instead of using nested columns
-    if st.session_state.get(f"confirm_del_prod_{pid}"):
-        st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
-        if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
-            try:
-                supabase.table("products").delete().eq("id", pid).execute()
-                clear_data_cache()
-                st.session_state.pop(f"confirm_del_prod_{pid}", None)
-                st.rerun()
-            except Exception as e:
-                st.error(f"Delete failed: {e}")
-        if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
-            st.session_state.pop(f"confirm_del_prod_{pid}", None)
-            st.rerun()
-    else:
-        st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
-        if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
-            st.session_state[f"confirm_del_prod_{pid}"] = True
-            st.rerun()
+                        # Stack buttons vertically instead of using nested columns
+                        if st.session_state.get(f"confirm_del_prod_{pid}"):
+                            st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
+                            if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+                                try:
+                                    supabase.table("products").delete().eq("id", pid).execute()
+                                    clear_data_cache()
+                                    st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Delete failed: {e}")
+                            if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
+                                st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                                st.rerun()
+                        else:
+                            st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
+                            if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
+                                st.session_state[f"confirm_del_prod_{pid}"] = True
+                                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)                           
@@ -1008,6 +1014,14 @@ with tab_history:
 # ── NOTIFICATIONS ──
 with tab_notif:
     render_notifications_tab(user_id)
+
+# ── PROFILE ──
+with tab_profile:
+    render_profile_editor_modal(profile, user_id)
+
+# ── Show profile editor modal if triggered from header button ──
+if st.session_state.get("show_profile_editor"):
+    render_profile_editor_modal(profile, user_id)
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 1_producer.py)
