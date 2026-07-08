@@ -321,7 +321,7 @@ with st.sidebar:
     
     # Update 7: Dark/Light Toggle
     st.markdown("### 🎨 Theme")
-    render_theme_toggle()
+    render_theme_toggle(page="admin")
     
     st.divider()
     st.markdown("### 📌 System Status")
@@ -1142,9 +1142,10 @@ with tab_settings:
                     st.session_state["confirm_purge_notifications"] = True
                     st.rerun()
 
-# ── Show profile editor modal if triggered from header button ──
+# ── Profile editor triggered from header Edit Profile button ──
 if st.session_state.get("show_profile_editor"):
-    render_profile_editor_modal(profile, st.session_state.user.id)
+    st.session_state.show_profile_editor = False   # clear FIRST to prevent duplicate on rerun
+    render_profile_editor_modal(profile, st.session_state.user.id, key_suffix="admin_modal")
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 4_Admin.py)
