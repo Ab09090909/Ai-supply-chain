@@ -37,10 +37,18 @@ GRADES_DICT = {
 }
 
 # ─────────────────────────────────────────────────────────────
-# SESSION KEYS
+# SESSION KEYS - All keys used in session_state
 # ─────────────────────────────────────────────────────────────
 SESSION_KEYS = [
-    "user", "profile", "auth_token", "show_profile_editor",
-    "theme_mode", "sidebar_light_mode", "match_results",
-    "forecast_result", "m_forecast_result", "wishlist"
+    "user", 
+    "profile", 
+    "auth_token", 
+    "show_profile_editor",
+    "theme_mode", 
+    "sidebar_light_mode", 
+    "match_results",
+    "forecast_result", 
+    "m_forecast_result", 
+    "wishlist",
+    "auth_redirect",
 ]
