@@ -65,7 +65,7 @@ if "initialized_merchant" not in st.session_state:
 inject_theme()
 
 # ─────────────────────────────────────────────
-# CSS STYLES (Condensed for performance)
+# CSS STYLES
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -231,7 +231,6 @@ html, body, [data-testid="stAppViewContainer"] {
     object-fit: cover;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 3px; }
@@ -821,7 +820,7 @@ with tab_pref:
         st.error(f"⚠️ Error loading preferences: {str(e)}")
 
 # ══════════════════════════════════════════════
-# TAB — AI INSIGHTS
+# TAB — AI INSIGHTS (FIXED - Added try block)
 # ══════════════════════════════════════════════
 with tab_ai_insights:
     try:
@@ -837,7 +836,6 @@ with tab_ai_insights:
             if st.button("Get Recommendations", use_container_width=True, key="ai_rec_btn"):
                 with st.spinner("Analyzing your preferences..."):
                     try:
-                        # Get recommendations based on merchant preferences
                         pref_sectors = (existing_pref.get("preferred_sectors") or []) if existing_pref else []
                         pref_products = (existing_pref.get("preferred_products") or []) if existing_pref else []
                         pref_regions = (existing_pref.get("preferred_regions") or []) if existing_pref else []
@@ -865,7 +863,6 @@ with tab_ai_insights:
             if st.button("Run Fraud Check", use_container_width=True, key="ai_fraud_btn"):
                 with st.spinner("Scanning transactions..."):
                     try:
-                        # Check recent orders for fraud risk
                         recent_orders = supabase.table("orders").select("*, products(sector, product_name, region)").eq("buyer_id", user_id).limit(5).execute().data or []
                         if recent_orders:
                             high_risk = 0
@@ -900,7 +897,6 @@ with tab_ai_insights:
             if st.button("Analyze Prices", use_container_width=True, key="ai_price_btn"):
                 with st.spinner("Computing market analysis..."):
                     try:
-                        # Get price recommendation for a sample product
                         product = (existing_pref.get("preferred_products") or ["Teff"])[0] if existing_pref else "Teff"
                         price_result = recommend_price(
                             sector="Agriculture",
@@ -984,9 +980,8 @@ with tab_ai_insights:
         st.markdown("")
         st.markdown('<div class="section-title">Your AI Readiness Score</div>', unsafe_allow_html=True)
         
-        # Calculate AI Readiness Score based on preferences
-        score = 60  # Base score
-        if existing_pref:
+        score = 60
+        if 'existing_pref' in locals() and existing_pref:
             if existing_pref.get("preferred_sectors"):
                 score += 10
             if existing_pref.get("preferred_products"):
@@ -994,9 +989,10 @@ with tab_ai_insights:
             if existing_pref.get("preferred_regions"):
                 score += 10
             if existing_pref.get("max_budget_birr", 0) > 0:
+                score += 10
             score = min(score, 100)
         else:
-            score = 40  # Lower score if no preferences set
+            score = 40
         
         fig_score = go.Figure(go.Indicator(
             mode="gauge+number",
