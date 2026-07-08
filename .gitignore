@@ -1,4 +1,6 @@
-# Python
+# ─────────────────────────────────────────────
+# PYTHON
+# ─────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,50 +12,83 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+*.egg-info/
+dist/
+build/
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Environment
+# ─────────────────────────────────────────────
+# ENVIRONMENT
+# ─────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
+.secrets
+.secrets.toml
+*.secrets
 
-# Logs
+# ─────────────────────────────────────────────
+# LOGS
+# ─────────────────────────────────────────────
 logs/
 *.log
 *.pid
 *.seed
+*.pid.lock
 
-# Database
+# ─────────────────────────────────────────────
+# DATABASE
+# ─────────────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
 
-# Models (if large)
+# ─────────────────────────────────────────────
+# AI MODELS (Large Files)
+# ─────────────────────────────────────────────
 models/*.pkl
 models/*.joblib
 *.h5
 *.pt
 *.pth
+*.onnx
+models/*.zip
+models/*.tar.gz
+models/*.parquet
+*.model
+*.weights
 
+# ─────────────────────────────────────────────
 # IDE
+# ─────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
 Thumbs.db
+*.code-workspace
+*.iml
+.project
+.classpath
+.settings/
 
-# Streamlit
+# ─────────────────────────────────────────────
+# STREAMLIT
+# ─────────────────────────────────────────────
 .streamlit/secrets.toml
 .streamlit/cache/
+.streamlit/uploads/
+.streamlit/*.key
 
-# Deployment
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage
+# ─────────────────────────────────────────────
+# COVERAGE & TESTING
+# ─────────────────────────────────────────────
 htmlcov/
 .tox/
 .coverage
@@ -61,7 +96,85 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+*.cover
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyre
 
-# Jupyter
+# ─────────────────────────────────────────────
+# JUPYTER
+# ─────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
+*.pynb
+
+# ─────────────────────────────────────────────
+# DEPLOYMENT
+# ─────────────────────────────────────────────
+*.pid
+*.seed
+*.pid.lock
+
+# ─────────────────────────────────────────────
+# TEMP FILES
+# ─────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
+
+# ─────────────────────────────────────────────
+# OS
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.bak
+
+# ─────────────────────────────────────────────
+# SECURITY
+# ─────────────────────────────────────────────
+*.key
+*.pem
+*.crt
+*.csr
+*.p12
+*.pfx
+*.jks
+
+# ─────────────────────────────────────────────
+# MISC
+# ─────────────────────────────────────────────
+*.bak
+*.orig
+*.rej
+*.patch
+*.diff
+*.out
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.dll
+
+# ─────────────────────────────────────────────
+# DATA FILES (Keep only small samples)
+# ─────────────────────────────────────────────
+data/
+samples/
+*.csv
+*.xlsx
+*.xls
+*.json
+*.jsonl
+*.parquet
+*.feather
+*.arrow
+
+# Except sample data
+!data/sample/
+!samples/
