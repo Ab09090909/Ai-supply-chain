@@ -35,18 +35,16 @@ LIGHT = {
 }
 
 def _get_tokens() -> dict:
-    # Use 'theme_mode' instead of 'sidebar_light_mode' to match the toggle button
-    mode = st.session_state.get("theme_mode", "dark")
-    return LIGHT if mode == "light" else DARK
+    # FIX: Safely initialize sidebar_light_mode to prevent KeyError crash
+    if "sidebar_light_mode" not in st.session_state:
+        st.session_state.sidebar_light_mode = False
+    return LIGHT if st.session_state.sidebar_light_mode else DARK
 
-# ═══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
 # INJECT GLOBAL CSS
 # ═══════════════════════════════════════════════════════════════
 def inject_theme():
     """Call near the top of each page."""
-    if "theme_mode" not in st.session_state:
-        st.session_state.theme_mode = "dark"
-        
     t = _get_tokens()
     st.markdown(f"""
     <style>
@@ -72,9 +70,6 @@ def inject_theme():
         .stButton > button {{ font-size: 12px !important; padding: 8px 10px !important; }}
         .forecast-container {{ padding: 12px !important; }}
         .alert-box {{ font-size: 12px !important; }}
-        .hero-section h1 {{ font-size: 24px !important; }}
-        .hero-section p {{ font-size: 13px !important; }}
-        .stats-grid {{ grid-template-columns: 1fr !important; }}
     }}
 
     @media (min-width: 769px) and (max-width: 1024px) {{
@@ -82,7 +77,7 @@ def inject_theme():
         .kpi-value {{ font-size: 24px !important; }}
     }}
 
-    /* ═══════════════════════════════════════════
+    /* ══════════════════════════════════════════
        MAIN CONTENT — always dark
     ════════════════════════════════════════════ */
     html, body, [data-testid="stAppViewContainer"] {{
@@ -91,10 +86,10 @@ def inject_theme():
         font-family: 'Inter', sans-serif;
     }}
     
-    /* FIX: Only hide MainMenu and footer, keep header visible for sidebar toggle */
+    /* FIX: Only hide MainMenu and footer. DO NOT hide header, or the sidebar toggle disappears! */
     #MainMenu, footer {{ visibility: hidden; }}
     
-    /* FIX: Ensure sidebar toggle button is always visible */
+    /* FIX: Force the sidebar toggle button (hamburger menu) to always be visible */
     [data-testid="stSidebarCollapsedControl"] {{
         visibility: visible !important;
         display: block !important;
@@ -109,7 +104,7 @@ def inject_theme():
 
     /* ═══════════════════════════════════════════
        SIDEBAR — togglable light / dark
-    ════════════════════════════════════════════ */
+    ═══════════════════════════════════════════ */
     [data-testid="stSidebar"] {{
         background: {t["sidebar_bg"]} !important;
         border-right: 1px solid {t["sidebar_border"]} !important;
@@ -176,13 +171,14 @@ def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
 # THEME TOGGLE WIDGET
 # ═══════════════════════════════════════════════════════════════
 def render_theme_toggle():
-    """Render a simple theme toggle button."""
-    if "theme_mode" not in st.session_state:
-        st.session_state.theme_mode = "dark"
+    """Render a simple theme toggle button. Takes NO arguments."""
+    # FIX: Safely initialize
+    if "sidebar_light_mode" not in st.session_state:
+        st.session_state.sidebar_light_mode = False
         
-    if st.button("🎨 Toggle Theme", key="theme_toggle_btn", use_container_width=True):
-        if st.session_state.theme_mode == "dark":
-            st.session_state.theme_mode = "light"
-        else:
-            st.session_state.theme_mode = "dark"
+    current_mode = st.session_state.sidebar_light_mode
+    btn_label = "☀️ Light Sidebar" if not current_mode else "🌙 Dark Sidebar"
+    
+    if st.button(btn_label, key="theme_toggle_btn_global", use_container_width=True):
+        st.session_state.sidebar_light_mode = not current_mode
         st.rerun()
