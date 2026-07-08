@@ -477,16 +477,19 @@ with tab_products:
                 img_col, info_col = st.columns([1, 4])
                 
                 with img_col:
-                    img_b64 = p.get("image_base64")
-                    if img_b64:
-                        try:
-                            img_data = base64.b64decode(img_b64)
-                            st.image(img_data, use_container_width=True)
-                        except Exception:
-                            st.markdown("📷 *Image error*")
-                    else:
-                        st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
-                
+    img_b64 = p.get("image_base64")
+    if img_b64:
+        try:
+            # Clean the base64 string (remove any whitespace/newlines)
+            img_b64 = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
+            img_data = base64.b64decode(img_b64)
+            st.image(img_data, use_container_width=True, caption=p.get("product_name", ""))
+        except Exception as img_err:
+            st.error(f"Image decode error: {str(img_err)[:50]}...")
+            st.caption("Base64 length: " + str(len(img_b64) if img_b64 else 0))
+    else:
+        st.markdown('<div style="background: #1e2a3a; border-radius: 8px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #334155; color: #64748b;">📷 No Image</div>', unsafe_allow_html=True)
+        
                 with info_col:
                     c1, c2, c3 = st.columns([5, 2, 3])
                     with c1:
