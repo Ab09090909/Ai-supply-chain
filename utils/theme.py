@@ -393,4 +393,228 @@ hr {{
 .pill-success {{ background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }}
 .pill-warning {{ background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }}
 .pill-danger  {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
-.pill-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid
+.pill-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
+.pill-neutral {{ background: #1e293b; color: #94a3b8; border: 1px solid #334155; }}
+.pill-purple  {{ background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }}
+
+/* ── Match bar ── */
+.match-bar-bg {{ background: {t["card_border"]}; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }}
+.match-bar-fill {{ height: 100%; border-radius: 4px; transition: width 0.4s ease; }}
+
+/* ── Status tracker ── */
+.status-track {{
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 12px 0;
+}}
+.track-step {{
+    flex: 1;
+    text-align: center;
+    position: relative;
+}}
+.track-step::after {{
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: -50%;
+    width: 100%;
+    height: 2px;
+    background: {t["card_border"]};
+    z-index: 0;
+}}
+.track-step:last-child::after {{ display: none; }}
+.track-dot {{
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin: 0 auto 4px;
+    position: relative;
+    z-index: 1;
+}}
+.track-label {{ font-size: 10px; color: {t["sidebar_subtext"]}; }}
+
+/* ── Admin header ── */
+.admin-header {{
+    background: linear-gradient(135deg, #1a2744 0%, #0f172a 60%, #162032 100%);
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}}
+.admin-header-icon {{ font-size: 40px; line-height: 1; }}
+.admin-header h1 {{
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.3px;
+}}
+.admin-header p {{
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #64748b;
+}}
+.admin-badge {{
+    margin-left: auto;
+    background: #1e3a5f;
+    border: 1px solid #2563eb44;
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}}
+
+/* ── Dash header ── */
+.dash-header {{
+    background: linear-gradient(135deg, #1a1020 0%, #0f1117 60%, #1a1030 100%);
+    border: 1px solid #2a1a4a;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}}
+.dash-header-icon {{ font-size: 40px; line-height: 1; }}
+.dash-header h1 {{
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.3px;
+}}
+.dash-header p {{
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #64748b;
+}}
+.dash-badge {{
+    margin-left: auto;
+    background: #3b1a6044;
+    border: 1px solid #7c3aed44;
+    color: #a78bfa;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}}
+
+/* ── Fraud risk badges ── */
+.fraud-low  {{ color: #4ade80; font-weight: 600; font-size: 12px; }}
+.fraud-med  {{ color: #fbbf24; font-weight: 600; font-size: 12px; }}
+.fraud-high {{ color: #f87171; font-weight: 600; font-size: 12px; }}
+
+/* ── Activity feed ── */
+.activity-item {{
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid {t["card_border"]};
+}}
+.activity-dot {{
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+}}
+.activity-text {{ font-size: 13px; color: {t["main_text"]}; }}
+.activity-time {{ font-size: 11px; color: {t["sidebar_subtext"]}; margin-top: 2px; }}
+
+/* ── Record cards ── */
+.record-card {{
+    background: {t["card_bg"]};
+    border: 1px solid {t["card_border"]};
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+}}
+.record-card:hover {{ border-color: {accent}55; }}
+.record-name {{
+    font-size: 15px;
+    font-weight: 600;
+    color: {t["main_text"]};
+    margin: 0 0 4px;
+}}
+.record-meta {{
+    font-size: 12px;
+    color: {t["sidebar_subtext"]};
+    margin: 0;
+}}
+
+/* ── Forecast container ── */
+.forecast-container {{
+    background: {t["card_bg"]};
+    border: 1px solid {t["card_border"]};
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 16px;
+}}
+
+/* ── Document preview ── */
+.doc-preview-container {{
+    background: {t["card_bg"]};
+    border: 1px solid {t["card_border"]};
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 12px;
+}}
+
+/* ── Product image container ── */
+.product-img-container {{
+    background: {t["input_bg"]};
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    border: 1px solid {t["card_border"]};
+}}
+.product-img-container img {{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}}
+</style>
+""", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════
+# THEME TOGGLE WIDGET
+# ═══════════════════════════════════════════════════════════════
+def render_theme_toggle():
+    """Render a simple theme toggle button for sidebar."""
+    if "sidebar_light_mode" not in st.session_state:
+        st.session_state.sidebar_light_mode = False
+    
+    is_light = st.session_state.sidebar_light_mode
+    label = "☀️ Light Theme" if not is_light else "🌙 Dark Theme"
+    
+    if st.button(label, key="theme_toggle_btn_global", use_container_width=True):
+        st.session_state.sidebar_light_mode = not is_light
+        st.rerun()
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE HEADER HELPER
+# ═══════════════════════════════════════════════════════════════
+def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
+    st.markdown(f"""
+    <div style="
+    background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
+    border-radius: 14px; padding: 28px 32px; margin-bottom: 24px; color: white;
+    ">
+    <div style="font-size: 36px; margin-bottom: 10px;">{icon}</div>
+    <h2 style="margin: 0; font-size: clamp(18px, 3vw, 26px); font-weight: 700;">{title}</h2>
+    {f'<p style="margin: 6px 0 0; opacity: 0.82; font-size: 14px;">{subtitle}</p>' if subtitle else ''}
+    </div>
+    """, unsafe_allow_html=True)
