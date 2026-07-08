@@ -23,6 +23,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+inject_theme()  # Must run right after set_page_config so sidebar CSS loads first
+
+
 st.markdown("""
 <style>
 /* ── Base ── */
@@ -266,7 +269,6 @@ html, body, [data-testid="stAppViewContainer"] {
 # ─────────────────────────────────────────────
 # Auth Guard
 # ─────────────────────────────────────────────
-inject_theme()
 if st.session_state.get("user") is None:
     st.warning("⚠️ Please sign in first.")
     st.page_link("app.py", label="← Go to Login", icon="🔐")
