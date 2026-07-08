@@ -71,6 +71,11 @@ def _generate_css(is_light: bool) -> str:
     return f"""
 <style>
 /* ═══════════════════════════════════════════
+   FONT IMPORTS
+═══════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ═══════════════════════════════════════════
    RESPONSIVE UTILITIES
 ═══════════════════════════════════════════ */
 @media (max-width: 768px) {{
@@ -95,6 +100,9 @@ def _generate_css(is_light: bool) -> str:
     .admin-header {{ padding: 16px !important; flex-wrap: wrap; }}
     .admin-header h1 {{ font-size: 20px !important; }}
     .admin-badge {{ margin-left: 0 !important; }}
+    [data-testid="stSidebar"] {{
+        width: 280px !important;
+    }}
 }}
 
 @media (min-width: 769px) and (max-width: 1024px) {{
@@ -215,7 +223,9 @@ hr {{
     border-radius: 8px !important;
 }}
 
-/* Buttons */
+/* ─────────────────────────────────────────────
+   BUTTONS
+──────────────────────────────────────────────── */
 .stButton > button {{
     border-radius: 8px !important;
     font-size: 13px !important;
@@ -254,78 +264,9 @@ hr {{
     transform: translateY(0) !important;
 }}
 
-/* Tabs */
-[data-testid="stTabs"] > div > div > div > button {{
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    color: {t["sidebar_subtext"]} !important;
-    padding: 0.5rem 1rem !important;
-    transition: all 0.2s ease !important;
-}}
-
-[data-testid="stTabs"] > div > div > div > button:hover {{
-    color: {t["main_text"]} !important;
-}}
-
-[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
-    color: {accent} !important;
-    border-bottom: 2px solid {accent} !important;
-}}
-
-/* Dataframes */
-[data-testid="stDataFrame"] {{
-    border-radius: 10px;
-    overflow: hidden;
-}}
-
-[data-testid="stDataFrame"] table {{
-    background: {t["card_bg"]} !important;
-    color: {t["main_text"]} !important;
-    width: 100% !important;
-}}
-
-[data-testid="stDataFrame"] th {{
-    background: {t["card_border"]} !important;
-    color: {t["main_text"]} !important;
-    font-weight: 600 !important;
-    padding: 8px 12px !important;
-}}
-
-[data-testid="stDataFrame"] td {{
-    background: {t["card_bg"]} !important;
-    color: {t["main_text"]} !important;
-    padding: 8px 12px !important;
-}}
-
-[data-testid="stDataFrame"] tr:hover td {{
-    background: {t["input_bg"]} !important;
-}}
-
-/* Metrics */
-[data-testid="stMetric"] {{
-    background: {t["card_bg"]} !important;
-    border: 1px solid {t["card_border"]} !important;
-    border-radius: 10px !important;
-    padding: 16px !important;
-    transition: all 0.2s ease !important;
-}}
-
-[data-testid="stMetric"]:hover {{
-    border-color: {accent}55 !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.05) !important;
-}}
-
-/* Info/Warning/Success/Error boxes */
-.stAlert {{
-    border-radius: 8px !important;
-    border-left: 4px solid !important;
-}}
-
-.stAlert > div {{
-    background: transparent !important;
-}}
-
-/* Sidebar */
+/* ─────────────────────────────────────────────
+   SIDEBAR STYLES
+──────────────────────────────────────────────── */
 [data-testid="stSidebar"] {{
     background: {t["sidebar_bg"]} !important;
     border-right: 1px solid {t["sidebar_border"]} !important;
@@ -362,31 +303,136 @@ hr {{
     border-color: {t["sidebar_divider"]} !important;
 }}
 
-[data-testid="stSidebar"] .pill {{
-    background: {t["pill_bg"]} !important;
-    color: {t["pill_color"]} !important;
-    border-color: {t["pill_border"]} !important;
+[data-testid="stSidebar"] .stInfo {{
+    background: {t["card_bg"]} !important;
+    border-color: {t["card_border"]} !important;
 }}
 
-[data-testid="stSidebar"] .pill-success {{
-    background: #14532d44 !important;
-    color: #16a34a !important;
-    border-color: #16a34a44 !important;
+/* ─────────────────────────────────────────────
+   PILL STYLES
+──────────────────────────────────────────────── */
+.pill {{
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+    margin: 2px 0;
+}}
+.pill-success {{
+    background: #14532d44;
+    color: #4ade80;
+    border: 1px solid #16a34a44;
+}}
+.pill-warning {{
+    background: #78350f44;
+    color: #fbbf24;
+    border: 1px solid #d9770644;
+}}
+.pill-danger {{
+    background: #7f1d1d44;
+    color: #f87171;
+    border: 1px solid #ef444444;
+}}
+.pill-info {{
+    background: #1e3a5f44;
+    color: #60a5fa;
+    border: 1px solid #2563eb44;
+}}
+.pill-purple {{
+    background: #3b1a6044;
+    color: #a78bfa;
+    border: 1px solid #7c3aed44;
+}}
+.pill-neutral {{
+    background: {t["pill_bg"]};
+    color: {t["pill_color"]};
+    border: 1px solid {t["pill_border"]};
 }}
 
-[data-testid="stSidebar"] .pill-warning {{
-    background: #78350f44 !important;
-    color: #d97706 !important;
-    border-color: #d9770644 !important;
+/* ─────────────────────────────────────────────
+   TABS
+──────────────────────────────────────────────── */
+[data-testid="stTabs"] > div > div > div > button {{
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: {t["sidebar_subtext"]} !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s ease !important;
 }}
 
-[data-testid="stSidebar"] .pill-info {{
-    background: #1e3a5f44 !important;
-    color: #2563eb !important;
-    border-color: #2563eb44 !important;
+[data-testid="stTabs"] > div > div > div > button:hover {{
+    color: {t["main_text"]} !important;
 }}
 
-/* Hide Streamlit branding */
+[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
+    color: {accent} !important;
+    border-bottom: 2px solid {accent} !important;
+}}
+
+/* ─────────────────────────────────────────────
+   DATAFRAMES
+──────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {{
+    border-radius: 10px;
+    overflow: hidden;
+}}
+
+[data-testid="stDataFrame"] table {{
+    background: {t["card_bg"]} !important;
+    color: {t["main_text"]} !important;
+    width: 100% !important;
+}}
+
+[data-testid="stDataFrame"] th {{
+    background: {t["card_border"]} !important;
+    color: {t["main_text"]} !important;
+    font-weight: 600 !important;
+    padding: 8px 12px !important;
+}}
+
+[data-testid="stDataFrame"] td {{
+    background: {t["card_bg"]} !important;
+    color: {t["main_text"]} !important;
+    padding: 8px 12px !important;
+}}
+
+[data-testid="stDataFrame"] tr:hover td {{
+    background: {t["input_bg"]} !important;
+}}
+
+/* ─────────────────────────────────────────────
+   METRICS
+──────────────────────────────────────────────── */
+[data-testid="stMetric"] {{
+    background: {t["card_bg"]} !important;
+    border: 1px solid {t["card_border"]} !important;
+    border-radius: 10px !important;
+    padding: 16px !important;
+    transition: all 0.2s ease !important;
+}}
+
+[data-testid="stMetric"]:hover {{
+    border-color: {accent}55 !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05) !important;
+}}
+
+/* ─────────────────────────────────────────────
+   ALERTS
+──────────────────────────────────────────────── */
+.stAlert {{
+    border-radius: 8px !important;
+    border-left: 4px solid !important;
+}}
+
+.stAlert > div {{
+    background: transparent !important;
+}}
+
+/* ─────────────────────────────────────────────
+   HIDE STREAMLIT BRANDING
+──────────────────────────────────────────────── */
 #MainMenu, footer, header {{
     visibility: hidden !important;
 }}
@@ -394,7 +440,9 @@ hr {{
     display: none !important;
 }}
 
-/* KPI Cards */
+/* ─────────────────────────────────────────────
+   KPI CARDS
+──────────────────────────────────────────────── */
 .kpi-card {{
     background: {t["card_bg"]} !important;
     border: 1px solid {t["card_border"]} !important;
@@ -432,7 +480,9 @@ hr {{
     margin-top: 6px;
 }}
 
-/* Section Titles */
+/* ─────────────────────────────────────────────
+   SECTION TITLES
+──────────────────────────────────────────────── */
 .section-title {{
     font-size: 13px;
     font-weight: 700;
@@ -444,7 +494,9 @@ hr {{
     border-bottom: 1px solid {t["card_border"]} !important;
 }}
 
-/* Alert boxes */
+/* ─────────────────────────────────────────────
+   ALERT BOXES
+──────────────────────────────────────────────── */
 .alert-box {{
     border-radius: 8px;
     padding: 12px 16px;
@@ -456,8 +508,11 @@ hr {{
 .alert-danger   {{ background: #7f1d1d22; border-color: #ef444466; color: #f87171; }}
 .alert-info     {{ background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }}
 .alert-success  {{ background: #14532d22; border-color: #16a34a66; color: #4ade80; }}
+.alert-purple   {{ background: #3b1a6022; border-color: #7c3aed66; color: #a78bfa; }}
 
-/* Price tag */
+/* ─────────────────────────────────────────────
+   PRICE TAG
+──────────────────────────────────────────────── */
 .price-tag {{
     font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 18px;
@@ -465,7 +520,9 @@ hr {{
     color: {accent} !important;
 }}
 
-/* Danger button */
+/* ─────────────────────────────────────────────
+   DANGER BUTTON
+──────────────────────────────────────────────── */
 .danger-btn > button {{
     background: #7f1d1d44 !important;
     border: 1px solid #ef444455 !important;
@@ -477,7 +534,9 @@ hr {{
     border-color: #ef4444 !important;
 }}
 
-/* Confirm box */
+/* ─────────────────────────────────────────────
+   CONFIRM BOX
+──────────────────────────────────────────────── */
 .confirm-box {{
     background: #7f1d1d22;
     border: 1px solid #ef444455;
@@ -488,27 +547,15 @@ hr {{
     margin-bottom: 8px;
 }}
 
-/* Pill styles */
-.pill {{
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.3px;
-}}
-.pill-success {{ background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }}
-.pill-warning {{ background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }}
-.pill-danger  {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
-.pill-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
-.pill-neutral {{ background: {t["pill_bg"]}; color: {t["pill_color"]}; border: 1px solid {t["pill_border"]}; }}
-.pill-purple  {{ background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }}
-
-/* Match bar */
+/* ─────────────────────────────────────────────
+   MATCH BAR
+──────────────────────────────────────────────── */
 .match-bar-bg {{ background: {t["card_border"]}; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }}
 .match-bar-fill {{ height: 100%; border-radius: 4px; transition: width 0.4s ease; }}
 
-/* Status tracker */
+/* ─────────────────────────────────────────────
+   STATUS TRACKER
+──────────────────────────────────────────────── */
 .status-track {{
     display: flex;
     align-items: center;
@@ -541,7 +588,9 @@ hr {{
 }}
 .track-label {{ font-size: 10px; color: {t["sidebar_subtext"]}; }}
 
-/* Admin header */
+/* ─────────────────────────────────────────────
+   ADMIN HEADER
+──────────────────────────────────────────────── */
 .admin-header {{
     background: linear-gradient(135deg, #1a2744 0%, #0f172a 60%, #162032 100%);
     border: 1px solid #1e3a5f;
@@ -551,6 +600,7 @@ hr {{
     display: flex;
     align-items: center;
     gap: 20px;
+    flex-wrap: wrap;
 }}
 .admin-header-icon {{ font-size: 40px; line-height: 1; }}
 .admin-header h1 {{
@@ -578,7 +628,9 @@ hr {{
     text-transform: uppercase;
 }}
 
-/* Dash header */
+/* ─────────────────────────────────────────────
+   DASH HEADER
+──────────────────────────────────────────────── */
 .dash-header {{
     background: linear-gradient(135deg, #1a1020 0%, #0f1117 60%, #1a1030 100%);
     border: 1px solid #2a1a4a;
@@ -588,6 +640,7 @@ hr {{
     display: flex;
     align-items: center;
     gap: 20px;
+    flex-wrap: wrap;
 }}
 .dash-header-icon {{ font-size: 40px; line-height: 1; }}
 .dash-header h1 {{
@@ -615,12 +668,16 @@ hr {{
     text-transform: uppercase;
 }}
 
-/* Fraud risk badges */
+/* ─────────────────────────────────────────────
+   FRAUD RISK BADGES
+──────────────────────────────────────────────── */
 .fraud-low  {{ color: #4ade80; font-weight: 600; font-size: 12px; }}
 .fraud-med  {{ color: #fbbf24; font-weight: 600; font-size: 12px; }}
 .fraud-high {{ color: #f87171; font-weight: 600; font-size: 12px; }}
 
-/* Activity feed */
+/* ─────────────────────────────────────────────
+   ACTIVITY FEED
+──────────────────────────────────────────────── */
 .activity-item {{
     display: flex;
     align-items: flex-start;
@@ -637,7 +694,9 @@ hr {{
 .activity-text {{ font-size: 13px; color: {t["main_text"]}; }}
 .activity-time {{ font-size: 11px; color: {t["sidebar_subtext"]}; margin-top: 2px; }}
 
-/* Record cards */
+/* ─────────────────────────────────────────────
+   RECORD CARDS
+──────────────────────────────────────────────── */
 .record-card {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -659,7 +718,9 @@ hr {{
     margin: 0;
 }}
 
-/* Forecast container */
+/* ─────────────────────────────────────────────
+   FORECAST CONTAINER
+──────────────────────────────────────────────── */
 .forecast-container {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -668,7 +729,9 @@ hr {{
     margin-top: 16px;
 }}
 
-/* Document preview */
+/* ─────────────────────────────────────────────
+   DOCUMENT PREVIEW
+──────────────────────────────────────────────── */
 .doc-preview-container {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -677,7 +740,9 @@ hr {{
     margin-top: 12px;
 }}
 
-/* Product image container */
+/* ─────────────────────────────────────────────
+   PRODUCT IMAGE CONTAINER
+──────────────────────────────────────────────── */
 .product-img-container {{
     background: {t["input_bg"]};
     border-radius: 8px;
@@ -694,7 +759,9 @@ hr {{
     object-fit: cover;
 }}
 
-/* Profile editor modal */
+/* ─────────────────────────────────────────────
+   PROFILE EDITOR MODAL
+──────────────────────────────────────────────── */
 .profile-editor-modal {{
     background: {t["card_bg"]} !important;
     border: 1px solid {t["card_border"]} !important;
@@ -716,7 +783,9 @@ hr {{
     }}
 }}
 
-/* Skeleton loading animation */
+/* ─────────────────────────────────────────────
+   SKELETON LOADING
+──────────────────────────────────────────────── */
 @keyframes shimmer {{
     0% {{ background-position: -200% 0; }}
     100% {{ background-position: 200% 0; }}
@@ -728,7 +797,9 @@ hr {{
     border-radius: 4px;
 }}
 
-/* Toast/Notification styles */
+/* ─────────────────────────────────────────────
+   TOAST/NOTIFICATION STYLES
+──────────────────────────────────────────────── */
 .stToast {{
     border-radius: 10px !important;
     border-left: 4px solid {accent} !important;
@@ -756,8 +827,7 @@ def render_theme_toggle():
     is_light = st.session_state.sidebar_light_mode
     label = "☀️ Light Theme" if not is_light else "🌙 Dark Theme"
     
-    # Use a unique key with a counter to avoid key conflicts
-    if st.button(label, key=f"theme_toggle_{hash(label)}", use_container_width=True):
+    if st.button(label, key="theme_toggle_sidebar", use_container_width=True):
         st.session_state.sidebar_light_mode = not is_light
         st.rerun()
 
