@@ -216,8 +216,13 @@ def render_profile_edit_tab(profile, user_id):
                         st.error(f"Update failed: {e}")
 
 
-def render_profile_editor_modal(profile, user_id):
-    """Render profile editor modal with image upload."""
+def render_profile_editor_modal(profile, user_id, key_suffix="main"):
+    """Render profile editor modal with image upload.
+    
+    key_suffix: unique string to avoid DuplicateWidgetID when this is
+    called from multiple locations. Use 'tab' for the Profile tab call
+    and 'modal' for the header-button triggered call.
+    """
     st.markdown("""
     <style>
     .profile-editor-modal {
@@ -260,9 +265,9 @@ def render_profile_editor_modal(profile, user_id):
                 """, unsafe_allow_html=True)
             
             uploaded_image = st.file_uploader(
-                " Upload Profile Picture",
+                "Upload Profile Picture",
                 type=["jpg", "jpeg", "png"],
-                key="profile_pic_upload",
+                key=f"profile_pic_upload_{key_suffix}",
                 help="Upload a profile picture (JPG, JPEG, or PNG)"
             )
             if uploaded_image:
@@ -283,8 +288,8 @@ def render_profile_editor_modal(profile, user_id):
         
         st.divider()
         
-        # Profile Information Form
-        with st.form("profile_info_form"):
+        # Profile Information Form — key also unique
+        with st.form(f"profile_info_form_{key_suffix}"):
             st.markdown("#### 📝 Profile Information")
             pe1, pe2 = st.columns(2)
             with pe1:
@@ -323,11 +328,10 @@ def render_profile_editor_modal(profile, user_id):
                 )
             
             st.markdown("")
-            # FIX: Submit button MUST be inside the form
             submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
             
-        # FIX: Cancel button MUST be outside the form
-        if st.button(" Cancel", use_container_width=True, key="cancel_profile_edit_modal"):
+        # Cancel button — unique key
+        if st.button("✖ Cancel", use_container_width=True, key=f"cancel_profile_edit_{key_suffix}"):
             st.session_state.show_profile_editor = False
             st.rerun()
 
