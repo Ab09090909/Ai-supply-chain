@@ -740,12 +740,9 @@ with tab_ai_insights:
     fig_score.update_layout(paper_bgcolor="#161b27", font={'color': "#94a3b8", 'family': "Inter"}, height=300)
     st.plotly_chart(fig_score, use_container_width=True)
 
-# ── NOTIFICATIONS & PROFILE ──
+# ── NOTIFICATIONS ──
 with tab_notif:
     render_notifications_tab(user_id)
-
-with tab_profile:
-    render_profile_edit_tab(profile, user_id)
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 2_merchant.py)
