@@ -6,8 +6,6 @@ from supabase import create_client, Client
 # ─────────────────────────────────────────────────────────────
 # STREAMLIT CLOUD SECRETS BRIDGE
 # ─────────────────────────────────────────────────────────────
-# Streamlit Cloud stores secrets in st.secrets, not .env files.
-# This block checks st.secrets first, then falls back to os.getenv().
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", ""))
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", os.getenv("SUPABASE_KEY", ""))
 
@@ -46,7 +44,7 @@ def cached_query(table_name, filters=None, order_by="created_at", desc=True, lim
             query = query.limit(limit)
         return query.execute().data or []
     except Exception as e:
-        st.toast(f"Query failed: {e}", icon="️")
+        st.toast(f"Query failed: {e}", icon="⚠️")
         return []
 
 
@@ -93,7 +91,7 @@ def send_notification(recipient_id, title, message, notif_type="info", order_id=
         supabase.table("notifications").insert(payload).execute()
         cached_unread_count.clear()
     except Exception as e:
-        st.toast(f"Notification failed: {e}", icon="️")
+        st.toast(f"Notification failed: {e}", icon="⚠️")
 
 
 def reduce_product_stock(product_id, qty_sold):
