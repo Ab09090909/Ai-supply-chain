@@ -1,18 +1,25 @@
 """
 app.py — Ethiopian AI Supply Chain Platform (Main Entry)
+Handles: Landing page, Authentication, Routing to pages/
 """
 import sys
 import os
 import streamlit as st
+
+# ─────────────────────────────────────────────────────────────
+# STREAMLIT CLOUD SECRETS BRIDGE
+# ─────────────────────────────────────────────────────────────
+# This automatically copies Streamlit Cloud secrets into OS environment variables
+# so your existing os.getenv() code works without changes.
 for key, value in st.secrets.items():
     os.environ[key] = str(value)
-# ─────────────────────────────────────────────────────────────
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from utils.theme import inject_theme, render_page_header
 from utils.auth import sign_in, sign_up, sign_out, forgot_password
 from utils.constants import REGIONS, SECTORS, SESSION_KEYS
-from utils.db_helpers import get_supabase_client, cached_get_profile, cached_unread_count, clear_data_cache
+from utils.db_helpers import supabase, cached_get_profile, cached_unread_count, clear_data_cache
 from utils.verification import check_verification_status
 from utils.shared_ui import render_profile_editor_modal
 
@@ -26,16 +33,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Initialize session keys
 for _k in SESSION_KEYS:
     if _k not in st.session_state:
         st.session_state[_k] = None
 
-try:
-    supabase = get_supabase_client()
-except ValueError as e:
-    st.error(str(e))
-    st.stop()
+# Initialize theme mode
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "dark"
 
+# Initialize profile editor flag
+if "show_profile_editor" not in st.session_state:
+    st.session_state.show_profile_editor = False
+
+# Inject theme
 inject_theme()
 
 # ═════════════════════════════════════════════════════════════
@@ -77,9 +88,7 @@ def render_sidebar():
             # ──────────────────────────────────────
             # PROFILE PICTURE SECTION WITH EDIT ICON
             # ──────────────────────────────────────
-            # Center the profile picture
             profile_pic = profile.get("profile_image")
-            
             st.markdown(f"""
             <div style="text-align: center; margin: 20px 0;">
                 <div style="position: relative; display: inline-block;">
@@ -105,17 +114,17 @@ def render_sidebar():
             
             st.divider()
             
-            st.caption(f'📍 {profile.get("region", "N/A")}')
+            st.caption(f' {profile.get("region", "N/A")}')
             
             try:
                 verif_status = check_verification_status(st.session_state.user.id)
                 if not verif_status["is_verified"]:
                     if verif_status["has_documents"]:
-                        st.info("⏳ Documents pending verification")
+                        st.info(" Documents pending verification")
                     else:
                         st.warning("⚠️ Upload documents to verify")
             except Exception as _verif_err:
-                st.caption(f"️ Verification check failed: {_verif_err}")
+                st.caption(f"⚠️ Verification check failed: {_verif_err}")
             
             unread = cached_unread_count(st.session_state.user.id)
             if unread:
@@ -146,8 +155,8 @@ def show_landing():
         <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
         <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> AI Price Engine</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
+            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">⚡ AI Price Engine</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> Smart Matchmaking</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
         </div>
@@ -275,14 +284,14 @@ else:
             sign_out()
             st.rerun()
     else:
-        role_emoji = {"producer": "", "merchant": "🏬", "customer": "🛒", "admin": "️"}.get(role, "👤")
+        role_emoji = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
                     border-radius: 16px; padding: 40px; color: white; text-align: center;">
             <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
             <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
             <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
-                👈 Use the sidebar to navigate to your dashboard pages.
+                 Use the sidebar to navigate to your dashboard pages.
             </p>
         </div>
         """, unsafe_allow_html=True)
