@@ -33,10 +33,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #e2e8f0;
     font-family: 'Inter', sans-serif;
 }
-[data-testid="stSidebar"] {
-    background: #161b27 !important;
-    border-right: 1px solid #1e2a3a;
-}
+/* Sidebar colours controlled by inject_theme() in utils/theme.py */
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stToolbar"] { display: none; }
 
@@ -735,6 +732,63 @@ with tab_ai_insights:
                 st.success("✅ Current market prices are 8% below average. Good time to buy!")
         st.markdown('</div>', unsafe_allow_html=True)
     
+    st.markdown("")
+    st.markdown('<div class="section-title">📈 Demand Forecast</div>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-box alert-info">🤖 Forecast demand for any product across Ethiopian regions to plan your purchases ahead.</div>', unsafe_allow_html=True)
+    from src.demand_engine import forecast_demand as _merchant_forecast_demand
+    import plotly.graph_objects as _go_m
+    _all_prod_names = []
+    try:
+        _avail_products = supabase.table("products").select("product_name").eq("is_available", True).execute().data or []
+        _all_prod_names = sorted(set(p["product_name"] for p in _avail_products if p.get("product_name")))
+    except Exception:
+        pass
+    _prod_options = ["(General / All)"] + _all_prod_names
+    mfc_col1, mfc_col2, mfc_col3, mfc_col4 = st.columns([2, 2, 2, 1])
+    with mfc_col1:
+        mfc_product = st.selectbox("Product", _prod_options, key="mfc_product", help="Select a product to forecast demand for")
+    with mfc_col2:
+        mfc_sector = st.selectbox("Sector", SECTORS, key="mfc_sector")
+    with mfc_col3:
+        mfc_region = st.selectbox("Region", REGIONS, key="mfc_region")
+    with mfc_col4:
+        mfc_horizon = st.selectbox("Weeks", [4, 8, 12, 16], index=2, key="mfc_horizon")
+    if st.button("📈 Run Forecast", type="primary", use_container_width=True, key="m_run_forecast"):
+        with st.spinner("Running AI demand model…"):
+            try:
+                _mfc_result = _merchant_forecast_demand(sector=mfc_sector, region=mfc_region, horizon=mfc_horizon)
+                st.session_state["m_forecast_result"] = _mfc_result
+                st.session_state["m_forecast_params"] = (mfc_product, mfc_sector, mfc_region, mfc_horizon)
+            except Exception as _e:
+                st.error(f"Forecast failed: {_e}")
+    _mfc_res = st.session_state.get("m_forecast_result")
+    _mfc_par = st.session_state.get("m_forecast_params")
+    if _mfc_res and _mfc_par:
+        _mp, _ms, _mr, _mh = _mfc_par
+        _plabel = f" · {_mp}" if _mp and _mp != "(General / All)" else ""
+        st.markdown(f'<div class="section-title">Forecast: {_ms}{_plabel} · {_mr} · {_mh} Weeks</div>', unsafe_allow_html=True)
+        if isinstance(_mfc_res, list) and _mfc_res:
+            _avg = sum(_mfc_res) / len(_mfc_res)
+            _peak = max(_mfc_res)
+            _trend = "📈 Rising" if _mfc_res[-1] > _mfc_res[0] else "📉 Falling"
+            _mc1, _mc2, _mc3 = st.columns(3)
+            with _mc1:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-label">Avg Weekly Demand</div><div class="kpi-value">{_avg:,.0f}</div><div class="kpi-sub">Units / week</div></div>', unsafe_allow_html=True)
+            with _mc2:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-label">Peak Week</div><div class="kpi-value">{_peak:,.0f}</div><div class="kpi-sub">Max units</div></div>', unsafe_allow_html=True)
+            with _mc3:
+                st.markdown(f'<div class="kpi-card"><div class="kpi-label">Trend</div><div class="kpi-value" style="font-size:20px;">{_trend}</div></div>', unsafe_allow_html=True)
+            _weeks = [f"W{i+1}" for i in range(len(_mfc_res))]
+            _fig_m = _go_m.Figure()
+            _fig_m.add_trace(_go_m.Scatter(x=_weeks, y=_mfc_res, mode="lines+markers",
+                line=dict(color="#60a5fa", width=2), marker=dict(size=6, color="#2563eb"),
+                fill="tozeroy", fillcolor="rgba(96,165,250,0.08)", name="Demand"))
+            _fig_m.update_layout(paper_bgcolor="#161b27", plot_bgcolor="#161b27",
+                font=dict(color="#94a3b8", family="Inter"),
+                xaxis=dict(gridcolor="#1e2a3a"), yaxis=dict(gridcolor="#1e2a3a", title="Units"),
+                margin=dict(l=40, r=20, t=20, b=40), height=280, showlegend=False)
+            st.plotly_chart(_fig_m, use_container_width=True)
+
     st.markdown("")
     st.markdown('<div class="section-title">Your AI Readiness Score</div>', unsafe_allow_html=True)
     score = 70  # Mock score
