@@ -252,19 +252,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 # ══════════════════════════════════════════════════════════════
 #  THEME TOGGLE WIDGET  (render inside st.sidebar block)
 # ══════════════════════════════════════════════════════════════
-def render_theme_toggle():
-    """
-    Call this inside `with st.sidebar:` on every page.
-    Toggles ONLY the sidebar between light and dark.
-    Main content is always dark — unaffected.
-
-    Uses on_change callback so the toggle state is committed to
-    session_state BEFORE Streamlit re-runs the page — this means
-    it survives navigation between pages with no extra st.rerun().
-    """
-    # Initialise the session-state key if this is the first load
-    if "sidebar_light_mode" not in st.session_state:
-        st.session_state["sidebar_light_mode"] = False
 
     def _on_toggle_change():
         # Mirror widget value to our canonical session-state key
