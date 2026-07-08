@@ -32,7 +32,7 @@ st.set_page_config(
     page_title="AI Supply Chain Platform",
     page_icon="🌾",
     layout="wide",
-    initial_sidebar_state="collapsed",  # Sidebar collapsed by default
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -48,14 +48,14 @@ if "user_role" not in st.session_state:
     st.session_state.user_role = None
 if "auth_redirect" not in st.session_state:
     st.session_state.auth_redirect = False
-if "mobile_menu_open" not in st.session_state:
-    st.session_state.mobile_menu_open = False
+if "menu_open" not in st.session_state:
+    st.session_state.menu_open = False
 
 # Inject theme
 inject_theme()
 
 # ─────────────────────────────────────────────────────────────
-# CSS - HIDE SIDEBAR, SHOW HAMBURGER MENU ONLY
+# CSS - HIDE SIDEBAR, SHOW HAMBURGER MENU
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -63,11 +63,9 @@ st.markdown("""
 [data-testid="stSidebar"] {
     display: none !important;
 }
-
 [data-testid="stSidebarContent"] {
     display: none !important;
 }
-
 [data-testid="collapsedControl"] {
     display: none !important;
 }
@@ -95,7 +93,6 @@ st.markdown("""
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
-
 .hamburger-btn:hover {
     background: #2D6A4F;
 }
@@ -111,7 +108,6 @@ st.markdown("""
     background: rgba(0, 0, 0, 0.6);
     z-index: 999998;
 }
-
 .mobile-overlay.active {
     display: block;
 }
@@ -132,7 +128,6 @@ st.markdown("""
     transform: translateX(-100%);
     transition: transform 0.3s ease;
 }
-
 .mobile-sidebar.open {
     transform: translateX(0);
 }
@@ -147,7 +142,6 @@ st.markdown("""
     float: right;
     padding: 5px 10px;
 }
-
 .close-sidebar-btn:hover {
     color: #f87171;
 }
@@ -157,7 +151,6 @@ st.markdown("""
     text-align: center;
     margin: 10px 0 20px 0;
 }
-
 .sidebar-avatar {
     width: 60px;
     height: 60px;
@@ -172,20 +165,16 @@ st.markdown("""
     font-weight: 700;
     border: 2px solid #D4A017;
 }
-
 .sidebar-name {
     font-size: 16px;
     font-weight: 600;
     margin-top: 8px;
     color: #e2e8f0;
 }
-
 .sidebar-role {
     font-size: 12px;
     color: #94a3b8;
 }
-
-/* ─── SIDEBAR DIVIDER ─── */
 .sidebar-divider {
     border: none;
     border-top: 1px solid #1e2a3a;
@@ -207,7 +196,6 @@ st.markdown("""
     text-align: left;
     transition: all 0.15s;
 }
-
 .sidebar-nav-btn:hover {
     border-color: #D4A017;
     color: #D4A017;
@@ -227,13 +215,11 @@ st.markdown("""
     text-align: left;
     transition: all 0.15s;
 }
-
 .sidebar-nav-btn-logout:hover {
     background: #7f1d1d66;
     border-color: #ef4444;
 }
 
-/* ─── SECTION HEADERS ─── */
 .sidebar-section-title {
     font-weight: 600;
     color: #94a3b8;
@@ -258,7 +244,6 @@ st.markdown("""
 .pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
 .pill-danger { background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }
 .pill-info { background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }
-.pill-purple { background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }
 .pill-neutral { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
 
 /* ─── MAIN CONTENT ─── */
@@ -279,12 +264,10 @@ st.markdown("""
     color: #e2e8f0 !important;
     cursor: pointer !important;
 }
-
 .stButton > button:hover {
     border-color: #D4A01755 !important;
     color: #D4A017 !important;
 }
-
 .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
     border-color: #D4A017 !important;
@@ -300,7 +283,6 @@ st.markdown("""
     color: #e2e8f0 !important;
     border-radius: 8px !important;
 }
-
 [data-testid="stSelectbox"] > div > div {
     background: #1e2a3a !important;
     border-color: #334155 !important;
@@ -315,38 +297,18 @@ st.markdown("""
     color: #64748b !important;
     padding: 8px 16px !important;
 }
-
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
     color: #D4A017 !important;
     border-bottom: 2px solid #D4A017 !important;
 }
 
-/* ─── KPI CARDS ─── */
-.kpi-card {
-    background: #161b27 !important;
-    border: 1px solid #1e2a3a !important;
-    border-radius: 10px;
-    padding: 16px 20px;
-    height: 100%;
-}
-.kpi-label { font-size: 11px; font-weight: 600; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-.kpi-value { font-size: 24px; font-weight: 700; color: #f1f5f9 !important; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.kpi-sub { font-size: 12px; color: #64748b !important; margin-top: 6px; }
-
-/* ─── ALERT BOXES ─── */
-.alert-box { border-radius: 8px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; border: 1px solid; }
-.alert-warning { background: #78350f22; border-color: #d9770666; color: #fbbf24; }
-.alert-danger { background: #7f1d1d22; border-color: #ef444466; color: #f87171; }
-.alert-info { background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }
-.alert-success { background: #14532d22; border-color: #16a34a66; color: #4ade80; }
-.alert-purple { background: #3b1a6022; border-color: #7c3aed66; color: #a78bfa; }
-
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
-    .kpi-value { font-size: 20px !important; }
-    .kpi-card { padding: 12px 14px !important; }
-    div.stButton > button { width: 100% !important; }
-    [data-testid="column"] { min-width: 100% !important; flex: 1 1 100% !important; }
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 70px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
     [data-testid="stTabs"] > div > div > div > button {
         font-size: 12px !important;
         padding: 6px 10px !important;
@@ -356,62 +318,60 @@ st.markdown("""
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch;
     }
+    div.stButton > button {
+        width: 100% !important;
+    }
+}
+
+@media (min-width: 769px) {
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 80px !important;
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# HAMBURGER MENU BUTTON
+# HAMBURGER MENU BUTTON - Using Streamlit Button
 # ─────────────────────────────────────────────────────────────
 def render_hamburger_button():
-    """Render the hamburger menu button."""
-    st.markdown('''
-    <button class="hamburger-btn" onclick="
-        var sidebar = document.getElementById('mobileSidebar');
-        var overlay = document.getElementById('mobileOverlay');
-        if (sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-        } else {
-            sidebar.classList.add('open');
-            overlay.classList.add('active');
-        }
-    ">☰</button>
-    <div class="mobile-overlay" id="mobileOverlay" onclick="
-        document.getElementById('mobileSidebar').classList.remove('open');
-        this.classList.remove('active');
-    "></div>
-    ''', unsafe_allow_html=True)
+    """Render the hamburger menu button using Streamlit."""
+    # Use a Streamlit button in a fixed position container
+    col1, col2, col3 = st.columns([1, 10, 1])
+    with col1:
+        if st.button("☰", key="hamburger_btn", help="Toggle Menu"):
+            st.session_state.menu_open = not st.session_state.menu_open
+            st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# CUSTOM MOBILE SIDEBAR
+# CUSTOM SIDEBAR
 # ─────────────────────────────────────────────────────────────
-def render_custom_sidebar():
+def render_custom_sidebar(profile=None):
     """Render custom sidebar with hamburger menu."""
     
-    # Get profile
-    profile = st.session_state.profile
-    if profile is None and st.session_state.user:
-        try:
-            profile = cached_get_profile(st.session_state.user.id)
-            if profile:
-                st.session_state.profile = profile
-        except Exception:
-            pass
+    # Get profile if not provided
+    if profile is None:
+        profile = st.session_state.get("profile")
+    
+    # Determine if menu should be open
+    is_open = st.session_state.get("menu_open", False)
+    overlay_class = "active" if is_open else ""
     
     if not profile or st.session_state.user is None:
-        # Show login option in sidebar
-        sidebar_html = '''
-        <div class="mobile-sidebar" id="mobileSidebar">
+        sidebar_html = f'''
+        <div class="mobile-sidebar {'open' if is_open else ''}" id="mobileSidebar">
             <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
             <div class="sidebar-profile">
                 <div class="sidebar-avatar">🔐</div>
                 <div class="sidebar-name">Not Signed In</div>
-                <div class="sidebar-role">Please sign in to continue</div>
+                <div class="sidebar-role">Please sign in</div>
             </div>
             <hr class="sidebar-divider">
             <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
         </div>
+        <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="document.getElementById('mobileSidebar').classList.remove('open'); this.classList.remove('active');"></div>
         '''
         st.markdown(sidebar_html, unsafe_allow_html=True)
         return
@@ -419,22 +379,21 @@ def render_custom_sidebar():
     name = profile.get("full_name", "User")
     role = profile.get("role", "customer")
     region = profile.get("region", "N/A")
+    role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
     
-    # Sidebar HTML
     sidebar_html = f'''
-    <div class="mobile-sidebar" id="mobileSidebar">
+    <div class="mobile-sidebar {'open' if is_open else ''}" id="mobileSidebar">
         <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
         
         <div class="sidebar-profile">
             <div class="sidebar-avatar">{name[0].upper()}</div>
             <div class="sidebar-name">{name}</div>
-            <div class="sidebar-role">{role.capitalize()} · {region}</div>
+            <div class="sidebar-role">{role_icon} {role.capitalize()} · {region}</div>
         </div>
         
         <hr class="sidebar-divider">
         
         <div class="sidebar-section-title">📊 Navigation</div>
-        
         <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
     '''
     
@@ -452,10 +411,10 @@ def render_custom_sidebar():
     
     # Verification status
     try:
-        status = check_verification_status(st.session_state.user.id)
-        if status.get("is_verified", False):
+        verif_status = check_verification_status(st.session_state.user.id)
+        if verif_status.get("is_verified", False):
             status_html = '<span class="pill pill-success">✅ Verified</span>'
-        elif status.get("has_documents", False):
+        elif verif_status.get("has_documents", False):
             status_html = '<span class="pill pill-warning">⏳ Pending</span>'
         else:
             status_html = '<span class="pill pill-info">📄 Verify</span>'
@@ -469,6 +428,7 @@ def render_custom_sidebar():
         <hr class="sidebar-divider">
         <button class="sidebar-nav-btn-logout" onclick="document.getElementById('logoutForm').submit();">🚪 Log Out</button>
     </div>
+    <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="document.getElementById('mobileSidebar').classList.remove('open'); this.classList.remove('active');"></div>
     '''
     
     st.markdown(sidebar_html, unsafe_allow_html=True)
@@ -480,7 +440,6 @@ def render_custom_sidebar():
     </form>
     ''', unsafe_allow_html=True)
     
-    # Handle logout from form
     if st.query_params.get("logout") == "true":
         try:
             sign_out()
