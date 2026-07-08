@@ -244,7 +244,6 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .track-label { font-size: 10px; color: #475569; }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 3px; }
@@ -345,7 +344,6 @@ with st.sidebar:
     except Exception:
         st.markdown("📋 Orders: Unable to load")
     
-    # Wishlist count
     wishlist_count = len(st.session_state.get("wishlist", []))
     if wishlist_count > 0:
         st.markdown(f"**❤️ {wishlist_count}** wishlist items")
@@ -532,7 +530,6 @@ with tab_orders:
                                 st.markdown('</div>', unsafe_allow_html=True)
                         elif status == "confirmed":
                             st.markdown('<div class="pill pill-info" style="display:block;text-align:center;margin-top:8px;">🚚 In Transit</div>', unsafe_allow_html=True)
-                            # Download agreement PDF
                             try:
                                 qty_c = float(o.get("quantity_ordered") or 0)
                                 tot_c = float(o.get("total_price_birr") or 0)
@@ -772,7 +769,7 @@ with tab_wishlist:
         st.error(f"⚠️ Error loading wishlist: {str(e)}")
 
 # ══════════════════════════════════════════════
-# TAB — AI INSIGHTS
+# TAB — AI INSIGHTS (FIXED - Added try block)
 # ══════════════════════════════════════════════
 with tab_ai_insights:
     try:
@@ -865,7 +862,7 @@ with tab_ai_insights:
         st.markdown('<div class="section-title">Your AI Readiness Score</div>', unsafe_allow_html=True)
         
         # Calculate score based on activity
-        score = 45  # Base score
+        score = 45
         try:
             order_count = supabase.table("orders").select("id", count="exact").eq("buyer_id", user_id).execute().count or 0
             if order_count > 0:
