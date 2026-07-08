@@ -13,7 +13,6 @@ load_dotenv()
 # ─────────────────────────────────────────────────────────────
 # STREAMLIT CLOUD SECRETS BRIDGE (SECURE)
 # ─────────────────────────────────────────────────────────────
-# Only set specific required environment variables from secrets
 REQUIRED_SECRETS = [
     'SUPABASE_URL',
     'SUPABASE_KEY',
@@ -23,15 +22,10 @@ REQUIRED_SECRETS = [
     'ADMIN_PASSWORD'
 ]
 
-# Set only required secrets as environment variables
 if hasattr(st, 'secrets') and st.secrets:
     for key in REQUIRED_SECRETS:
         if key in st.secrets:
             os.environ[key] = str(st.secrets[key])
-        else:
-            # For development, try to get from .env
-            if key not in os.environ:
-                logging.warning(f"Missing required secret: {key}")
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -51,12 +45,9 @@ except ImportError as e:
     st.stop()
 
 # ─────────────────────────────────────────────────────────────
-# LOGGING CONFIGURATION
+# LOGGING
 # ─────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ═════════════════════════════════════════════════════════════
@@ -74,8 +65,7 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────
 def initialize_session_state():
     """Initialize all session state variables"""
-    # User session
-    default_keys = {
+    defaults = {
         'user': None,
         'profile': None,
         'authenticated': False,
@@ -89,8 +79,7 @@ def initialize_session_state():
         'page': 'main'
     }
     
-    # Initialize all keys
-    for key, default_value in default_keys.items():
+    for key, default_value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default_value
     
@@ -100,20 +89,20 @@ def initialize_session_state():
             if _k not in st.session_state:
                 st.session_state[_k] = None
 
-# Call initialization
 initialize_session_state()
 
 # Inject theme
 inject_theme()
 
 # ═════════════════════════════════════════════════════════════
-# SIDEBAR RENDERER (FIXED)
+# SIDEBAR RENDERER (COMPLETELY REWRITTEN)
 # ═════════════════════════════════════════════════════════════
 def render_sidebar():
     """Render the sidebar with navigation and user info."""
     
+    # Always render sidebar container
     with st.sidebar:
-        # Theme toggle at top
+        # ─── THEME TOGGLE ───
         render_theme_toggle()
         st.divider()
         
@@ -123,47 +112,23 @@ def render_sidebar():
             return None, None
         
         # ─── USER IS LOGGED IN ───
-        st.title("🌾 AI Supply Chain")
+        st.markdown("## 🌾 AI Supply Chain")
         st.caption("Ethiopian Multi-Sector Commerce")
         st.divider()
         
-        # Get profile
+        # ─── GET PROFILE ───
         profile = st.session_state.get("profile")
-        if profile is None:
+        if profile is None and st.session_state.get("user"):
             try:
                 profile = cached_get_profile(st.session_state.user.id)
                 if profile:
                     st.session_state.profile = profile
             except Exception as e:
                 logger.error(f"Profile fetch error: {e}")
-                st.error(f"⚠️ Profile error: {e}")
-                return None, None
-        
-        # Try to create profile if it doesn't exist
-        if profile is None:
-            try:
-                default_name = st.session_state.user.email.split('@')[0] if st.session_state.user.email else "User"
-                supabase.table("profiles").insert({
-                    "id": st.session_state.user.id,
-                    "full_name": default_name,
-                    "role": "customer",
-                    "is_verified": False,
-                    "documents_uploaded": False
-                }).execute()
-                profile = cached_get_profile(st.session_state.user.id)
-                if profile:
-                    st.session_state.profile = profile
-            except Exception as e:
-                logger.error(f"Profile creation error: {e}")
-                st.error(f"⚠️ Profile creation failed: {str(e)}")
-                if st.button("Sign Out", key="sb_logout_error", use_container_width=True):
-                    sign_out()
-                    st.rerun()
-                return None, None
         
         if profile is None:
             st.warning("⚠️ Could not load profile")
-            if st.button("Sign Out", key="sb_logout_profile", use_container_width=True):
+            if st.button("🚪 Sign Out", key="sb_logout_error", use_container_width=True):
                 sign_out()
                 st.rerun()
             return None, None
@@ -171,80 +136,61 @@ def render_sidebar():
         role = profile.get("role", "customer")
         st.session_state.user_role = role
         
-        # ─── PROFILE SECTION ───
-        # Profile picture
+        # ─── PROFILE PICTURE ───
         profile_pic = profile.get("profile_image")
         if profile_pic:
             st.markdown(f"""
-            <div style="text-align: center; margin: 20px 0;">
+            <div style="text-align: center; margin: 15px 0;">
                 <img src="data:image/jpeg;base64,{profile_pic}" 
-                     style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">
+                     style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">
             </div>
             """, unsafe_allow_html=True)
         else:
             name_initial = profile.get("full_name", "U")[0].upper()
             st.markdown(f"""
-            <div style="text-align: center; margin: 20px 0;">
-                <div style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 36px; color: #f1f5f9; font-weight: 700;">
+            <div style="text-align: center; margin: 15px 0;">
+                <div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: #f1f5f9; font-weight: 700;">
                     {name_initial}
                 </div>
             </div>
             """, unsafe_allow_html=True)
         
-        # Edit profile button
-        if st.button("✏️ Edit Profile", key="edit_profile_btn_sidebar", use_container_width=True):
-            st.session_state.show_profile_editor = True
-            st.rerun()
-        
-        # User name and role
+        # ─── USER NAME ───
         st.markdown(f"""
-        <div style="text-align: center; margin: 15px 0;">
-            <div style="font-size: 22px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
-            <div style="font-size: 13px; color: #64748b; margin-top: 6px;">{role.capitalize() if role else 'N/A'}</div>
-            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">📍 {profile.get('region', 'N/A')}</div>
+        <div style="text-align: center; margin: 10px 0;">
+            <div style="font-size: 18px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">{role.capitalize()}</div>
+            <div style="font-size: 11px; color: #64748b;">📍 {profile.get('region', 'N/A')}</div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # ─── EDIT PROFILE BUTTON ───
+        if st.button("✏️ Edit Profile", key="edit_profile_sidebar", use_container_width=True):
+            st.session_state.show_profile_editor = True
+            st.rerun()
         
         st.divider()
         
         # ─── NAVIGATION ───
-        st.markdown("### 📊 Dashboard Navigation")
+        st.markdown("### 📊 Navigation")
         
-        # Navigation buttons based on role
-        nav_map = {
-            "producer": {
-                "label": "🚜 Producer Dashboard",
-                "page": "1_producer.py",
-                "icon": "🚜"
-            },
-            "merchant": {
-                "label": "🏬 Merchant Dashboard",
-                "page": "2_merchant.py",
-                "icon": "🏬"
-            },
-            "customer": {
-                "label": "🛒 Customer Dashboard",
-                "page": "3_customer.py",
-                "icon": "🛒"
-            },
-            "admin": {
-                "label": "🛡️ Admin Panel",
-                "page": "4_Admin.py",
-                "icon": "🛡️"
-            }
+        # Role-specific dashboard
+        nav_pages = {
+            "producer": ("🚜 Producer Dashboard", "pages/1_producer.py"),
+            "merchant": ("🏬 Merchant Dashboard", "pages/2_merchant.py"),
+            "customer": ("🛒 Customer Dashboard", "pages/3_customer.py"),
+            "admin": ("🛡️ Admin Panel", "pages/4_Admin.py")
         }
         
-        # Show role-specific dashboard
-        if role in nav_map:
-            nav = nav_map[role]
-            if st.button(nav["label"], key=f"nav_{role}", use_container_width=True):
+        if role in nav_pages:
+            label, page = nav_pages[role]
+            if st.button(label, key=f"nav_{role}", use_container_width=True):
                 try:
-                    st.switch_page(f"pages/{nav['page']}")
+                    st.switch_page(page)
                 except Exception as e:
-                    logger.error(f"Navigation error: {e}")
-                    st.error(f"⚠️ Navigation error: {e}")
+                    st.error(f"Navigation error: {e}")
         
-        # Always show home
+        # Home
         if st.button("🏠 Home", key="nav_home", use_container_width=True):
             try:
                 st.switch_page("app.py")
@@ -253,44 +199,33 @@ def render_sidebar():
         
         st.divider()
         
-        # ─── STATUS SECTION ───
-        st.markdown("### 📌 Account Status")
+        # ─── STATUS ───
+        st.markdown("### 📌 Status")
         
-        # Verification status
+        # Verification
         try:
             verif_status = check_verification_status(st.session_state.user.id)
             if verif_status.get("is_verified", False):
-                st.markdown('<div class="pill pill-success">✅ Verified</div>', unsafe_allow_html=True)
+                st.markdown('<span class="pill pill-success">✅ Verified</span>', unsafe_allow_html=True)
             elif verif_status.get("has_documents", False):
-                st.markdown('<div class="pill pill-warning">⏳ Pending Verification</div>', unsafe_allow_html=True)
+                st.markdown('<span class="pill pill-warning">⏳ Pending</span>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="pill pill-info">📄 Verification Required</div>', unsafe_allow_html=True)
-        except Exception as e:
-            logger.error(f"Verification check error: {e}")
-            st.caption("⚠️ Verification check failed")
+                st.markdown('<span class="pill pill-info">📄 Verify</span>', unsafe_allow_html=True)
+        except Exception:
+            pass
         
         # Notifications
         try:
             unread = cached_unread_count(st.session_state.user.id)
             if unread and unread > 0:
-                st.info(f"🔔 {unread} unread notification(s)")
-        except Exception as e:
-            logger.error(f"Notification count error: {e}")
-        
-        st.divider()
-        
-        # ─── QUICK ACTIONS ───
-        st.markdown("### ⚡ Quick Actions")
-        
-        # Refresh data
-        if st.button("🔄 Refresh Data", key="refresh_sidebar", use_container_width=True):
-            clear_data_cache()
-            st.rerun()
+                st.info(f"🔔 {unread} unread")
+        except Exception:
+            pass
         
         st.divider()
         
         # ─── LOGOUT ───
-        if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
+        if st.button("🚪 Log Out", key="sb_logout_btn", use_container_width=True):
             try:
                 sign_out()
                 st.session_state.authenticated = False
@@ -300,13 +235,11 @@ def render_sidebar():
                 clear_data_cache()
                 st.rerun()
             except Exception as e:
-                logger.error(f"Logout error: {e}")
-                st.error(f"Logout error: {str(e)}")
+                st.error(f"Logout error: {e}")
         
         # Footer
         st.divider()
-        st.caption("🌾 Ethiopian AI Supply Chain Platform")
-        st.caption("© 2026 - Wolaita Sodo University")
+        st.caption("🌾 v2.0")
         
         return profile, role
 
@@ -316,6 +249,7 @@ def render_sidebar():
 def show_landing():
     """Show the landing page with login/register."""
     
+    # Stats
     try:
         _n_products = supabase.table("products").select("", count="exact").eq("is_available", True).execute().count or 0
     except Exception:
@@ -328,42 +262,44 @@ def show_landing():
     
     _n_sectors = len(SECTORS) if 'SECTORS' in globals() else 0
     
+    # Hero Section
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 52px 48px 44px; margin-bottom: 36px; color: white;">
-        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;margin-bottom:14px;">🌍 Wolaita Sodo University · Department of ECE</p>
-        <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
-        <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤖 AI Price Engine</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
+    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 40px 36px; margin-bottom: 30px; color: white;">
+        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;">🌍 Wolaita Sodo University · ECE</p>
+        <h1 style="font-size: clamp(24px, 4vw, 40px); font-weight: 800; margin: 10px 0; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span></h1>
+        <p style="font-size: 14px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px;">AI-powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;">
+            <span style="background: #D4A017; color: #1B4332; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;">🤖 AI Price Engine</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 4px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 4px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 4px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
         </div>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 32px;">
-        <div style="background: #fff; border: 1px solid #e8ede9; border-radius: 14px; padding: 22px 20px; text-align: center;">
-            <span style="font-size: 28px; font-weight: 800; color: #1B4332; display: block;">{_n_products}</span>
-            <span style="font-size: 12px; color: #6b7c6e; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block;">Active Listings</span>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px;">
+        <div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 10px; padding: 16px; text-align: center;">
+            <div style="font-size: 24px; font-weight: 700; color: #4ade80;">{_n_products}</div>
+            <div style="font-size: 11px; color: #64748b;">Listings</div>
         </div>
-        <div style="background: #fff; border: 1px solid #e8ede9; border-radius: 14px; padding: 22px 20px; text-align: center;">
-            <span style="font-size: 28px; font-weight: 800; color: #1B4332; display: block;">{_n_users}</span>
-            <span style="font-size: 12px; color: #6b7c6e; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block;">Registered Users</span>
+        <div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 10px; padding: 16px; text-align: center;">
+            <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">{_n_users}</div>
+            <div style="font-size: 11px; color: #64748b;">Users</div>
         </div>
-        <div style="background: #fff; border: 1px solid #e8ede9; border-radius: 14px; padding: 22px 20px; text-align: center;">
-            <span style="font-size: 28px; font-weight: 800; color: #1B4332; display: block;">{_n_sectors}</span>
-            <span style="font-size: 12px; color: #6b7c6e; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block;">Trade Sectors</span>
+        <div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 10px; padding: 16px; text-align: center;">
+            <div style="font-size: 24px; font-weight: 700; color: #a78bfa;">{_n_sectors}</div>
+            <div style="font-size: 11px; color: #64748b;">Sectors</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div style="background: #fff; border: 1px solid #dde8de; border-radius: 20px; padding: 32px 30px 28px; box-shadow: 0 4px 24px rgba(27,67,50,0.08); margin-top: 20px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size: 20px; font-weight: 700; color: #1B4332; margin-bottom: 4px;">🔐 Access Your Account</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size: 13px; color: #7a8c7c; margin-bottom: 24px;">Sign in to your dashboard or register a new entity below.</div>', unsafe_allow_html=True)
+    # Login/Register
+    st.markdown('<div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 16px; padding: 28px 24px;">', unsafe_allow_html=True)
+    st.markdown('<div style="font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 4px;">🔐 Access Your Account</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size: 13px; color: #64748b; margin-bottom: 20px;">Sign in or register below.</div>', unsafe_allow_html=True)
     
     tab_login, tab_register = st.tabs(["🔐 Sign In", "📝 Register"])
     
     with tab_login:
-        email = st.text_input("Email Address", key="login_email", placeholder="you@example.com")
+        email = st.text_input("Email", key="login_email", placeholder="you@example.com")
         password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
         
         if st.button("Sign In →", use_container_width=True, type="primary", key="login_btn"):
@@ -379,14 +315,13 @@ def show_landing():
                 else:
                     st.error(msg)
         
-        st.divider()
         with st.expander("🔑 Forgot Password?"):
-            reset_email = st.text_input("Enter your registered email", key="reset_email", placeholder="you@example.com")
+            reset_email = st.text_input("Enter your email", key="reset_email")
             if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
                 if not reset_email:
                     st.warning("Please enter your email address.")
                 else:
-                    with st.spinner("Sending reset email…"):
+                    with st.spinner("Sending..."):
                         ok, msg = forgot_password(reset_email)
                     if ok:
                         st.success(msg)
@@ -395,7 +330,7 @@ def show_landing():
     
     with tab_register:
         reg_name = st.text_input("Full Name", key="reg_name", placeholder="Abebe Girma")
-        reg_email = st.text_input("Email Address", key="reg_email", placeholder="abebe@example.com")
+        reg_email = st.text_input("Email", key="reg_email", placeholder="abebe@example.com")
         reg_password = st.text_input("Password", type="password", key="reg_password", placeholder="Min. 8 characters")
         
         col_r, col_reg = st.columns(2)
@@ -410,16 +345,15 @@ def show_landing():
             if not all([reg_name, reg_email, reg_password]):
                 st.warning("Name, email, and password are required.")
             else:
-                with st.spinner("Creating your account…"):
+                with st.spinner("Creating account…"):
                     ok, msg = sign_up(reg_email, reg_password, reg_name, reg_role, reg_region, reg_phone)
                 if ok:
                     st.success(msg)
-                    st.info("Account created — please go to Sign In to continue.")
+                    st.info("Account created — please sign in.")
                 else:
                     st.error(msg)
     
     st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center; font-size: 11px; color: #9aab9c; padding: 24px 0 8px;">Ethiopian AI Supply Chain Platform · Wolaita Sodo University, Dept. of ECE</div>', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════
 # MAIN ROUTER
@@ -466,19 +400,18 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
     
-    # ─── AUTO-REDIRECT AFTER LOGIN ───
+    # ─── AUTO-REDIRECT ───
     if st.session_state.get("authenticated") and st.session_state.get("auth_redirect"):
         st.session_state.auth_redirect = False
         
-        # Get profile if not already loaded
         if profile is None and st.session_state.get("user"):
             try:
                 profile = cached_get_profile(st.session_state.user.id)
                 if profile:
                     st.session_state.profile = profile
                     st.session_state.user_role = profile.get("role", "customer")
-            except Exception as e:
-                logger.error(f"Profile fetch for redirect error: {e}")
+            except Exception:
+                pass
         
         if profile:
             role = profile.get("role")
@@ -488,13 +421,11 @@ def main():
                 "customer": "pages/3_customer.py",
                 "admin": "pages/4_Admin.py"
             }
-            
             if role in page_mapping:
                 try:
                     st.switch_page(page_mapping[role])
-                except Exception as e:
-                    logger.error(f"Switch page error: {e}")
-                    st.session_state.auth_redirect = False
+                except Exception:
+                    pass
     
     # ─── SHOW LANDING OR DASHBOARD ───
     if st.session_state.get("user") is None or not st.session_state.get("authenticated"):
@@ -510,8 +441,8 @@ def main():
                     st.session_state.profile = None
                     clear_data_cache()
                     st.rerun()
-                except Exception as e:
-                    logger.error(f"Signout error: {e}")
+                except Exception:
+                    pass
         else:
             role = profile.get("role", "customer")
             role_emoji = {
@@ -521,33 +452,31 @@ def main():
                 "admin": "🛡️"
             }.get(role, "👤")
             
-            # ─── DASHBOARD HOME ───
+            # Dashboard Home
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-                        border-radius: 16px; padding: 40px; color: white; text-align: center;">
-                <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
-                <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
-                <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
+                        border-radius: 14px; padding: 36px; color: white; text-align: center;">
+                <div style="font-size: 56px; margin-bottom: 12px;">{role_emoji}</div>
+                <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Your Dashboard</h1>
+                <p style="opacity: 0.9; margin-top: 10px; font-size: 15px;">
                     👈 Use the sidebar navigation to go to your dashboard.
                 </p>
-                <p style="opacity: 0.7; margin-top: 8px; font-size: 14px;">
-                    Logged in as: <strong>{profile.get('full_name', 'User')}</strong> · 
-                    Role: <strong>{role.capitalize()}</strong>
+                <p style="opacity: 0.7; margin-top: 6px; font-size: 13px;">
+                    {profile.get('full_name', 'User')} · <strong>{role.capitalize()}</strong>
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
-            # Show quick stats
+            # Quick stats
             try:
-                # Count products if producer
                 if role == "producer":
                     prod_count = supabase.table("products").select("id", count="exact").eq("producer_id", st.session_state.user.id).execute().count or 0
                     st.markdown(f"""
-                    <div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 12px; padding: 20px; margin-top: 20px;">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
-                            <div style="text-align: center;">
-                                <div style="font-size: 28px; font-weight: 700; color: #4ade80;">{prod_count}</div>
-                                <div style="font-size: 12px; color: #64748b;">Products Listed</div>
+                    <div style="background: #161b27; border: 1px solid #1e2a3a; border-radius: 10px; padding: 16px; margin-top: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; text-align: center;">
+                            <div>
+                                <div style="font-size: 24px; font-weight: 700; color: #4ade80;">{prod_count}</div>
+                                <div style="font-size: 11px; color: #64748b;">Products</div>
                             </div>
                         </div>
                     </div>
