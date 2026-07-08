@@ -1,95 +1,43 @@
 """
-theme.py — Ethiopian AI Supply Chain Platform
-Full dark/light theme support for both sidebar and main content
+theme.py — Minimal theme for sidebar
 """
 import streamlit as st
-from typing import Dict, Any
 
-# ═══════════════════════════════════════════════════════════════
-# COLOUR TOKENS
-# ═══════════════════════════════════════════════════════════════
-DARK: Dict[str, str] = {
-    "sidebar_bg": "#161b27",
-    "sidebar_border": "#1e2a3a",
-    "sidebar_text": "#e2e8f0",
-    "sidebar_subtext": "#64748b",
-    "sidebar_btn_bg": "#1e2a3a",
-    "sidebar_btn_border": "#334155",
-    "sidebar_btn_color": "#e2e8f0",
-    "sidebar_divider": "#1e2a3a",
-    "pill_bg": "#1e293b",
-    "pill_color": "#94a3b8",
-    "pill_border": "#334155",
-    "main_bg": "#0f1117",
-    "main_text": "#e2e8f0",
-    "card_bg": "#161b27",
-    "card_border": "#1e2a3a",
-    "input_bg": "#1e2a3a",
-    "input_border": "#334155",
-    "input_text": "#e2e8f0",
-}
-
-LIGHT: Dict[str, str] = {
-    "sidebar_bg": "#f8fafc",
-    "sidebar_border": "#e2e8f0",
-    "sidebar_text": "#1e293b",
-    "sidebar_subtext": "#64748b",
-    "sidebar_btn_bg": "#ffffff",
-    "sidebar_btn_border": "#cbd5e1",
-    "sidebar_btn_color": "#1e293b",
-    "sidebar_divider": "#e2e8f0",
-    "pill_bg": "#f1f5f9",
-    "pill_color": "#475569",
-    "pill_border": "#cbd5e1",
-    "main_bg": "#f8fafc",
-    "main_text": "#0f172a",
-    "card_bg": "#ffffff",
-    "card_border": "#e2e8f0",
-    "input_bg": "#ffffff",
-    "input_border": "#cbd5e1",
-    "input_text": "#1e293b",
-}
-
-def _get_tokens() -> Dict[str, str]:
-    return LIGHT if st.session_state.get("sidebar_light_mode", False) else DARK
-
-# ═══════════════════════════════════════════════════════════════
-# INJECT THEME CSS
-# ═══════════════════════════════════════════════════════════════
 def inject_theme():
-    """Inject theme CSS for both sidebar and main content."""
+    """Inject minimal theme CSS."""
+    # Define accent colors
     is_light = st.session_state.get("sidebar_light_mode", False)
-    t = LIGHT if is_light else DARK
     accent = "#D4A017" if not is_light else "#1B4332"
+    accent_light = "#F4C430" if not is_light else "#2D6A4F"
     
     st.markdown(f"""
 <style>
 /* ─── BASE ─── */
 html, body, [data-testid="stAppViewContainer"] {{
-    background: {t["main_bg"]} !important;
-    color: {t["main_text"]} !important;
+    background: #0f1117 !important;
+    color: #e2e8f0 !important;
     font-family: 'Inter', sans-serif;
 }}
 
 /* ─── SIDEBAR ─── */
 [data-testid="stSidebar"] {{
-    background: {t["sidebar_bg"]} !important;
-    border-right: 1px solid {t["sidebar_border"]} !important;
+    background: #161b27 !important;
+    border-right: 1px solid #1e2a3a !important;
 }}
 
 [data-testid="stSidebar"] * {{
-    color: {t["sidebar_text"]} !important;
+    color: #e2e8f0 !important;
 }}
 
 [data-testid="stSidebar"] .stCaption,
 [data-testid="stSidebar"] small {{
-    color: {t["sidebar_subtext"]} !important;
+    color: #64748b !important;
 }}
 
 [data-testid="stSidebar"] .stButton > button {{
-    background: {t["sidebar_btn_bg"]} !important;
-    border-color: {t["sidebar_btn_border"]} !important;
-    color: {t["sidebar_btn_color"]} !important;
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
     width: 100% !important;
     border-radius: 8px !important;
     font-weight: 500 !important;
@@ -102,12 +50,12 @@ html, body, [data-testid="stAppViewContainer"] {{
 }}
 
 [data-testid="stSidebar"] hr {{
-    border-color: {t["sidebar_divider"]} !important;
+    border-color: #1e2a3a !important;
 }}
 
 [data-testid="stSidebar"] .stInfo {{
-    background: {t["card_bg"]} !important;
-    border-color: {t["card_border"]} !important;
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
 }}
 
 /* ─── PILL STYLES ─── */
@@ -125,7 +73,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 .pill-danger {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
 .pill-info {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
 .pill-purple {{ background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }}
-.pill-neutral {{ background: {t["pill_bg"]}; color: {t["pill_color"]}; border: 1px solid {t["pill_border"]}; }}
+.pill-neutral {{ background: #1e293b; color: #94a3b8; border: 1px solid #334155; }}
 
 /* ─── BUTTONS ─── */
 .stButton > button {{
@@ -133,9 +81,9 @@ html, body, [data-testid="stAppViewContainer"] {{
     font-size: 13px !important;
     font-weight: 500 !important;
     transition: all 0.15s ease !important;
-    background: {t["input_bg"]} !important;
-    border: 1px solid {t["input_border"]} !important;
-    color: {t["input_text"]} !important;
+    background: #1e2a3a !important;
+    border: 1px solid #334155 !important;
+    color: #e2e8f0 !important;
     cursor: pointer !important;
 }}
 
@@ -158,24 +106,34 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
 [data-testid="stTextArea"] textarea {{
-    background: {t["input_bg"]} !important;
-    border-color: {t["input_border"]} !important;
-    color: {t["input_text"]} !important;
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
     border-radius: 8px !important;
 }}
 
 [data-testid="stSelectbox"] > div > div {{
-    background: {t["input_bg"]} !important;
-    border-color: {t["input_border"]} !important;
-    color: {t["input_text"]} !important;
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
     border-radius: 8px !important;
+}}
+
+[data-testid="stSelectbox"] option {{
+    background: #1e2a3a !important;
+    color: #e2e8f0 !important;
 }}
 
 /* ─── TABS ─── */
 [data-testid="stTabs"] > div > div > div > button {{
     font-size: 13px !important;
     font-weight: 500 !important;
-    color: {t["sidebar_subtext"]} !important;
+    color: #64748b !important;
+    padding: 8px 16px !important;
+}}
+
+[data-testid="stTabs"] > div > div > div > button:hover {{
+    color: #e2e8f0 !important;
 }}
 
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
@@ -185,15 +143,30 @@ html, body, [data-testid="stAppViewContainer"] {{
 
 /* ─── KPI CARDS ─── */
 .kpi-card {{
-    background: {t["card_bg"]} !important;
-    border: 1px solid {t["card_border"]} !important;
+    background: #161b27 !important;
+    border: 1px solid #1e2a3a !important;
     border-radius: 10px;
     padding: 20px 24px;
     height: 100%;
 }}
-.kpi-label {{ font-size: 11px; font-weight: 600; color: {t["sidebar_subtext"]} !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }}
-.kpi-value {{ font-size: 28px; font-weight: 700; color: {t["main_text"]} !important; font-family: 'JetBrains Mono', monospace; line-height: 1; }}
-.kpi-sub {{ font-size: 12px; color: {t["sidebar_subtext"]} !important; margin-top: 6px; }}
+.kpi-label {{ font-size: 11px; font-weight: 600; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }}
+.kpi-value {{ font-size: 28px; font-weight: 700; color: #f1f5f9 !important; font-family: 'JetBrains Mono', monospace; line-height: 1; }}
+.kpi-sub {{ font-size: 12px; color: #64748b !important; margin-top: 6px; }}
+
+/* ─── SECTION TITLE ─── */
+.section-title {{
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569 !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 24px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e2a3a;
+}}
+
+/* ─── PRICE TAG ─── */
+.price-tag {{ font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: {accent} !important; }}
 
 /* ─── ALERT BOXES ─── */
 .alert-box {{ border-radius: 8px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; border: 1px solid; }}
@@ -201,24 +174,28 @@ html, body, [data-testid="stAppViewContainer"] {{
 .alert-danger {{ background: #7f1d1d22; border-color: #ef444466; color: #f87171; }}
 .alert-info {{ background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }}
 .alert-success {{ background: #14532d22; border-color: #16a34a66; color: #4ade80; }}
-
-/* ─── SECTION TITLE ─── */
-.section-title {{
-    font-size: 13px;
-    font-weight: 700;
-    color: {t["sidebar_subtext"]} !important;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 24px 0 14px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid {t["card_border"]} !important;
-}}
-
-/* ─── PRICE TAG ─── */
-.price-tag {{ font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: {accent} !important; }}
+.alert-purple {{ background: #3b1a6022; border-color: #7c3aed66; color: #a78bfa; }}
 
 /* ─── CONFIRM BOX ─── */
 .confirm-box {{ background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }}
+
+/* ─── DANGER BUTTON ─── */
+.danger-btn > button {{
+    background: #7f1d1d44 !important;
+    border: 1px solid #ef444455 !important;
+    color: #f87171 !important;
+}}
+
+/* ─── RECORD CARDS ─── */
+.record-card {{
+    background: #161b27;
+    border: 1px solid #1e2a3a;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+}}
+.record-card:hover {{ border-color: {accent}55; }}
 
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {{
@@ -227,15 +204,69 @@ html, body, [data-testid="stAppViewContainer"] {{
     .kpi-card {{ padding: 14px 16px !important; }}
     div.stButton > button {{ width: 100% !important; }}
     [data-testid="stTabs"] > div > div > div > button {{ font-size: 12px !important; padding: 6px 10px !important; }}
+    [data-testid="column"] {{ min-width: 100% !important; flex: 1 1 100% !important; }}
 }}
+
+/* ─── ACTIVITY FEED ─── */
+.activity-item {{
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #1e2a3a;
+}}
+.activity-dot {{
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+}}
+.activity-text {{ font-size: 13px; color: #94a3b8; }}
+.activity-time {{ font-size: 11px; color: #475569; margin-top: 2px; }}
+
+/* ─── STATUS TRACKER ─── */
+.status-track {{
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 12px 0;
+}}
+.track-step {{
+    flex: 1;
+    text-align: center;
+    position: relative;
+}}
+.track-step::after {{
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: -50%;
+    width: 100%;
+    height: 2px;
+    background: #1e2a3a;
+    z-index: 0;
+}}
+.track-step:last-child::after {{ display: none; }}
+.track-dot {{
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin: 0 auto 4px;
+    position: relative;
+    z-index: 1;
+}}
+.track-label {{ font-size: 10px; color: #475569; }}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+::-webkit-scrollbar-track {{ background: #0f1117; }}
+::-webkit-scrollbar-thumb {{ background: #1e2a3a; border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: #334155; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════
-# THEME TOGGLE
-# ═══════════════════════════════════════════════════════════════
 def render_theme_toggle():
-    """Render theme toggle button for sidebar."""
+    """Simple theme toggle."""
     if "sidebar_light_mode" not in st.session_state:
         st.session_state.sidebar_light_mode = False
     
@@ -250,8 +281,10 @@ def render_theme_toggle():
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
+    """Render a styled page header."""
     st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; color: white;">
+    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); 
+                border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; color: white;">
         <div style="font-size: 32px; margin-bottom: 8px;">{icon}</div>
         <h2 style="margin: 0; font-size: clamp(18px, 3vw, 24px); font-weight: 700; color: white;">{title}</h2>
         {f'<p style="margin: 4px 0 0; opacity: 0.82; font-size: 13px; color: white;">{subtitle}</p>' if subtitle else ''}
@@ -259,6 +292,7 @@ def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
     """, unsafe_allow_html=True)
 
 def render_kpi_card(label: str, value: str, subtext: str = "", icon: str = ""):
+    """Render a KPI card."""
     st.markdown(f"""
     <div class="kpi-card">
         {f'<div style="font-size: 24px; margin-bottom: 8px;">{icon}</div>' if icon else ''}
@@ -269,11 +303,23 @@ def render_kpi_card(label: str, value: str, subtext: str = "", icon: str = ""):
     """, unsafe_allow_html=True)
 
 def render_alert(message: str, alert_type: str = "info"):
-    type_map = {"info": "alert-info", "success": "alert-success", "warning": "alert-warning", "error": "alert-danger"}
+    """Render an alert box."""
+    type_map = {
+        "info": "alert-info",
+        "success": "alert-success",
+        "warning": "alert-warning",
+        "error": "alert-danger"
+    }
     st.markdown(f'<div class="alert-box {type_map.get(alert_type, "alert-info")}">{message}</div>', unsafe_allow_html=True)
 
 def render_pill(text: str, pill_type: str = "neutral"):
+    """Render a pill/badge."""
     st.markdown(f'<span class="pill pill-{pill_type}">{text}</span>', unsafe_allow_html=True)
 
 def render_price(amount: float, currency: str = "ETB"):
+    """Render a price."""
     st.markdown(f'<span class="price-tag">{currency} {amount:,.2f}</span>', unsafe_allow_html=True)
+
+def render_section_title(title: str):
+    """Render a section title."""
+    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
