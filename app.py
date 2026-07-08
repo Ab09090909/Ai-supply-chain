@@ -1,19 +1,17 @@
 """
 app.py — Ethiopian AI Supply Chain Platform (Main Entry)
-Handles: Landing page, Authentication, Routing to pages/
-Optimized for performance (caching) and includes Dark/Light theme toggle.
 """
 import sys
 import os
 import streamlit as st
 sys.path.insert(0, os.path.dirname(__file__))
 
-from utils.theme import inject_theme, render_theme_toggle, render_page_header
+from utils.theme import inject_theme, render_page_header
 from utils.auth import sign_in, sign_up, sign_out, forgot_password
 from utils.constants import REGIONS, SECTORS, SESSION_KEYS
 from utils.db_helpers import get_supabase_client, cached_get_profile, cached_unread_count, clear_data_cache
 from utils.verification import check_verification_status
-from utils.chatbot import render_floating_chatbot
+from utils.shared_ui import render_profile_editor_modal
 
 # ═════════════════════════════════════════════════════════════
 # PAGE CONFIG
@@ -25,36 +23,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize session keys
 for _k in SESSION_KEYS:
     if _k not in st.session_state:
         st.session_state[_k] = None
 
-# Initialize Supabase
 try:
     supabase = get_supabase_client()
 except ValueError as e:
     st.error(str(e))
     st.stop()
 
-# Inject theme (handles dark/light mode CSS)
 inject_theme()
 
 # ═════════════════════════════════════════════════════════════
-# PERFORMANCE FIX: Cache landing page stats to prevent lag
-# ═════════════════════════════════════════════════════════════
-@st.cache_data(ttl=300)  # Cache for 5 minutes
-def get_landing_stats():
-    try:
-        _n_products = supabase.table("products").select("", count="exact").eq("is_available", True).execute().count or 0
-        _n_users = supabase.table("profiles").select("", count="exact").execute().count or 0
-        _n_sectors = len(SECTORS)
-    except Exception:
-        _n_products, _n_users, _n_sectors = 0, 0, len(SECTORS)
-    return _n_products, _n_users, _n_sectors
-
-# ═════════════════════════════════════════════════════════════
-# SIDEBAR — Always visible
+# SIDEBAR
 # ═════════════════════════════════════════════════════════════
 def render_sidebar():
     with st.sidebar:
@@ -66,10 +48,8 @@ def render_sidebar():
             st.caption("Ethiopian Multi-Sector Commerce")
             st.divider()
             
-            # Try to get profile (FIXED: using cached_get_profile)
             profile = st.session_state.get("profile") or cached_get_profile(st.session_state.user.id)
             
-            # 🚨 FIX: If profile is still None, create it automatically to prevent crash
             if profile is None:
                 try:
                     default_name = st.session_state.user.email.split('@')[0] if st.session_state.user.email else "User"
@@ -80,7 +60,6 @@ def render_sidebar():
                         "is_verified": False,
                         "documents_uploaded": False
                     }).execute()
-                    # Fetch it again now that it's created
                     profile = cached_get_profile(st.session_state.user.id)
                 except Exception as e:
                     st.error(f"⚠️ Profile creation failed: {e}")
@@ -95,39 +74,29 @@ def render_sidebar():
             # ──────────────────────────────────────
             # PROFILE PICTURE SECTION WITH EDIT ICON
             # ──────────────────────────────────────
-            col_pic, col_edit = st.columns([4, 1])
+            # Center the profile picture
+            profile_pic = profile.get("profile_image")
             
-            with col_pic:
-                # Display profile picture (circular with border)
-                profile_pic = profile.get("profile_image")
-                if profile_pic:
-                    st.markdown(f"""
-                    <div style="text-align: center; margin-bottom: 10px;">
-                        <img src="data:image/jpeg;base64,{profile_pic}" 
-                             style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    # Default avatar
-                    st.markdown(f"""
-                    <div style="text-align: center; margin-bottom: 10px;">
-                        <div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px;">
-                            {profile.get('full_name', 'U')[0].upper()}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <div style="position: relative; display: inline-block;">
+                    {f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">' if profile_pic else f'<div style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 36px; color: #f1f5f9; font-weight: 700;">{profile.get("full_name", "U")[0].upper()}</div>'}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             
-            with col_edit:
-                # Edit icon button
-                if st.button("✏️", key="edit_profile_btn_sidebar", help="Edit Profile"):
+            # Edit button centered
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("✏️ Edit Profile", key="edit_profile_btn_sidebar", use_container_width=True):
                     st.session_state.show_profile_editor = True
                     st.rerun()
             
             # Show name in bold and large
             st.markdown(f"""
-            <div style="text-align: center; margin: 10px 0;">
-                <div style="font-size: 20px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
-                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">{role.capitalize() if role else 'N/A'}</div>
+            <div style="text-align: center; margin: 15px 0;">
+                <div style="font-size: 22px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
+                <div style="font-size: 13px; color: #64748b; margin-top: 6px;">{role.capitalize() if role else 'N/A'}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -143,9 +112,8 @@ def render_sidebar():
                     else:
                         st.warning("⚠️ Upload documents to verify")
             except Exception as _verif_err:
-                st.caption(f"⚠️ Verification check failed: {_verif_err}")
+                st.caption(f"️ Verification check failed: {_verif_err}")
             
-            # FIXED: using cached_unread_count
             unread = cached_unread_count(st.session_state.user.id)
             if unread:
                 st.info(f"🔔 {unread} unread notification(s)")
@@ -159,11 +127,15 @@ def render_sidebar():
             return profile, role
 
 # ═════════════════════════════════════════════════════════════
-# LANDING PAGE (shown when not logged in)
+# LANDING PAGE
 # ═════════════════════════════════════════════════════════════
 def show_landing():
-    # Update 8: Use cached stats to fix lagging on page load
-    _n_products, _n_users, _n_sectors = get_landing_stats()
+    try:
+        _n_products = supabase.table("products").select("", count="exact").eq("is_available", True).execute().count or 0
+        _n_users = supabase.table("profiles").select("", count="exact").execute().count or 0
+        _n_sectors = len(SECTORS)
+    except Exception:
+        _n_products, _n_users, _n_sectors = 0, 0, len(SECTORS)
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 52px 48px 44px; margin-bottom: 36px; color: white;">
@@ -171,9 +143,9 @@ def show_landing():
         <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
         <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">⚡ AI Price Engine</span>
+            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> AI Price Engine</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">️ Fraud Detection</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
         </div>
     </div>
@@ -197,7 +169,7 @@ def show_landing():
     st.markdown('<div style="font-size: 20px; font-weight: 700; color: #1B4332; margin-bottom: 4px;">Access Your Account</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size: 13px; color: #7a8c7c; margin-bottom: 24px;">Sign in to your dashboard or register a new entity below.</div>', unsafe_allow_html=True)
     
-    tab_login, tab_register = st.tabs([" Sign In", "📝 Register"])
+    tab_login, tab_register = st.tabs(["🔐 Sign In", "📝 Register"])
     
     with tab_login:
         email = st.text_input("Email Address", key="login_email", placeholder="you@example.com")
@@ -214,7 +186,7 @@ def show_landing():
                     st.error(msg)
         
         st.divider()
-        with st.expander(" Forgot Password?"):
+        with st.expander("🔑 Forgot Password?"):
             reset_email = st.text_input("Enter your registered email", key="reset_email", placeholder="you@example.com")
             if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
                 if not reset_email:
@@ -258,17 +230,49 @@ def show_landing():
 # ═════════════════════════════════════════════════════════════
 profile, role = render_sidebar()
 
+# ═════════════════════════════════════════════════════════════
+# PROFILE EDITOR MODAL (Check this BEFORE showing dashboard)
+# ═════════════════════════════════════════════════════════════
+if st.session_state.get("show_profile_editor") and profile:
+    st.markdown("""
+    <style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    
+    # Center the modal with columns
+    col1, col2, col3 = st.columns([1, 4, 1])
+    with col2:
+        render_profile_editor_modal(profile, st.session_state.user.id)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()  # Stop rendering the rest of the page
+
+# Show landing or dashboard
 if st.session_state.get("user") is None:
     show_landing()
 else:
-    # User is logged in — show a welcome message and direct them to the sidebar pages
     if profile is None:
         st.error("Could not load profile. Please sign out and try again.")
         if st.button("Sign Out"):
             sign_out()
             st.rerun()
     else:
-        role_emoji = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "")
+        role_emoji = {"producer": "", "merchant": "🏬", "customer": "🛒", "admin": "️"}.get(role, "👤")
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
                     border-radius: 16px; padding: 40px; color: white; text-align: center;">
@@ -278,42 +282,4 @@ else:
                 👈 Use the sidebar to navigate to your dashboard pages.
             </p>
         </div>
-                """, unsafe_allow_html=True)
-
-# ═════════════════════════════════════════════════════════════
-# PROFILE EDITOR MODAL
-# ═════════════════════════════════════════════════════════════
-if st.session_state.get("show_profile_editor"):
-    from utils.shared_ui import render_profile_editor_modal
-    st.markdown("""
-    <style>
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    
-    # Center the modal
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col2:
-        render_profile_editor_modal(profile, st.session_state.user.id)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()  # Stop rendering the rest of the page
-
-# ═════════════════════════════════════════════════════════════
-# FLOATING CHATBOT (Renders on ALL pages for ALL roles)
-# ═════════════════════════════════════════════════════════════
-current_profile = st.session_state.get("profile")
-render_floating_chatbot(current_profile)
+        """, unsafe_allow_html=True)
