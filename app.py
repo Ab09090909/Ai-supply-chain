@@ -60,11 +60,6 @@ def render_sidebar():
     with st.sidebar:
         if st.session_state.get("user") is None:
             st.info("👈 Use the main page to Log In or Sign Up")
-            
-            # Update 7: Theme toggle for non-logged-in users
-            st.divider()
-            st.markdown("### 🎨 Theme")
-            render_theme_toggle()
             return None, None
         else:
             st.title("🌾 AI Supply Chain")
@@ -74,7 +69,7 @@ def render_sidebar():
             # Try to get profile (FIXED: using cached_get_profile)
             profile = st.session_state.get("profile") or cached_get_profile(st.session_state.user.id)
             
-            #  FIX: If profile is still None, create it automatically to prevent crash
+            # 🚨 FIX: If profile is still None, create it automatically to prevent crash
             if profile is None:
                 try:
                     default_name = st.session_state.user.email.split('@')[0] if st.session_state.user.email else "User"
@@ -97,9 +92,48 @@ def render_sidebar():
             st.session_state.profile = profile
             role = profile.get("role") if profile else None
             
-            st.success(f"Welcome, {profile.get('full_name', 'User')}")
-            st.caption(f'Role: {role.capitalize() if role else "N/A"}')
-            st.caption(f'Region: {profile.get("region", "N/A")}')
+            # ──────────────────────────────────────
+            # PROFILE PICTURE SECTION WITH EDIT ICON
+            # ──────────────────────────────────────
+            col_pic, col_edit = st.columns([4, 1])
+            
+            with col_pic:
+                # Display profile picture (circular with border)
+                profile_pic = profile.get("profile_image")
+                if profile_pic:
+                    st.markdown(f"""
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <img src="data:image/jpeg;base64,{profile_pic}" 
+                             style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    # Default avatar
+                    st.markdown(f"""
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px;">
+                            {profile.get('full_name', 'U')[0].upper()}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col_edit:
+                # Edit icon button
+                if st.button("✏️", key="edit_profile_btn_sidebar", help="Edit Profile"):
+                    st.session_state.show_profile_editor = True
+                    st.rerun()
+            
+            # Show name in bold and large
+            st.markdown(f"""
+            <div style="text-align: center; margin: 10px 0;">
+                <div style="font-size: 20px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">{role.capitalize() if role else 'N/A'}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.divider()
+            
+            st.caption(f'📍 {profile.get("region", "N/A")}')
             
             try:
                 verif_status = check_verification_status(st.session_state.user.id)
@@ -116,11 +150,6 @@ def render_sidebar():
             if unread:
                 st.info(f"🔔 {unread} unread notification(s)")
             
-            st.divider()
-            
-            # Update 7: Dark/Light Theme Toggle
-            st.markdown("### 🎨 Theme")
-            render_theme_toggle()
             st.divider()
             
             if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
@@ -250,6 +279,38 @@ else:
             </p>
         </div>
                 """, unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════════════════════
+# PROFILE EDITOR MODAL
+# ═════════════════════════════════════════════════════════════
+if st.session_state.get("show_profile_editor"):
+    from utils.shared_ui import render_profile_editor_modal
+    st.markdown("""
+    <style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    
+    # Center the modal
+    col1, col2, col3 = st.columns([1, 3, 1])
+    with col2:
+        render_profile_editor_modal(profile, st.session_state.user.id)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()  # Stop rendering the rest of the page
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Renders on ALL pages for ALL roles)
