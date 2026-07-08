@@ -30,6 +30,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Initialize session state
 for _k in SESSION_KEYS:
     if _k not in st.session_state:
         st.session_state[_k] = None
@@ -37,10 +38,83 @@ for _k in SESSION_KEYS:
 # Initialize session state flags
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "dark"
+
 if "show_profile_editor" not in st.session_state:
     st.session_state.show_profile_editor = False
 
+# Prevent unnecessary reruns
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
+
+# Inject theme and responsive CSS
 inject_theme()
+
+# Add responsive CSS for mobile and desktop
+st.markdown("""
+<style>
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .main > div {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    div[data-testid="stSidebar"] {
+        width: 280px;
+    }
+    div.stButton > button {
+        width: 100%;
+    }
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: column;
+    }
+    div[data-testid="stMetric"] {
+        text-align: center;
+    }
+}
+
+/* Desktop optimizations */
+@media (min-width: 769px) {
+    .main > div {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
+
+/* General improvements */
+[data-testid="stSidebar"] {
+    user-select: none;
+}
+
+/* Modal overlay for profile editor */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* Responsive grid for stats */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════
 # SIDEBAR
@@ -112,7 +186,7 @@ def render_sidebar():
                     if verif_status["has_documents"]:
                         st.info("⏳ Documents pending verification")
                     else:
-                        st.warning("️ Upload documents to verify")
+                        st.warning("⚠️ Upload documents to verify")
             except Exception as _verif_err:
                 st.caption(f"⚠️ Verification check failed: {_verif_err}")
             
@@ -145,13 +219,13 @@ def show_landing():
         <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
         <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> AI Price Engine</span>
+            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">⚡ AI Price Engine</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
         </div>
     </div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+    <div class="stats-grid">
         <div style="background: #fff; border: 1px solid #e8ede9; border-radius: 14px; padding: 22px 20px; text-align: center;">
             <span style="font-size: 28px; font-weight: 800; color: #1B4332; display: block;">{_n_products}</span>
             <span style="font-size: 12px; color: #6b7c6e; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block;">Active Listings</span>
@@ -176,6 +250,7 @@ def show_landing():
     with tab_login:
         email = st.text_input("Email Address", key="login_email", placeholder="you@example.com")
         password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
+        
         if st.button("Sign In →", use_container_width=True, type="primary", key="login_btn"):
             if not email or not password:
                 st.warning("Please enter your email and password.")
@@ -188,6 +263,7 @@ def show_landing():
                     st.error(msg)
         
         st.divider()
+        
         with st.expander("🔑 Forgot Password?"):
             reset_email = st.text_input("Enter your registered email", key="reset_email", placeholder="you@example.com")
             if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
@@ -205,11 +281,13 @@ def show_landing():
         reg_name = st.text_input("Full Name", key="reg_name", placeholder="Abebe Girma")
         reg_email = st.text_input("Email Address", key="reg_email", placeholder="abebe@example.com")
         reg_password = st.text_input("Password", type="password", key="reg_password", placeholder="Min. 8 characters")
+        
         col_r, col_reg = st.columns(2)
         with col_r:
             reg_role = st.selectbox("I am a…", ["producer", "merchant", "customer"], key="reg_role")
         with col_reg:
             reg_region = st.selectbox("Region", REGIONS, key="reg_region")
+        
         reg_phone = st.text_input("Phone (optional)", key="reg_phone", placeholder="+251 9xx xxx xxx")
         
         if st.button("Create Account →", use_container_width=True, type="primary", key="reg_btn"):
@@ -273,10 +351,16 @@ else:
             sign_out()
             st.rerun()
     else:
-        role_emoji = {"producer": "🚜", "merchant": "", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
+        role_emoji = {
+            "producer": "🚜",
+            "merchant": "🏪",
+            "customer": "🛒",
+            "admin": "🛡️"
+        }.get(role, "👤")
+        
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-                    border-radius: 16px; padding: 40px; color: white; text-align: center;">
+        border-radius: 16px; padding: 40px; color: white; text-align: center;">
             <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
             <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
             <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
