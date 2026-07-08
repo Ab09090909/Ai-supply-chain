@@ -1,326 +1,285 @@
-"""Modern Ethiopian-inspired theme with dark/light toggle support."""
+"""
+theme.py — Ethiopian AI Supply Chain Platform
+Handles:
+  - Dark / Light toggle that ONLY changes the sidebar
+  - Responsive CSS for mobile and desktop
+  - inject_theme() called once per page
+  - render_theme_toggle() placed inside each sidebar
+"""
 import streamlit as st
 
-# ─────────────────────────────────────────────
-# Theme Color Palettes
-# ─────────────────────────────────────────────
-THEME = {
-    "primary":          "#1B4332",
-    "primary_light":    "#2D6A4F",
-    "primary_lighter":  "#40916C",
-    "accent":           "#D4A017",
-    "accent_light":     "#F4C430",
-    "success":          "#10B981",
-    "warning":          "#F59E0B",
-    "danger":           "#EF4444",
-    "info":             "#3B82F6",
-    "dark":             "#1F2937",
-    "gray":             "#6B7280",
-    "light":            "#F9FAFB",
-    "white":            "#FFFFFF",
+
+# ══════════════════════════════════════════════════════════════
+#  COLOUR TOKENS
+# ══════════════════════════════════════════════════════════════
+DARK = {
+    "sidebar_bg":        "#161b27",
+    "sidebar_border":    "#1e2a3a",
+    "sidebar_text":      "#e2e8f0",
+    "sidebar_subtext":   "#64748b",
+    "sidebar_btn_bg":    "#1e2a3a",
+    "sidebar_btn_border":"#334155",
+    "sidebar_btn_color": "#e2e8f0",
+    "sidebar_divider":   "#1e2a3a",
+    "pill_bg":           "#1e293b",
+    "pill_color":        "#94a3b8",
+    "pill_border":       "#334155",
 }
 
-# ─────────────────────────────────────────────
-# Light Theme CSS (Ethiopian-inspired)
-# ─────────────────────────────────────────────
-LIGHT_CSS = """
+LIGHT = {
+    "sidebar_bg":        "#f8fafc",
+    "sidebar_border":    "#e2e8f0",
+    "sidebar_text":      "#1e293b",
+    "sidebar_subtext":   "#64748b",
+    "sidebar_btn_bg":    "#ffffff",
+    "sidebar_btn_border":"#cbd5e1",
+    "sidebar_btn_color": "#1e293b",
+    "sidebar_divider":   "#e2e8f0",
+    "pill_bg":           "#f1f5f9",
+    "pill_color":        "#475569",
+    "pill_border":       "#cbd5e1",
+}
+
+
+def _get_tokens() -> dict:
+    return LIGHT if st.session_state.get("sidebar_light_mode") else DARK
+
+
+# ══════════════════════════════════════════════════════════════
+#  INJECT GLOBAL CSS  (main content always dark + responsive)
+# ══════════════════════════════════════════════════════════════
+def inject_theme():
+    """
+    Call once near the top of each page (after set_page_config).
+    Injects:
+      1. Responsive CSS (mobile ≤768 px / desktop > 768 px)
+      2. Sidebar-only theming based on session state toggle
+    Main content area is ALWAYS dark.
+    """
+    t = _get_tokens()
+
+    st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* ═══════════════════════════════════════════
+   RESPONSIVE UTILITIES
+═══════════════════════════════════════════ */
 
-.stApp {
-    font-family: 'Inter', sans-serif !important;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e8f5e9 100%) !important;
-}
-header[data-testid="stHeader"] {
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 2px 8px rgba(27,67,50,0.08);
-}
+/* Fluid container that collapses columns on small screens */
+@media (max-width: 768px) {{
+    /* Stack Streamlit columns vertically */
+    [data-testid="column"] {{
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }}
 
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #1B4332 0%, #2D6A4F 100%) !important;
-    color: white !important;
-}
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3,
-section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] label {
-    color: white !important;
-}
-section[data-testid="stSidebar"] .stButton > button {
-    background: rgba(255,255,255,0.08) !important;
-    color: white !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    border-radius: 10px !important;
-    margin-bottom: 6px !important;
-    transition: all 0.25s ease !important;
-    text-align: left !important;
-    padding: 10px 16px !important;
-}
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(212,160,23,0.25) !important;
-    border-color: #F4C430 !important;
-    transform: translateX(4px) !important;
-}
+    /* Shrink dashboard header text */
+    .dash-header h1 {{
+        font-size: 18px !important;
+    }}
+    .dash-header p {{
+        font-size: 11px !important;
+    }}
+    .dash-header {{
+        padding: 16px !important;
+        gap: 12px !important;
+        flex-wrap: wrap;
+    }}
+    .dash-header-icon {{
+        font-size: 28px !important;
+    }}
+    /* Profile picture in header */
+    .dash-header img, .dash-header > div:first-child {{
+        width: 56px !important;
+        height: 56px !important;
+    }}
 
-[data-testid="stContainer"] {
-    background: white;
-    border-radius: 14px;
-    padding: 20px;
-    box-shadow: 0 2px 12px rgba(27,67,50,0.06);
-    border: 1px solid rgba(27,67,50,0.08);
-    margin-bottom: 14px;
-}
+    /* KPI cards: make value smaller */
+    .kpi-value {{
+        font-size: 22px !important;
+    }}
+    .kpi-card {{
+        padding: 14px 16px !important;
+    }}
 
-[data-testid="stMetric"] {
-    background: white;
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    border-left: 4px solid #1B4332;
-}
-[data-testid="stMetricValue"] { color: #1B4332 !important; font-weight: 700 !important; font-size: 26px !important; }
-[data-testid="stMetricLabel"] { color: #6B7280 !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; font-size: 11px !important; }
+    /* Section titles */
+    .section-title {{
+        font-size: 11px !important;
+    }}
 
-.stButton > button {
-    background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 10px 20px !important;
-    font-weight: 600 !important;
-    transition: all 0.25s ease !important;
-}
-.stButton > button:hover {
-    background: linear-gradient(135deg, #2D6A4F 0%, #40916C 100%) !important;
-    transform: translateY(-2px) !important;
-}
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
-    color: #1B4332 !important;
-    font-weight: 700 !important;
-}
+    /* Tabs: allow horizontal scroll on mobile */
+    [data-testid="stTabs"] > div > div {{
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }}
+    [data-testid="stTabs"] > div > div > div > button {{
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+        white-space: nowrap;
+    }}
 
-h1, h2, h3 { color: #1B4332 !important; font-weight: 700 !important; }
-#MainMenu, footer { visibility: hidden; }
-</style>
-"""
+    /* Record / product cards */
+    .record-card {{
+        padding: 12px !important;
+    }}
 
-# ─────────────────────────────────────────────
-# Dark Theme CSS (Professional dark design)
-# ────────────────────────────────────────────
-DARK_CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    /* Price tag */
+    .price-tag {{
+        font-size: 15px !important;
+    }}
 
-.stApp {
-    font-family: 'Inter', sans-serif !important;
+    /* Buttons: full width on mobile */
+    .stButton > button {{
+        font-size: 12px !important;
+        padding: 8px 10px !important;
+    }}
+
+    /* Forecast container */
+    .forecast-container {{
+        padding: 12px !important;
+    }}
+
+    /* Alert boxes */
+    .alert-box {{
+        font-size: 12px !important;
+    }}
+
+    /* Landing page hero */
+    .hero-section h1 {{
+        font-size: 24px !important;
+    }}
+    .hero-section p {{
+        font-size: 13px !important;
+    }}
+    /* Stat cards grid → single column */
+    .stats-grid {{
+        grid-template-columns: 1fr !important;
+    }}
+}}
+
+@media (min-width: 769px) and (max-width: 1024px) {{
+    /* Tablet adjustments */
+    .dash-header h1 {{
+        font-size: 22px !important;
+    }}
+    .kpi-value {{
+        font-size: 24px !important;
+    }}
+}}
+
+@media (min-width: 1025px) {{
+    /* Desktop — default sizes, nothing overridden */
+}}
+
+/* ═══════════════════════════════════════════
+   MAIN CONTENT — always dark
+═══════════════════════════════════════════ */
+html, body, [data-testid="stAppViewContainer"] {{
     background: #0f1117 !important;
     color: #e2e8f0 !important;
-}
-header[data-testid="stHeader"] {
-    background: rgba(15,17,23,0.95);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
+    font-family: 'Inter', sans-serif;
+}}
+#MainMenu, footer, header {{ visibility: hidden; }}
+[data-testid="stToolbar"] {{ display: none; }}
 
-section[data-testid="stSidebar"] {
-    background: #161b27 !important;
-    color: #e2e8f0 !important;
-    border-right: 1px solid #1e2a3a !important;
-}
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3,
-section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] label {
-    color: #e2e8f0 !important;
-}
-section[data-testid="stSidebar"] .stButton > button {
-    background: #1e2a3a !important;
-    color: #e2e8f0 !important;
-    border: 1px solid #334155 !important;
-    border-radius: 8px !important;
+/* ═══════════════════════════════════════════
+   SIDEBAR — togglable light / dark
+═══════════════════════════════════════════ */
+[data-testid="stSidebar"] {{
+    background: {t["sidebar_bg"]} !important;
+    border-right: 1px solid {t["sidebar_border"]} !important;
+}}
+[data-testid="stSidebar"] * {{
+    color: {t["sidebar_text"]} !important;
+}}
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] small {{
+    color: {t["sidebar_subtext"]} !important;
+}}
+[data-testid="stSidebar"] .stButton > button {{
+    background: {t["sidebar_btn_bg"]} !important;
+    border-color: {t["sidebar_btn_border"]} !important;
+    color: {t["sidebar_btn_color"]} !important;
+    width: 100% !important;
     margin-bottom: 6px !important;
-    transition: all 0.2s ease !important;
-    text-align: left !important;
-    padding: 10px 16px !important;
-}
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background: #2563eb22 !important;
-    border-color: #2563eb !important;
-    color: #60a5fa !important;
-}
-
-[data-testid="stContainer"] {
-    background: #161b27;
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid #1e2a3a;
-    margin-bottom: 14px;
-}
-
-[data-testid="stMetric"] {
-    background: #161b27;
-    border-radius: 10px;
-    padding: 18px;
-    border: 1px solid #1e2a3a;
-}
-[data-testid="stMetricValue"] { color: #f1f5f9 !important; font-weight: 700 !important; font-size: 26px !important; }
-[data-testid="stMetricLabel"] { color: #64748b !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; font-size: 11px !important; }
-
-.stButton > button {
-    background: #1e2a3a !important;
-    color: #e2e8f0 !important;
-    border: 1px solid #334155 !important;
     border-radius: 8px !important;
-    padding: 10px 20px !important;
+    font-size: 13px !important;
     font-weight: 500 !important;
-    transition: all 0.15s ease !important;
-}
-.stButton > button:hover {
-    border-color: #60a5fa55 !important;
-    color: #60a5fa !important;
-}
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%) !important;
-    border-color: #2563eb !important;
-    color: #fff !important;
-    font-weight: 600 !important;
-}
-
-h1, h2, h3 { color: #f1f5f9 !important; font-weight: 700 !important; }
-p, span, div { color: #e2e8f0; }
-
-[data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input,
-[data-testid="stTextArea"] textarea {
-    background: #1e2a3a !important;
-    border-color: #334155 !important;
-    color: #e2e8f0 !important;
-    border-radius: 8px !important;
-}
-[data-testid="stSelectbox"] > div > div {
-    background: #1e2a3a !important;
-    border-color: #334155 !important;
-    border-radius: 8px !important;
-}
-
-#MainMenu, footer { visibility: hidden; }
-</style>
-"""
-
-# ─────────────────────────────────────────────
-# Theme Toggle CSS (for the toggle buttons)
-# ─────────────────────────────────────────────
-TOGGLE_CSS = """
-<style>
-.theme-toggle-container {
-    display: flex;
-    gap: 6px;
-    margin: 8px 0;
-}
-.theme-toggle-btn {
-    flex: 1;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #334155;
-    background: #1e2a3a;
-    color: #94a3b8;
+}}
+[data-testid="stSidebar"] hr {{
+    border-color: {t["sidebar_divider"]} !important;
+}}
+/* Sidebar pills */
+[data-testid="stSidebar"] .pill {{
+    background: {t["pill_bg"]} !important;
+    color: {t["pill_color"]} !important;
+    border-color: {t["pill_border"]} !important;
+}}
+/* Override specific colored pills to keep their semantic color in light mode */
+[data-testid="stSidebar"] .pill-success {{
+    background: #14532d44 !important;
+    color: #16a34a !important;
+    border-color: #16a34a44 !important;
+}}
+[data-testid="stSidebar"] .pill-warning {{
+    background: #78350f44 !important;
+    color: #d97706 !important;
+    border-color: #d9770644 !important;
+}}
+[data-testid="stSidebar"] .pill-info {{
+    background: #1e3a5f44 !important;
+    color: #2563eb !important;
+    border-color: #2563eb44 !important;
+}}
+/* Sidebar toggle label */
+.sidebar-theme-toggle-label {{
     font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: center;
-}
-.theme-toggle-btn:hover {
-    border-color: #60a5fa;
-    color: #60a5fa;
-}
-.theme-toggle-btn.active {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: white;
-}
+    font-weight: 600;
+    color: {t["sidebar_subtext"]};
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 4px;
+    display: block;
+}}
+/* Toggle switch visual */
+[data-testid="stSidebar"] [data-testid="stToggle"] {{
+    accent-color: #16a34a;
+}}
 </style>
-"""
+""", unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
-# Core Functions
-# ─────────────────────────────────────────────
-def inject_theme():
-    """Inject theme based on user preference (dark by default)."""
-    # Initialize theme mode in session state
-    if "theme_mode" not in st.session_state:
-        st.session_state.theme_mode = "dark"
-    
-    # Inject appropriate CSS
-    if st.session_state.theme_mode == "light":
-        st.markdown(LIGHT_CSS, unsafe_allow_html=True)
-    else:
-        st.markdown(DARK_CSS, unsafe_allow_html=True)
-    
-    # Mark as injected
-    st.session_state.theme_injected = True
-
-
-def toggle_theme():
-    """Toggle between dark and light mode."""
-    current = st.session_state.get("theme_mode", "dark")
-    st.session_state.theme_mode = "light" if current == "dark" else "dark"
-    # Clear the injected flag so CSS re-injects on next run
-    st.session_state.pop("theme_injected", None)
-
-
+# ══════════════════════════════════════════════════════════════
+#  THEME TOGGLE WIDGET  (render inside st.sidebar block)
+# ══════════════════════════════════════════════════════════════
 def render_theme_toggle():
-    """Render a theme toggle UI in the sidebar."""
-    st.markdown(TOGGLE_CSS, unsafe_allow_html=True)
-    
-    current = st.session_state.get("theme_mode", "dark")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        is_dark_active = current == "dark"
-        btn_style_dark = "theme-toggle-btn active" if is_dark_active else "theme-toggle-btn"
-        if st.button("🌙 Dark", key="theme_toggle_dark", use_container_width=True):
-            if current != "dark":
-                st.session_state.theme_mode = "dark"
-                st.session_state.pop("theme_injected", None)
-                st.rerun()
-    
-    with col2:
-        is_light_active = current == "light"
-        btn_style_light = "theme-toggle-btn active" if is_light_active else "theme-toggle-btn"
-        if st.button("☀️ Light", key="theme_toggle_light", use_container_width=True):
-            if current != "light":
-                st.session_state.theme_mode = "light"
-                st.session_state.pop("theme_injected", None)
-                st.rerun()
+    """
+    Call this inside `with st.sidebar:` on every page.
+    It renders a toggle that switches the sidebar between dark and light.
+    The main content area is unaffected.
+    """
+    if "sidebar_light_mode" not in st.session_state:
+        st.session_state["sidebar_light_mode"] = False
+
+    current = st.session_state["sidebar_light_mode"]
+    label = "☀️ Light Sidebar" if not current else "🌙 Dark Sidebar"
+
+    new_val = st.toggle(label, value=current, key="sidebar_theme_toggle_widget")
+    if new_val != current:
+        st.session_state["sidebar_light_mode"] = new_val
+        st.rerun()
 
 
-def render_page_header(icon, title, subtitle):
-    """Modern page header used on every dashboard."""
-    mode = st.session_state.get("theme_mode", "dark")
-    
-    if mode == "light":
-        bg = "linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%)"
-        color = "white"
-    else:
-        bg = "linear-gradient(135deg, #1a2744 0%, #0f172a 60%, #162032 100%)"
-        color = "#f1f5f9"
-    
+# ══════════════════════════════════════════════════════════════
+#  PAGE HEADER HELPER  (optional convenience)
+# ══════════════════════════════════════════════════════════════
+def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
     st.markdown(f"""
-    <div style="background: {bg};
-                border-radius: 16px;
-                padding: 28px;
-                color: {color};
-                margin-bottom: 20px;
-                border: 1px solid #1e3a5f;">
-        <h1 style="color: {color}; margin: 0;">{icon} {title}</h1>
-        <p style="opacity: 0.9; margin: 6px 0 0 0;">{subtitle}</p>
+    <div style="
+        background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
+        border-radius: 14px; padding: 28px 32px; margin-bottom: 24px; color: white;
+    ">
+        <div style="font-size: 36px; margin-bottom: 10px;">{icon}</div>
+        <h2 style="margin: 0; font-size: clamp(18px, 3vw, 26px); font-weight: 700;">{title}</h2>
+        { f'<p style="margin: 6px 0 0; opacity: 0.82; font-size: 14px;">{subtitle}</p>' if subtitle else '' }
     </div>
     """, unsafe_allow_html=True)
