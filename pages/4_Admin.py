@@ -11,6 +11,7 @@ from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS
 from utils.db_helpers import supabase, cached_get_profile, send_notification, clear_data_cache
 from src.fraud_engine import check_fraud_risk
+from utils.shared_ui import render_profile_editor_modal
 
 # ─────────────────────────────────────────────
 # Page Config + CSS
@@ -283,16 +284,32 @@ if profile is None or profile.get("role") != "admin":
 # Header
 # ─────────────────────────────────────────────
 now_str = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
+
+# Profile picture for admin header
+_apic = profile.get("profile_image")
+if _apic:
+    _apic_html = f'<img src="data:image/jpeg;base64,{_apic}" style="width:80px;height:80px;border-radius:50%;border:3px solid #60a5fa;object-fit:cover;">'
+else:
+    _apic_html = f'<div style="width:80px;height:80px;border-radius:50%;border:3px solid #60a5fa;background:#1e2a3a;display:flex;align-items:center;justify-content:center;font-size:32px;color:#f1f5f9;font-weight:700;">{profile.get("full_name","A")[0].upper()}</div>'
+
 st.markdown(f"""
 <div class="admin-header">
-    <div class="admin-header-icon">🛡️</div>
-    <div>
+    <div style="flex-shrink:0;position:relative;width:80px;height:80px;">
+        {_apic_html}
+        <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;background:#1d4ed8;border-radius:50%;border:2px solid #0f1117;display:flex;align-items:center;justify-content:center;font-size:12px;" title="Edit Profile">✏️</div>
+    </div>
+    <div style="flex:1;margin-left:20px;">
         <h1>Admin Panel</h1>
         <p>System Administration & User Management · {now_str}</p>
     </div>
     <div class="admin-badge">Super Admin</div>
 </div>
 """, unsafe_allow_html=True)
+
+_ac1, _ac2, _ac3 = st.columns([1, 6, 1])
+with _ac3:
+    if st.button("✏️ Edit Profile", key="admin_header_edit_btn", use_container_width=True):
+        st.session_state.show_profile_editor = True
 
 # ─────────────────────────────────────────────
 # Sidebar
@@ -633,14 +650,6 @@ with tab_docs:
                          st.info("No file URL or path found.")
                          
                  st.markdown('</div>', unsafe_allow_html=True)
-                        if any(ext in file_url.lower() for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
-                            st.image(file_url, caption=doc.get("document_name",""), use_container_width=True)
-                        elif ".pdf" in file_url.lower():
-                            st.markdown(f"[📥 Open PDF in new tab]({file_url})", unsafe_allow_html=False)
-                            st.components.v1.iframe(file_url, height=500, scrolling=True)
-                        else:
-                            st.markdown(f"[📥 Download / Open Document]({file_url})")
-                    st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
 # TAB — DATABASE
@@ -698,7 +707,7 @@ with tab_products:
         filtered_prods = [p for p in filtered_prods if p.get("region") == prod_region]
     
     st.caption(f"**{len(filtered_prods)} product(s)**")
-        for p in filtered_prods:
+    for p in filtered_prods:
         pid = p["id"]
         with st.container(border=True):
             img_col, c1, c2, c3 = st.columns([1, 4, 2, 3])
@@ -1127,6 +1136,10 @@ with tab_settings:
                 if st.button("🗑️ Purge All Notifications", key="purge_notif_btn", use_container_width=True):
                     st.session_state["confirm_purge_notifications"] = True
                     st.rerun()
+
+# ── Show profile editor modal if triggered from header button ──
+if st.session_state.get("show_profile_editor"):
+    render_profile_editor_modal(profile, st.session_state.user.id)
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 4_Admin.py)
