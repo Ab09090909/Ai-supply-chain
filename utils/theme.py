@@ -5,7 +5,7 @@ import streamlit as st
 
 # ═══════════════════════════════════════════════════════════════
 # COLOUR TOKENS
-# ══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 DARK = {
     "sidebar_bg":         "#161b27",
     "sidebar_border":     "#1e2a3a",
@@ -44,7 +44,6 @@ def _get_tokens() -> dict:
 # ═══════════════════════════════════════════════════════════════
 def inject_theme():
     """Call near the top of each page."""
-    # Initialize theme mode if missing
     if "theme_mode" not in st.session_state:
         st.session_state.theme_mode = "dark"
         
@@ -91,8 +90,22 @@ def inject_theme():
         color: #e2e8f0 !important;
         font-family: 'Inter', sans-serif;
     }}
-    #MainMenu, footer, header {{ visibility: hidden; }}
-    [data-testid="stToolbar"] {{ display: none; }}
+    
+    /* FIX: Only hide MainMenu and footer, keep header visible for sidebar toggle */
+    #MainMenu, footer {{ visibility: hidden; }}
+    
+    /* FIX: Ensure sidebar toggle button is always visible */
+    [data-testid="stSidebarCollapsedControl"] {{
+        visibility: visible !important;
+        display: block !important;
+        position: fixed !important;
+        top: 10px !important;
+        right: 10px !important;
+        z-index: 999999 !important;
+        background: #1e2a3a !important;
+        border-radius: 8px !important;
+        padding: 8px !important;
+    }}
 
     /* ═══════════════════════════════════════════
        SIDEBAR — togglable light / dark
