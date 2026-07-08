@@ -50,11 +50,12 @@ def _get_tokens() -> dict:
 # ══════════════════════════════════════════════════════════════
 def inject_theme():
     """
-    Call once near the top of each page (after set_page_config).
+    Call near the top of each page (after set_page_config).
+    Safe to call multiple times — each call re-injects the latest tokens.
     Injects:
       1. Responsive CSS (mobile ≤768 px / desktop > 768 px)
-      2. Sidebar-only theming based on session state toggle
-    Main content area is ALWAYS dark.
+      2. Sidebar-only theming based on sidebar_light_mode session state
+    Main content area is ALWAYS dark — never changes.
     """
     t = _get_tokens()
 
@@ -254,19 +255,34 @@ html, body, [data-testid="stAppViewContainer"] {{
 def render_theme_toggle():
     """
     Call this inside `with st.sidebar:` on every page.
-    It renders a toggle that switches the sidebar between dark and light.
-    The main content area is unaffected.
+    Toggles ONLY the sidebar between light and dark.
+    Main content is always dark — unaffected.
+
+    Uses on_change callback so the toggle state is committed to
+    session_state BEFORE Streamlit re-runs the page — this means
+    it survives navigation between pages with no extra st.rerun().
     """
+    # Initialise the session-state key if this is the first load
     if "sidebar_light_mode" not in st.session_state:
         st.session_state["sidebar_light_mode"] = False
 
-    current = st.session_state["sidebar_light_mode"]
-    label = "☀️ Light Sidebar" if not current else "🌙 Dark Sidebar"
+    def _on_toggle_change():
+        # Mirror widget value to our canonical session-state key
+        st.session_state["sidebar_light_mode"] = st.session_state["_sb_toggle"]
+        # inject_theme() re-runs at top of each page on the next Streamlit
+        # re-run (triggered automatically by the toggle change), so the new
+        # sidebar CSS is applied without an extra st.rerun() call.
 
-    new_val = st.toggle(label, value=current, key="sidebar_theme_toggle_widget")
-    if new_val != current:
-        st.session_state["sidebar_light_mode"] = new_val
-        st.rerun()
+    is_light = st.session_state["sidebar_light_mode"]
+    label = "☀️ Light Sidebar" if not is_light else "🌙 Dark Sidebar"
+
+    st.toggle(
+        label,
+        value=is_light,
+        key="_sb_toggle",
+        on_change=_on_toggle_change,
+        help="Switch the sidebar between light and dark. Main content stays dark.",
+    )
 
 
 # ══════════════════════════════════════════════════════════════
