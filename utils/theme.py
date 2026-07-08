@@ -3,11 +3,12 @@ theme.py — Ethiopian AI Supply Chain Platform
 Full dark/light theme support for both sidebar and main content
 """
 import streamlit as st
+from typing import Dict, Any
 
 # ═══════════════════════════════════════════════════════════════
 # COLOUR TOKENS
 # ═══════════════════════════════════════════════════════════════
-DARK = {
+DARK: Dict[str, str] = {
     "sidebar_bg":         "#161b27",
     "sidebar_border":     "#1e2a3a",
     "sidebar_text":       "#e2e8f0",
@@ -29,7 +30,7 @@ DARK = {
     "input_text":         "#e2e8f0",
 }
 
-LIGHT = {
+LIGHT: Dict[str, str] = {
     "sidebar_bg":         "#f8fafc",
     "sidebar_border":     "#e2e8f0",
     "sidebar_text":       "#1e293b",
@@ -51,22 +52,23 @@ LIGHT = {
     "input_text":         "#1e293b",
 }
 
-def _get_tokens() -> dict:
+def _get_tokens() -> Dict[str, str]:
+    """Get current theme tokens based on session state."""
     return LIGHT if st.session_state.get("sidebar_light_mode", False) else DARK
 
 # ═══════════════════════════════════════════════════════════════
-# INJECT GLOBAL CSS
+# CACHED CSS GENERATION
 # ═══════════════════════════════════════════════════════════════
-def inject_theme():
-    """Call near the top of each page. Applies to both sidebar and main content."""
-    t = _get_tokens()
-    is_light = st.session_state.get("sidebar_light_mode", False)
+@st.cache_data(ttl=3600, show_spinner=False)
+def _generate_css(is_light: bool) -> str:
+    """Generate CSS with caching for better performance."""
+    t = LIGHT if is_light else DARK
     
-    # Determine accent colors based on theme
+    # Determine accent colors
     accent = "#D4A017" if not is_light else "#1B4332"
     accent_light = "#F4C430" if not is_light else "#2D6A4F"
     
-    st.markdown(f"""
+    return f"""
 <style>
 /* ═══════════════════════════════════════════
    RESPONSIVE UTILITIES
@@ -90,6 +92,9 @@ def inject_theme():
     .stButton > button {{ font-size: 12px !important; padding: 8px 10px !important; }}
     .forecast-container {{ padding: 12px !important; }}
     .alert-box {{ font-size: 12px !important; }}
+    .admin-header {{ padding: 16px !important; flex-wrap: wrap; }}
+    .admin-header h1 {{ font-size: 20px !important; }}
+    .admin-badge {{ margin-left: 0 !important; }}
 }}
 
 @media (min-width: 769px) and (max-width: 1024px) {{
@@ -98,12 +103,30 @@ def inject_theme():
 }}
 
 /* ═══════════════════════════════════════════
+   SCROLLBAR STYLING
+═══════════════════════════════════════════ */
+::-webkit-scrollbar {{
+    width: 6px;
+    height: 6px;
+}}
+::-webkit-scrollbar-track {{
+    background: {t["card_bg"]};
+}}
+::-webkit-scrollbar-thumb {{
+    background: {t["card_border"]};
+    border-radius: 3px;
+}}
+::-webkit-scrollbar-thumb:hover {{
+    background: {t["input_border"]};
+}}
+
+/* ═══════════════════════════════════════════
    MAIN CONTENT — dynamic theme
 ═══════════════════════════════════════════ */
 html, body, [data-testid="stAppViewContainer"] {{
     background: {t["main_bg"]} !important;
     color: {t["main_text"]} !important;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }}
 
 [data-testid="stApp"] {{
@@ -113,6 +136,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 /* Main content area */
 [data-testid="stAppViewBlockContainer"] {{
     background: {t["main_bg"]} !important;
+    padding-top: 1rem !important;
 }}
 
 /* Cards and containers */
@@ -123,6 +147,7 @@ html, body, [data-testid="stAppViewContainer"] {{
 /* Headers */
 h1, h2, h3, h4, h5, h6 {{
     color: {t["main_text"]} !important;
+    font-weight: 600 !important;
 }}
 
 /* Paragraphs and captions */
@@ -133,14 +158,21 @@ p, .stCaption, .stMarkdown p {{
 /* Divider */
 hr {{
     border-color: {t["card_border"]} !important;
+    margin: 1rem 0 !important;
 }}
 
 /* Streamlit overrides */
 [data-testid="stMetricValue"] {{
     color: {t["main_text"]} !important;
+    font-weight: 700 !important;
 }}
 
 [data-testid="stMetricLabel"] {{
+    color: {t["sidebar_subtext"]} !important;
+    font-weight: 500 !important;
+}}
+
+[data-testid="stMetricDelta"] {{
     color: {t["sidebar_subtext"]} !important;
 }}
 
@@ -153,6 +185,15 @@ hr {{
     border-color: {t["input_border"]} !important;
     color: {t["input_text"]} !important;
     border-radius: 8px !important;
+    transition: border-color 0.2s ease !important;
+}}
+
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stDateInput"] input:focus {{
+    border-color: {accent} !important;
+    box-shadow: 0 0 0 2px {accent}33 !important;
 }}
 
 [data-testid="stSelectbox"] > div > div {{
@@ -167,26 +208,50 @@ hr {{
     color: {t["input_text"]} !important;
 }}
 
+/* Multi-select */
+[data-testid="stMultiSelect"] > div > div {{
+    background: {t["input_bg"]} !important;
+    border-color: {t["input_border"]} !important;
+    border-radius: 8px !important;
+}}
+
 /* Buttons */
 .stButton > button {{
     border-radius: 8px !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    transition: all 0.15s !important;
+    transition: all 0.15s ease !important;
     background: {t["input_bg"]} !important;
     border: 1px solid {t["input_border"]} !important;
     color: {t["input_text"]} !important;
+    cursor: pointer !important;
+    padding: 0.5rem 1rem !important;
 }}
 
 .stButton > button:hover {{
     border-color: {accent}55 !important;
     color: {accent} !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}}
+
+.stButton > button:active {{
+    transform: translateY(0) !important;
 }}
 
 .stButton > button[kind="primary"] {{
     background: linear-gradient(135deg, {accent} 0%, {accent_light} 100%) !important;
     border-color: {accent} !important;
-    color: #fff !important;
+    color: #ffffff !important;
+}}
+
+.stButton > button[kind="primary"]:hover {{
+    box-shadow: 0 4px 16px {accent}44 !important;
+    transform: translateY(-1px) !important;
+}}
+
+.stButton > button[kind="primary"]:active {{
+    transform: translateY(0) !important;
 }}
 
 /* Tabs */
@@ -194,11 +259,17 @@ hr {{
     font-size: 13px !important;
     font-weight: 500 !important;
     color: {t["sidebar_subtext"]} !important;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s ease !important;
+}}
+
+[data-testid="stTabs"] > div > div > div > button:hover {{
+    color: {t["main_text"]} !important;
 }}
 
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
     color: {accent} !important;
-    border-bottom-color: {accent} !important;
+    border-bottom: 2px solid {accent} !important;
 }}
 
 /* Dataframes */
@@ -210,16 +281,24 @@ hr {{
 [data-testid="stDataFrame"] table {{
     background: {t["card_bg"]} !important;
     color: {t["main_text"]} !important;
+    width: 100% !important;
 }}
 
 [data-testid="stDataFrame"] th {{
     background: {t["card_border"]} !important;
     color: {t["main_text"]} !important;
+    font-weight: 600 !important;
+    padding: 8px 12px !important;
 }}
 
 [data-testid="stDataFrame"] td {{
     background: {t["card_bg"]} !important;
     color: {t["main_text"]} !important;
+    padding: 8px 12px !important;
+}}
+
+[data-testid="stDataFrame"] tr:hover td {{
+    background: {t["input_bg"]} !important;
 }}
 
 /* Metrics */
@@ -228,17 +307,29 @@ hr {{
     border: 1px solid {t["card_border"]} !important;
     border-radius: 10px !important;
     padding: 16px !important;
+    transition: all 0.2s ease !important;
 }}
 
-/* Info/Warning/Success boxes */
+[data-testid="stMetric"]:hover {{
+    border-color: {accent}55 !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05) !important;
+}}
+
+/* Info/Warning/Success/Error boxes */
 .stAlert {{
     border-radius: 8px !important;
+    border-left: 4px solid !important;
+}}
+
+.stAlert > div {{
+    background: transparent !important;
 }}
 
 /* Sidebar */
 [data-testid="stSidebar"] {{
     background: {t["sidebar_bg"]} !important;
     border-right: 1px solid {t["sidebar_border"]} !important;
+    transition: all 0.3s ease !important;
 }}
 
 [data-testid="stSidebar"] * {{
@@ -259,6 +350,12 @@ hr {{
     border-radius: 8px !important;
     font-size: 13px !important;
     font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+}}
+
+[data-testid="stSidebar"] .stButton > button:hover {{
+    border-color: {accent}55 !important;
+    color: {accent} !important;
 }}
 
 [data-testid="stSidebar"] hr {{
@@ -303,12 +400,13 @@ hr {{
     border: 1px solid {t["card_border"]} !important;
     border-radius: 10px;
     padding: 20px 24px;
-    transition: border-color 0.2s;
+    transition: all 0.2s ease;
     height: 100%;
 }}
 
 .kpi-card:hover {{
     border-color: {accent}55 !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05) !important;
 }}
 
 .kpi-label {{
@@ -324,7 +422,7 @@ hr {{
     font-size: 28px;
     font-weight: 700;
     color: {t["main_text"]} !important;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
     line-height: 1;
 }}
 
@@ -361,7 +459,7 @@ hr {{
 
 /* Price tag */
 .price-tag {{
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
     font-size: 18px;
     font-weight: 700;
     color: {accent} !important;
@@ -372,6 +470,11 @@ hr {{
     background: #7f1d1d44 !important;
     border: 1px solid #ef444455 !important;
     color: #f87171 !important;
+}}
+
+.danger-btn > button:hover {{
+    background: #7f1d1d66 !important;
+    border-color: #ef4444 !important;
 }}
 
 /* Confirm box */
@@ -398,7 +501,7 @@ hr {{
 .pill-warning {{ background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }}
 .pill-danger  {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
 .pill-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
-.pill-neutral {{ background: #1e293b; color: #94a3b8; border: 1px solid #334155; }}
+.pill-neutral {{ background: {t["pill_bg"]}; color: {t["pill_color"]}; border: 1px solid {t["pill_border"]}; }}
 .pill-purple  {{ background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }}
 
 /* Match bar */
@@ -541,7 +644,7 @@ hr {{
     border-radius: 10px;
     padding: 16px 20px;
     margin-bottom: 10px;
-    transition: border-color 0.15s;
+    transition: all 0.15s ease;
 }}
 .record-card:hover {{ border-color: {accent}55; }}
 .record-name {{
@@ -612,8 +715,35 @@ hr {{
         max-height: 95vh;
     }}
 }}
+
+/* Skeleton loading animation */
+@keyframes shimmer {{
+    0% {{ background-position: -200% 0; }}
+    100% {{ background-position: 200% 0; }}
+}}
+.skeleton {{
+    background: linear-gradient(90deg, {t["card_border"]} 25%, {t["input_bg"]} 50%, {t["card_border"]} 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}}
+
+/* Toast/Notification styles */
+.stToast {{
+    border-radius: 10px !important;
+    border-left: 4px solid {accent} !important;
+}}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+# ═══════════════════════════════════════════════════════════════
+# INJECT GLOBAL CSS
+# ═══════════════════════════════════════════════════════════════
+def inject_theme():
+    """Call near the top of each page. Applies to both sidebar and main content."""
+    is_light = st.session_state.get("sidebar_light_mode", False)
+    css = _generate_css(is_light)
+    st.markdown(css, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 # THEME TOGGLE WIDGET
@@ -626,21 +756,111 @@ def render_theme_toggle():
     is_light = st.session_state.sidebar_light_mode
     label = "☀️ Light Theme" if not is_light else "🌙 Dark Theme"
     
-    if st.button(label, key="theme_toggle_btn_global", use_container_width=True):
+    # Use a unique key with a counter to avoid key conflicts
+    if st.button(label, key=f"theme_toggle_{hash(label)}", use_container_width=True):
         st.session_state.sidebar_light_mode = not is_light
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE HEADER HELPER
+# PAGE HEADER HELPERS
 # ═══════════════════════════════════════════════════════════════
 def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
+    """Render a styled page header with icon and subtitle."""
     st.markdown(f"""
     <div style="
-    background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-    border-radius: 14px; padding: 28px 32px; margin-bottom: 24px; color: white;
+        background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
+        border-radius: 14px; 
+        padding: 28px 32px; 
+        margin-bottom: 24px; 
+        color: white;
     ">
-    <div style="font-size: 36px; margin-bottom: 10px;">{icon}</div>
-    <h2 style="margin: 0; font-size: clamp(18px, 3vw, 26px); font-weight: 700;">{title}</h2>
-    {f'<p style="margin: 6px 0 0; opacity: 0.82; font-size: 14px;">{subtitle}</p>' if subtitle else ''}
+        <div style="font-size: 36px; margin-bottom: 10px;">{icon}</div>
+        <h2 style="margin: 0; font-size: clamp(18px, 3vw, 26px); font-weight: 700; color: white;">
+            {title}
+        </h2>
+        {f'<p style="margin: 6px 0 0; opacity: 0.82; font-size: 14px; color: white;">{subtitle}</p>' if subtitle else ''}
     </div>
     """, unsafe_allow_html=True)
+
+def render_kpi_card(label: str, value: str, subtext: str = "", icon: str = ""):
+    """Render a KPI card with consistent styling."""
+    st.markdown(f"""
+    <div class="kpi-card">
+        {f'<div style="font-size: 24px; margin-bottom: 8px;">{icon}</div>' if icon else ''}
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-value">{value}</div>
+        {f'<div class="kpi-sub">{subtext}</div>' if subtext else ''}
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_section_title(title: str):
+    """Render a section title with consistent styling."""
+    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+
+def render_alert(message: str, alert_type: str = "info"):
+    """Render an alert box with consistent styling."""
+    type_map = {
+        "info": "alert-info",
+        "success": "alert-success",
+        "warning": "alert-warning",
+        "error": "alert-danger"
+    }
+    css_class = type_map.get(alert_type, "alert-info")
+    st.markdown(f'<div class="alert-box {css_class}">{message}</div>', unsafe_allow_html=True)
+
+def render_pill(text: str, pill_type: str = "neutral"):
+    """Render a pill/badge with consistent styling."""
+    st.markdown(f'<span class="pill pill-{pill_type}">{text}</span>', unsafe_allow_html=True)
+
+def render_price(amount: float, currency: str = "ETB"):
+    """Render a price with consistent styling."""
+    st.markdown(f'<span class="price-tag">{currency} {amount:,.2f}</span>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════
+# THEME UTILITY FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+def get_current_theme() -> str:
+    """Get the current theme name."""
+    return "light" if st.session_state.get("sidebar_light_mode", False) else "dark"
+
+def is_dark_mode() -> bool:
+    """Check if dark mode is active."""
+    return not st.session_state.get("sidebar_light_mode", False)
+
+def is_light_mode() -> bool:
+    """Check if light mode is active."""
+    return st.session_state.get("sidebar_light_mode", False)
+
+def get_accent_color() -> str:
+    """Get the current accent color based on theme."""
+    is_light = st.session_state.get("sidebar_light_mode", False)
+    return "#D4A017" if not is_light else "#1B4332"
+
+def get_text_color() -> str:
+    """Get the current text color based on theme."""
+    t = _get_tokens()
+    return t["main_text"]
+
+def get_background_color() -> str:
+    """Get the current background color based on theme."""
+    t = _get_tokens()
+    return t["main_bg"]
+
+# ═══════════════════════════════════════════════════════════════
+# RESPONSIVE UTILITY
+# ═══════════════════════════════════════════════════════════════
+def responsive_columns(cols: int) -> list:
+    """
+    Create responsive columns that stack on mobile.
+    
+    Args:
+        cols: Number of columns to create
+    
+    Returns:
+        List of column objects
+    """
+    return st.columns(cols)
+
+def mobile_responsive_container(use_container_width: bool = True) -> st.container:
+    """Create a container with mobile-responsive styling."""
+    return st.container()
