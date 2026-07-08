@@ -10,7 +10,7 @@ from utils.theme import inject_theme, render_theme_toggle
 from utils.db_helpers import supabase, clear_data_cache, send_notification
 from utils.constants import REGIONS, SECTORS
 from utils.verification import check_verification_status, render_document_upload
-from utils.shared_ui import render_browse_tab, render_notifications_tab, render_profile_edit_tab
+from utils.shared_ui import render_browse_tab, render_notifications_tab, render_profile_edit_tab, render_profile_editor_modal
 from utils.pdf_generator import generate_agreement_pdf, generate_agreement_preview_html
 
 # ─────────────────────────────────────────────
@@ -219,16 +219,32 @@ now_str = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
 # Header
 # ─────────────────────────────────────────────
 verif_badge = '<span class="dash-badge">✓ Verified</span>' if verif_status["is_verified"] else '<span class="dash-badge" style="background:#78350f44;border-color:#d9770644;color:#fbbf24;">⏳ Pending</span>'
+
+# Profile picture for header
+_cpic = profile.get("profile_image")
+if _cpic:
+    _cpic_html = f'<img src="data:image/jpeg;base64,{_cpic}" style="width:80px;height:80px;border-radius:50%;border:3px solid #7c3aed;object-fit:cover;">'
+else:
+    _cpic_html = f'<div style="width:80px;height:80px;border-radius:50%;border:3px solid #7c3aed;background:#1e2a3a;display:flex;align-items:center;justify-content:center;font-size:32px;color:#f1f5f9;font-weight:700;">{profile.get("full_name","C")[0].upper()}</div>'
+
 st.markdown(f"""
 <div class="dash-header">
-    <div class="dash-header-icon">🛒</div>
-    <div>
+    <div style="flex-shrink:0;position:relative;width:80px;height:80px;">
+        {_cpic_html}
+        <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;background:#7c3aed;border-radius:50%;border:2px solid #0f1117;display:flex;align-items:center;justify-content:center;font-size:12px;" title="Edit Profile">✏️</div>
+    </div>
+    <div style="flex:1;margin-left:20px;">
         <h1>Customer Dashboard</h1>
         <p>Welcome back, <strong>{profile.get('full_name','Customer')}</strong> · {now_str}</p>
     </div>
     {verif_badge}
 </div>
 """, unsafe_allow_html=True)
+
+_cc1, _cc2, _cc3 = st.columns([1, 6, 1])
+with _cc3:
+    if st.button("✏️ Edit Profile", key="customer_header_edit_btn", use_container_width=True):
+        st.session_state.show_profile_editor = True
 
 # ─────────────────────────────────────────────
 # Sidebar
@@ -693,6 +709,14 @@ with tab_ai_insights:
 # ── NOTIFICATIONS & PROFILE ──
 with tab_notif:
     render_notifications_tab(user_id)
+
+# ── PROFILE ──
+with tab_profile:
+    render_profile_editor_modal(profile, user_id)
+
+# ── Show profile editor modal if triggered from header button ──
+if st.session_state.get("show_profile_editor"):
+    render_profile_editor_modal(profile, user_id)
 
 # ════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 3_customer.py)
