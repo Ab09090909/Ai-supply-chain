@@ -1,4 +1,4 @@
-"""Producer Dashboard — Professional dark design matching Admin panel."""
+"""Producer Dashboard — Professional dark design with Hamburger Menu."""
 import sys
 import os
 import base64
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 try:
     from utils.theme import inject_theme, render_theme_toggle
-    from utils.constants import REGIONS, SECTORS, UNITS, ROLE_ICONS
+    from utils.constants import REGIONS, SECTORS, UNITS
     from utils.db_helpers import supabase, cached_query, clear_data_cache, send_notification
     from utils.verification import check_verification_status, render_document_upload
     from utils.shared_ui import (
@@ -49,11 +49,11 @@ st.set_page_config(
     page_title="Producer Dashboard",
     page_icon="🚜",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # ─────────────────────────────────────────────
 if "initialized_producer" not in st.session_state:
     st.session_state.initialized_producer = True
@@ -61,6 +61,7 @@ if "initialized_producer" not in st.session_state:
     st.session_state.match_product = None
     st.session_state.forecast_result = None
     st.session_state.forecast_params = None
+    st.session_state.mobile_menu_open = False
 
 # ─────────────────────────────────────────────
 # THEME INJECTION
@@ -68,133 +69,255 @@ if "initialized_producer" not in st.session_state:
 inject_theme()
 
 # ─────────────────────────────────────────────
-# CSS STYLES (Condensed for performance)
+# CSS - HIDE SIDEBAR, SHOW HAMBURGER MENU
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-html, body, [data-testid="stAppViewContainer"] {
-    background: #0f1117 !important;
-    color: #e2e8f0;
-    font-family: 'Inter', sans-serif;
+/* ─── HIDE DEFAULT STREAMLIT SIDEBAR ─── */
+[data-testid="stSidebar"] {
+    display: none !important;
+}
+[data-testid="stSidebarContent"] {
+    display: none !important;
+}
+[data-testid="collapsedControl"] {
+    display: none !important;
 }
 
+/* ─── HIDE STREAMLIT BRANDING ─── */
+#MainMenu, footer, header {
+    visibility: hidden !important;
+}
+[data-testid="stToolbar"] {
+    display: none !important;
+}
+
+/* ─── HAMBURGER MENU BUTTON ─── */
+.hamburger-btn {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 999997;
+    background: #1B4332;
+    color: white;
+    border: 2px solid #2D6A4F;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+.hamburger-btn:hover {
+    background: #2D6A4F;
+}
+
+/* ─── SIDEBAR OVERLAY ─── */
+.mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 999998;
+}
+.mobile-overlay.active {
+    display: block;
+}
+
+/* ─── CUSTOM SIDEBAR ─── */
+.mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100%;
+    background: #161b27;
+    z-index: 999999;
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid #1e2a3a;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+}
+.mobile-sidebar.open {
+    transform: translateX(0);
+}
+
+/* ─── CLOSE BUTTON ─── */
+.close-sidebar-btn {
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
+    font-size: 24px;
+    cursor: pointer;
+    float: right;
+    padding: 5px 10px;
+}
+.close-sidebar-btn:hover {
+    color: #f87171;
+}
+
+/* ─── SIDEBAR PROFILE ─── */
+.sidebar-profile {
+    text-align: center;
+    margin: 10px 0 20px 0;
+}
+.sidebar-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #1e2a3a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-size: 24px;
+    color: #f1f5f9;
+    font-weight: 700;
+    border: 2px solid #D4A017;
+}
+.sidebar-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 8px;
+    color: #e2e8f0;
+}
+.sidebar-role {
+    font-size: 12px;
+    color: #94a3b8;
+}
+.sidebar-divider {
+    border: none;
+    border-top: 1px solid #1e2a3a;
+    margin: 12px 0;
+}
+
+/* ─── SIDEBAR NAVIGATION BUTTONS ─── */
+.sidebar-nav-btn {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 4px;
+    background: #1e2a3a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+}
+.sidebar-nav-btn:hover {
+    border-color: #D4A017;
+    color: #D4A017;
+}
+
+.sidebar-nav-btn-logout {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 4px;
+    background: #7f1d1d44;
+    border: 1px solid #ef444455;
+    border-radius: 8px;
+    color: #f87171;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+}
+.sidebar-nav-btn-logout:hover {
+    background: #7f1d1d66;
+    border-color: #ef4444;
+}
+
+.sidebar-section-title {
+    font-weight: 600;
+    color: #94a3b8;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    margin-top: 12px;
+}
+
+/* ─── PILL STYLES ─── */
+.pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+    margin: 2px 0;
+}
+.pill-success { background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }
+.pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
+.pill-danger { background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }
+.pill-info { background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }
+.pill-neutral { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+
+/* ─── MAIN CONTENT ─── */
+[data-testid="stAppViewBlockContainer"] {
+    padding-top: 70px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+}
+
+/* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
-    .main > div { padding-left: 1rem !important; padding-right: 1rem !important; }
-    .dash-header { flex-direction: column !important; padding: 16px !important; text-align: center; }
-    .kpi-card { padding: 12px !important; }
-    [data-testid="stSidebar"] { width: 280px; }
-    div.stButton > button { width: 100%; }
-    div[data-testid="stHorizontalBlock"] { flex-direction: column; }
-    .record-card { padding: 12px !important; }
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 70px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    [data-testid="stTabs"] > div > div > div > button {
+        font-size: 12px !important;
+        padding: 6px 10px !important;
+        white-space: nowrap !important;
+    }
+    [data-testid="stTabs"] > div > div {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    div.stButton > button {
+        width: 100% !important;
+    }
 }
 
 @media (min-width: 769px) {
-    .main > div { padding-left: 2rem; padding-right: 2rem; }
+    [data-testid="stAppViewBlockContainer"] {
+        padding-top: 80px !important;
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+    }
 }
 
-#MainMenu, footer, header { visibility: hidden; }
-[data-testid="stToolbar"] { display: none; }
-
-.dash-header {
-    background: linear-gradient(135deg, #0d2b1e 0%, #0f1117 60%, #122010 100%);
-    border: 1px solid #1a3d2b;
-    border-radius: 12px;
-    padding: 24px 32px;
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-wrap: wrap;
-}
-.dash-header-icon { font-size: 40px; line-height: 1; }
-.dash-header h1 { margin: 0; font-size: 26px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.3px; }
-.dash-header p { margin: 4px 0 0; font-size: 13px; color: #64748b; }
-.dash-badge {
-    margin-left: auto;
-    background: #14532d44;
-    border: 1px solid #16a34a44;
-    color: #4ade80;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 20px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.kpi-card {
-    background: #161b27;
-    border: 1px solid #1e2a3a;
-    border-radius: 10px;
-    padding: 20px 24px;
-    transition: border-color 0.2s;
-    height: 100%;
-}
-.kpi-card:hover { border-color: #16a34a55; }
-.kpi-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-.kpi-value { font-size: 28px; font-weight: 700; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.kpi-sub { font-size: 12px; color: #64748b; margin-top: 6px; }
-
-.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.3px; }
-.pill-success  { background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }
-.pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
-.pill-danger  { background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }
-.pill-info    { background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }
-.pill-neutral { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
-
-.record-card {
-    background: #161b27;
-    border: 1px solid #1e2a3a;
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 10px;
-    transition: border-color 0.15s;
-}
-.record-card:hover { border-color: #16a34a55; }
-
-.section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #475569;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 24px 0 14px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1e2a3a;
-}
-
-.match-bar-bg { background: #1e2a3a; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }
-.match-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-
-.price-tag {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 18px;
-    font-weight: 700;
-    color: #4ade80;
-}
-
-.alert-box { border-radius: 8px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; border: 1px solid; }
-.alert-warning { background: #78350f22; border-color: #d9770666; color: #fbbf24; }
-.alert-info    { background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }
-.alert-success { background: #14532d22; border-color: #16a34a66; color: #4ade80; }
-.alert-danger  { background: #7f1d1d22; border-color: #ef444466; color: #f87171; }
-
-.confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
-
-[data-testid="stTabs"] > div > div > div > button {
+/* ─── BUTTONS ─── */
+.stButton > button {
+    border-radius: 8px !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    color: #64748b !important;
-    padding: 8px 16px !important;
+    transition: all 0.15s ease !important;
+    background: #1e2a3a !important;
+    border: 1px solid #334155 !important;
+    color: #e2e8f0 !important;
+    cursor: pointer !important;
 }
-[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
-    color: #4ade80 !important;
-    border-bottom-color: #16a34a !important;
+.stButton > button:hover {
+    border-color: #D4A01755 !important;
+    color: #D4A017 !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #D4A017 0%, #F4C430 100%) !important;
+    border-color: #D4A017 !important;
+    color: #1B4332 !important;
 }
 
+/* ─── INPUTS ─── */
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
 [data-testid="stTextArea"] textarea {
@@ -206,35 +329,75 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stSelectbox"] > div > div {
     background: #1e2a3a !important;
     border-color: #334155 !important;
+    color: #e2e8f0 !important;
     border-radius: 8px !important;
 }
 
-.stButton > button {
-    border-radius: 8px !important;
+/* ─── TABS ─── */
+[data-testid="stTabs"] > div > div > div > button {
     font-size: 13px !important;
     font-weight: 500 !important;
-    transition: all 0.15s !important;
-    background: #1e2a3a !important;
-    border: 1px solid #334155 !important;
-    color: #e2e8f0 !important;
-    cursor: pointer !important;
+    color: #64748b !important;
+    padding: 8px 16px !important;
 }
-.stButton > button:hover { border-color: #4ade8055 !important; color: #4ade80 !important; }
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #166534 0%, #15803d 100%) !important;
-    border-color: #16a34a !important;
-    color: #fff !important;
-}
-.stButton > button[kind="primary"]:hover {
-    opacity: 0.9 !important;
+[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
+    color: #D4A017 !important;
+    border-bottom: 2px solid #D4A017 !important;
 }
 
-.danger-btn > button {
-    background: #7f1d1d44 !important;
-    border: 1px solid #ef444455 !important;
-    color: #f87171 !important;
+/* ─── KPI CARDS ─── */
+.kpi-card {
+    background: #161b27 !important;
+    border: 1px solid #1e2a3a !important;
+    border-radius: 10px;
+    padding: 16px 20px;
+    height: 100%;
+}
+.kpi-label { font-size: 11px; font-weight: 600; color: #475569 !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+.kpi-value { font-size: 24px; font-weight: 700; color: #f1f5f9 !important; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+.kpi-sub { font-size: 12px; color: #64748b !important; margin-top: 6px; }
+
+/* ─── ALERT BOXES ─── */
+.alert-box { border-radius: 8px; padding: 12px 16px; font-size: 13px; margin-bottom: 12px; border: 1px solid; }
+.alert-warning { background: #78350f22; border-color: #d9770666; color: #fbbf24; }
+.alert-danger { background: #7f1d1d22; border-color: #ef444466; color: #f87171; }
+.alert-info { background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }
+.alert-success { background: #14532d22; border-color: #16a34a66; color: #4ade80; }
+
+/* ─── SECTION TITLE ─── */
+.section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569 !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 20px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e2a3a;
 }
 
+/* ─── PRICE TAG ─── */
+.price-tag { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: #D4A017 !important; }
+
+/* ─── CONFIRM BOX ─── */
+.confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
+
+/* ─── MATCH BAR ─── */
+.match-bar-bg { background: #1e2a3a; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }
+.match-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+/* ─── RECORD CARDS ─── */
+.record-card {
+    background: #161b27;
+    border: 1px solid #1e2a3a;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+}
+.record-card:hover { border-color: #D4A01755; }
+
+/* ─── FORECAST CONTAINER ─── */
 .forecast-container {
     background: #161b27;
     border: 1px solid #1e2a3a;
@@ -242,25 +405,136 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 20px;
     margin-top: 16px;
 }
-
-/* Loading spinner color */
-.stSpinner > div {
-    border-color: #4ade80 !important;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0f1117; }
-::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #334155; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# HAMBURGER MENU BUTTON
+# ─────────────────────────────────────────────────────────────
+def render_hamburger_button():
+    """Render the hamburger menu button."""
+    st.markdown('''
+    <button class="hamburger-btn" onclick="
+        var sidebar = document.getElementById('mobileSidebar');
+        var overlay = document.getElementById('mobileOverlay');
+        if (sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        } else {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+        }
+    ">☰</button>
+    <div class="mobile-overlay" id="mobileOverlay" onclick="
+        document.getElementById('mobileSidebar').classList.remove('open');
+        this.classList.remove('active');
+    "></div>
+    ''', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# CUSTOM SIDEBAR
+# ─────────────────────────────────────────────────────────────
+def render_custom_sidebar(profile, user_id, role):
+    """Render custom sidebar with hamburger menu."""
+    
+    if not profile:
+        sidebar_html = '''
+        <div class="mobile-sidebar" id="mobileSidebar">
+            <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
+            <div class="sidebar-profile">
+                <div class="sidebar-avatar">🔐</div>
+                <div class="sidebar-name">Not Signed In</div>
+                <div class="sidebar-role">Please sign in</div>
+            </div>
+            <hr class="sidebar-divider">
+            <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
+        </div>
+        '''
+        st.markdown(sidebar_html, unsafe_allow_html=True)
+        return
+    
+    name = profile.get("full_name", "User")
+    region = profile.get("region", "N/A")
+    role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
+    
+    sidebar_html = f'''
+    <div class="mobile-sidebar" id="mobileSidebar">
+        <button class="close-sidebar-btn" onclick="document.getElementById('mobileSidebar').classList.remove('open'); document.getElementById('mobileOverlay').classList.remove('active');">✕</button>
+        
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar">{name[0].upper()}</div>
+            <div class="sidebar-name">{name}</div>
+            <div class="sidebar-role">{role_icon} {role.capitalize()} · {region}</div>
+        </div>
+        
+        <hr class="sidebar-divider">
+        
+        <div class="sidebar-section-title">📊 Navigation</div>
+        <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
+    '''
+    
+    # Role-specific pages
+    nav_pages = {
+        "producer": ("🚜 Producer", "pages/1_producer.py"),
+        "merchant": ("🏬 Merchant", "pages/2_merchant.py"),
+        "customer": ("🛒 Customer", "pages/3_customer.py"),
+        "admin": ("🛡️ Admin", "pages/4_Admin.py")
+    }
+    
+    if role in nav_pages:
+        label, page = nav_pages[role]
+        sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.location.href=\'{page}\'">{label}</button>'
+    
+    sidebar_html += f'''
+        <hr class="sidebar-divider">
+        <div class="sidebar-section-title">📌 Status</div>
+    '''
+    
+    # Verification status
+    try:
+        verif_status = check_verification_status(user_id)
+        if verif_status.get("is_verified", False):
+            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-success">✅ Verified</span></div>'
+        elif verif_status.get("has_documents", False):
+            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-warning">⏳ Pending</span></div>'
+        else:
+            sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-info">📄 Verify</span></div>'
+    except Exception:
+        sidebar_html += '<div style="margin-bottom: 8px;"><span class="pill pill-neutral">⚠️ Unknown</span></div>'
+    
+    sidebar_html += f'''
+        <hr class="sidebar-divider">
+        <button class="sidebar-nav-btn-logout" onclick="document.getElementById('logoutForm').submit();">🚪 Log Out</button>
+    </div>
+    '''
+    
+    st.markdown(sidebar_html, unsafe_allow_html=True)
+    
+    # Logout form
+    st.markdown('''
+    <form id="logoutForm" method="post" action="">
+        <input type="hidden" name="logout" value="true">
+    </form>
+    ''', unsafe_allow_html=True)
+    
+    if st.query_params.get("logout") == "true":
+        try:
+            from utils.auth import sign_out
+            sign_out()
+            st.session_state.user = None
+            st.session_state.profile = None
+            st.session_state.authenticated = False
+            st.session_state.user_role = None
+            clear_data_cache()
+            st.query_params.clear()
+            st.rerun()
+        except Exception:
+            pass
+
+# ─────────────────────────────────────────────────────────────
 # AUTH GUARD
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 def check_auth():
-    """Check if user is authenticated and has producer role."""
     if st.session_state.get("user") is None:
         st.warning("⚠️ Please sign in first.")
         st.page_link("app.py", label="← Go to Login", icon="🔐")
@@ -279,87 +553,51 @@ def check_auth():
 if not check_auth():
     st.stop()
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # GET USER DATA
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 profile = st.session_state.get("profile", {})
 user_id = st.session_state.user.id
 verif_status = check_verification_status(user_id)
 now_str = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
 
-# ─────────────────────────────────────────────
-# HEADER WITH PROFILE PICTURE
-# ─────────────────────────────────────────────
-verif_badge = (
-    '<span class="dash-badge">✓ Verified</span>' 
-    if verif_status.get("is_verified", False) 
-    else '<span class="dash-badge" style="background:#78350f44;border-color:#d9770644;color:#fbbf24;">⏳ Pending</span>'
-)
+# ─────────────────────────────────────────────────────────────
+# RENDER HAMBURGER AND SIDEBAR
+# ─────────────────────────────────────────────────────────────
+render_hamburger_button()
+render_custom_sidebar(profile, user_id, "producer")
+
+# ─────────────────────────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────────────────────────
+verif_badge = '<span class="pill pill-success">✓ Verified</span>' if verif_status["is_verified"] else '<span class="pill pill-warning">⏳ Pending</span>'
 
 profile_pic = profile.get("profile_image")
 if profile_pic:
-    profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">'
+    profile_pic_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #D4A017; object-fit: cover;">'
 else:
-    name_initial = profile.get("full_name", "U")[0].upper()
-    profile_pic_html = f'<div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #f1f5f9; font-weight: 700;">{name_initial}</div>'
+    profile_pic_html = f'<div style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #D4A017; background: #1e2a3a; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #f1f5f9; font-weight: 700;">{profile.get("full_name", "U")[0].upper()}</div>'
 
 st.markdown(f"""
-<div class="dash-header">
-    <div style="flex-shrink: 0; position: relative; width: 80px; height: 80px;">
+<div style="background: linear-gradient(135deg, #0d2b1e 0%, #0f1117 60%, #122010 100%);
+            border: 1px solid #1a3d2b; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+    <div style="flex-shrink: 0; position: relative; width: 60px; height: 60px;">
         {profile_pic_html}
     </div>
-    <div style="flex: 1; margin-left: 20px;">
-        <h1>🚜 Producer Dashboard</h1>
-        <p>Welcome back, <strong>{profile.get('full_name', 'Producer')}</strong> · 📍 {profile.get('region', 'N/A')} · {now_str}</p>
+    <div style="flex: 1;">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #f1f5f9;">🚜 Producer Dashboard</h1>
+        <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">
+            Welcome back, <strong>{profile.get('full_name', 'Producer')}</strong> · 📍 {profile.get('region', 'N/A')} · {now_str}
+        </p>
     </div>
-    {verif_badge}
+    <div>{verif_badge}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Profile edit button
-if st.button("✏️ Edit Profile", key="header_edit_profile_btn"):
-    st.session_state.show_profile_editor = True
-    st.rerun()
-
-# ─────────────────────────────────────────────
-# SIDEBAR
-# ─────────────────────────────────────────────
-with st.sidebar:
-    render_theme_toggle()
-    st.divider()
-    
-    st.markdown("### 🚜 Quick Actions")
-    if st.button("🔄 Refresh Data", use_container_width=True):
-        clear_data_cache()
-        st.rerun()
-    
-    st.divider()
-    
-    st.markdown("### 📌 Account Status")
-    if verif_status.get("is_verified", False):
-        st.markdown('<div class="pill pill-success">● Account Verified</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="pill pill-warning">● Pending Verification</div>', unsafe_allow_html=True)
-    st.markdown('<div class="pill pill-info">● AI Matching Ready</div>', unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # Product stats
-    try:
-        my_prods_sidebar = cached_query("products", filters={"producer_id": user_id}, limit=500)
-        active_count = sum(1 for p in my_prods_sidebar if p.get("is_available", False))
-        st.markdown(f"**📦 {len(my_prods_sidebar)}** products listed")
-        st.markdown(f"**🟢 {active_count}** active")
-    except Exception:
-        st.markdown("📦 Products: Unable to load")
-    
-    st.divider()
-    st.caption(f"👤 {profile.get('full_name', 'Producer')}")
-    st.caption(f"📍 {profile.get('region', 'N/A')}")
-
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # VERIFICATION GATE
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 if not verif_status.get("is_verified", False):
     tab_upload, tab_browse = st.tabs(["📄 Upload Documents", "🛒 Browse (Read Only)"])
     with tab_upload:
@@ -369,9 +607,9 @@ if not verif_status.get("is_verified", False):
         render_browse_tab("producer", profile)
     st.stop()
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # TABS
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 (tab_overview, tab_products, tab_demand, tab_incoming,
  tab_match, tab_agree, tab_history, tab_notif, tab_profile) = st.tabs([
     "📊 Overview", "📦 My Products", "📈 Demand Forecast",
@@ -386,7 +624,6 @@ with tab_overview:
     try:
         my_products_all = cached_query("products", filters={"producer_id": user_id}, limit=500)
         
-        # Get orders for producer's products
         try:
             product_ids = [p["id"] for p in my_products_all]
             if product_ids:
@@ -396,8 +633,7 @@ with tab_overview:
                 my_orders_all = orders_response.data if orders_response else []
             else:
                 my_orders_all = []
-        except Exception as e:
-            logger.error(f"Order fetch error: {e}")
+        except Exception:
             my_orders_all = []
         
         total_val = sum(p.get("price_birr", 0) * p.get("quantity", 0) for p in my_products_all)
@@ -426,15 +662,11 @@ with tab_overview:
                 s = p.get("sector", "Other")
                 sector_counts[s] = sector_counts.get(s, 0) + 1
             df_sector = pd.DataFrame({"Sector": list(sector_counts.keys()), "Count": list(sector_counts.values())})
-            st.bar_chart(df_sector.set_index("Sector"), height=200, color="#16a34a")
-        
+            st.bar_chart(df_sector.set_index("Sector"), height=200, color="#D4A017")
     except Exception as e:
-        logger.error(f"Overview error: {e}")
         st.error(f"⚠️ Error loading overview: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — MY PRODUCTS (Truncated for brevity - same as original but with error handling)
-# ══════════════════════════════════════════════
+# ─── PRODUCTS TAB ───
 with tab_products:
     try:
         st.markdown('<div class="section-title">Product Listings</div>', unsafe_allow_html=True)
@@ -452,7 +684,6 @@ with tab_products:
                 st.markdown(f'<div class="kpi-card"><div class="kpi-label">Inventory Value</div><div class="kpi-value">{total_val2:,.0f}</div><div class="kpi-sub">Birr</div></div>', unsafe_allow_html=True)
             st.markdown("")
         
-        # Add Product Form
         with st.expander("➕ Add New Product", expanded=not bool(my_products)):
             with st.form("add_product_form", clear_on_submit=True):
                 c1, c2 = st.columns(2)
@@ -462,15 +693,13 @@ with tab_products:
                     available_grades = get_grades_for_product(new_sector, new_name) if new_sector else ["A", "B", "C"]
                     new_grade_ui = st.selectbox("Quality Grade *", available_grades)
                     new_grade_db = map_grade_to_db(new_grade_ui)
-                    new_region = st.selectbox("Region *", REGIONS,
-                        index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0)
+                    new_region = st.selectbox("Region *", REGIONS, index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0)
                 with c2:
                     new_qty = st.number_input("Quantity *", min_value=0.1, value=1.0, step=0.5)
                     new_unit = st.selectbox("Unit *", UNITS)
                     use_ai_price = st.checkbox("🤖 Auto-suggest price using AI", value=False)
                     new_price = st.number_input("Price (Birr) *", min_value=1.0, value=100.0, step=10.0)
                     new_avail = st.checkbox("List as Available", value=True)
-                
                 new_image = st.file_uploader("📷 Product Image (Recommended)", type=["jpg", "jpeg", "png"], key="prod_img_upload")
                 new_image_b64 = None
                 if new_image:
@@ -478,10 +707,8 @@ with tab_products:
                         new_image_b64 = base64.b64encode(new_image.read()).decode("utf-8")
                     except Exception:
                         st.warning("Could not process image.")
-                
                 new_desc = st.text_area("Description (optional)", height=80, placeholder="Describe quality, harvest details, storage…")
                 submitted = st.form_submit_button("✅ Add Product", type="primary", use_container_width=True)
-                
                 if submitted:
                     if not new_name.strip():
                         st.error("Product name is required.")
@@ -502,7 +729,6 @@ with tab_products:
                                         st.success(f"💡 AI Recommended Price: {final_price:,.0f} Birr/{new_unit}")
                                     except Exception as e:
                                         st.warning(f"AI price suggestion failed: {e}")
-                            
                             data = {
                                 "producer_id": user_id,
                                 "product_name": new_name.strip(),
@@ -517,7 +743,6 @@ with tab_products:
                             }
                             if new_image_b64:
                                 data["image_base64"] = new_image_b64
-                            
                             supabase.table("products").insert(data).execute()
                             clear_data_cache()
                             st.success(f"✅ '{new_name}' listed successfully!")
@@ -525,15 +750,12 @@ with tab_products:
                         except Exception as e:
                             st.error(f"Failed to add product: {e}")
         
-        # Product list
         if my_products:
-            # Filters
             pf1, pf2 = st.columns(2)
             with pf1:
                 prod_search = st.text_input("🔍 Search products", key="prod_search_inp", placeholder="Product name…")
             with pf2:
                 avail_filter = st.selectbox("Availability", ["All", "Available", "Unavailable"], key="prod_avail_filter")
-            
             filtered = my_products
             if prod_search:
                 filtered = [p for p in filtered if prod_search.lower() in p.get("product_name", "").lower()]
@@ -541,14 +763,11 @@ with tab_products:
                 filtered = [p for p in filtered if p.get("is_available", False)]
             elif avail_filter == "Unavailable":
                 filtered = [p for p in filtered if not p.get("is_available", False)]
-            
             st.caption(f"**{len(filtered)} product(s)**")
-            
             for p in filtered:
                 pid = p["id"]
                 avail = p.get("is_available", False)
                 status_pill = '<span class="pill pill-success">● Available</span>' if avail else '<span class="pill pill-danger">● Unavailable</span>'
-                
                 with st.container(border=True):
                     img_col, info_col = st.columns([1, 4])
                     with img_col:
@@ -556,12 +775,11 @@ with tab_products:
                         if img_b64:
                             try:
                                 img_b64_clean = img_b64.replace('\n', '').replace('\r', '').replace(' ', '')
-                                st.image(f"data:image/jpeg;base64,{img_b64_clean}", width=150)
+                                st.image(f"data:image/jpeg;base64,{img_b64_clean}", width=120)
                             except Exception:
-                                st.markdown('<div style="background:#1e2a3a;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;font-size:11px;">📷 Error</div>', unsafe_allow_html=True)
+                                st.markdown('<div style="background:#1e2a3a;border-radius:8px;height:100px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;font-size:11px;">📷 Error</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown('<div style="background:#1e2a3a;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;">📷 No Image</div>', unsafe_allow_html=True)
-                    
+                            st.markdown('<div style="background:#1e2a3a;border-radius:8px;height:100px;display:flex;align-items:center;justify-content:center;border:1px dashed #334155;color:#64748b;">📷 No Image</div>', unsafe_allow_html=True)
                     with info_col:
                         col1, col2, col3 = st.columns([5, 2, 3])
                         with col1:
@@ -571,11 +789,9 @@ with tab_products:
                         with col2:
                             st.markdown(f'<div class="price-tag">{p.get("price_birr", 0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit", "")}</div>', unsafe_allow_html=True)
                         with col3:
-                            # Delete button with confirmation
                             if st.button("🗑️ Delete", key=f"del_prod_{pid}", use_container_width=True):
                                 st.session_state[f"confirm_del_prod_{pid}"] = True
                                 st.rerun()
-                            
                             if st.session_state.get(f"confirm_del_prod_{pid}"):
                                 st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
                                 if st.button("✅ Yes, Delete", key=f"do_del_prod_{pid}", use_container_width=True):
@@ -589,16 +805,10 @@ with tab_products:
                                 if st.button("Cancel", key=f"cancel_del_prod_{pid}", use_container_width=True):
                                     st.session_state.pop(f"confirm_del_prod_{pid}", None)
                                     st.rerun()
-        else:
-            st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)
-            
     except Exception as e:
-        logger.error(f"Products tab error: {e}")
         st.error(f"⚠️ Error loading products: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — DEMAND FORECAST
-# ══════════════════════════════════════════════
+# ─── DEMAND FORECAST TAB ───
 with tab_demand:
     try:
         st.markdown('<div class="section-title">AI Demand Forecasting</div>', unsafe_allow_html=True)
@@ -648,7 +858,6 @@ with tab_demand:
                 avg_demand = sum(result) / len(result)
                 max_demand = max(result)
                 trend = "📈 Rising" if result[-1] > result[0] else "📉 Falling" if result[-1] < result[0] else "➡️ Stable"
-                
                 sm1, sm2, sm3 = st.columns(3)
                 with sm1:
                     st.markdown(f'<div class="kpi-card"><div class="kpi-label">Avg Weekly Demand</div><div class="kpi-value">{avg_demand:,.0f}</div><div class="kpi-sub">Units / week</div></div>', unsafe_allow_html=True)
@@ -657,16 +866,15 @@ with tab_demand:
                 with sm3:
                     st.markdown(f'<div class="kpi-card"><div class="kpi-label">Trend Direction</div><div class="kpi-value" style="font-size:20px;">{trend}</div></div>', unsafe_allow_html=True)
                 st.markdown("")
-                
                 weeks = [f"W{i+1}" for i in range(len(result))]
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=weeks, y=result,
                     mode="lines+markers",
-                    line=dict(color="#4ade80", width=2),
-                    marker=dict(size=6, color="#16a34a"),
+                    line=dict(color="#D4A017", width=2),
+                    marker=dict(size=6, color="#F4C430"),
                     fill="tozeroy",
-                    fillcolor="rgba(74, 222, 128, 0.08)",
+                    fillcolor="rgba(212, 160, 23, 0.08)",
                     name="Demand"
                 ))
                 fig.update_layout(
@@ -680,21 +888,14 @@ with tab_demand:
                     showlegend=False,
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Forecast data not available in the expected format.")
-                
     except Exception as e:
-        logger.error(f"Demand forecast error: {e}")
         st.error(f"⚠️ Error running forecast: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — INCOMING ORDERS (Truncated for brevity)
-# ══════════════════════════════════════════════
+# ─── INCOMING ORDERS TAB ───
 with tab_incoming:
     try:
         st.markdown('<div class="section-title">Incoming Orders</div>', unsafe_allow_html=True)
         prod_ids = [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]
-        
         if not prod_ids:
             st.markdown('<div class="alert-box alert-info">ℹ️ You have no products listed. Add products first to receive orders.</div>', unsafe_allow_html=True)
         else:
@@ -722,7 +923,6 @@ with tab_incoming:
             else:
                 st.caption(f"{len(filtered_orders)} order(s)")
                 STATUS_PILLS = {"pending": "pill-warning", "confirmed": "pill-info", "cancelled": "pill-danger"}
-                
                 for o in filtered_orders:
                     oid = o["id"]
                     prod = o.get("products") or {}
@@ -770,12 +970,9 @@ with tab_incoming:
                                     except Exception as e:
                                         st.error(f"Failed: {e}")
     except Exception as e:
-        logger.error(f"Incoming orders error: {e}")
         st.error(f"⚠️ Error loading orders: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — AI MATCHING (Truncated for brevity)
-# ══════════════════════════════════════════════
+# ─── AI MATCHING TAB ───
 with tab_match:
     try:
         st.markdown('<div class="section-title">AI Merchant Matching</div>', unsafe_allow_html=True)
@@ -788,7 +985,6 @@ with tab_match:
             product_names = [p["product_name"] for p in my_products_m]
             selected_name = st.selectbox("Select Product to Match", product_names, key="match_product_select")
             p = next((x for x in my_products_m if x["product_name"] == selected_name), None)
-            
             if p:
                 pm1, pm2, pm3 = st.columns(3)
                 with pm1:
@@ -828,7 +1024,6 @@ with tab_match:
                                     "avg_delivery_days": m.get("avg_delivery_days") or 5,
                                     "years_active": m.get("years_active") or 1,
                                 } for m in merchants_raw]
-                                
                                 ranked = rank_merchants(listing_data, merchant_list)
                                 top_matches = [r for r in ranked if r.get("match_probability", 0) > 0.1][:5]
                                 st.session_state.match_results = top_matches
@@ -854,7 +1049,6 @@ with tab_match:
                             else:
                                 badge_color = "#f87171"
                                 badge_label = "🔴 Weak Match"
-                            
                             with st.container(border=True):
                                 c1, c2 = st.columns([5, 2])
                                 with c1:
@@ -882,7 +1076,6 @@ with tab_match:
                                         agree_delivery = st.text_input("Delivery date", placeholder="e.g. 2024-09-01", key=f"ad_{r.get('id')}")
                                         agree_payment = st.selectbox("Payment method", ["Bank Transfer", "Cash on Delivery", "Mobile Money"], key=f"apay_{r.get('id')}")
                                         agree_notes = st.text_area("Notes (optional)", height=60, key=f"an_{r.get('id')}")
-                                        
                                         if st.button("📤 Send to Merchant", key=f"send_agree_{r.get('id')}_{p['id']}", type="primary", use_container_width=True):
                                             try:
                                                 payload = {
@@ -909,9 +1102,7 @@ with tab_match:
                                                     "quality_grade": p.get("quality_grade", "A"),
                                                     "unit": p.get("unit", "kg"),
                                                 }
-                                                
                                                 pdf_bytes = generate_agreement_pdf(**payload)
-                                                
                                                 send_notification(
                                                     r["id"], "📄 New Agreement Request",
                                                     f"{profile.get('full_name', '')} sent you a supply agreement for {p['product_name']}",
@@ -940,12 +1131,9 @@ with tab_match:
                                                 use_container_width=True,
                                             )
     except Exception as e:
-        logger.error(f"Match tab error: {e}")
         st.error(f"⚠️ Error in matching: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — AGREEMENTS (Truncated)
-# ══════════════════════════════════════════════
+# ─── AGREEMENTS TAB ───
 with tab_agree:
     try:
         st.markdown('<div class="section-title">Supply Agreements</div>', unsafe_allow_html=True)
@@ -979,13 +1167,11 @@ with tab_agree:
                         st.markdown(f'<div class="price-tag">{o.get("quantity_ordered", 0):,.1f}</div><div style="font-size:11px;color:#64748b;">{prod.get("unit", " ")}</div>', unsafe_allow_html=True)
                     with c3:
                         st.markdown(f'<div class="price-tag">{o.get("total_price_birr", 0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
-                    
                     with st.expander("👁️ Preview Agreement"):
                         try:
                             qty_ord = float(o.get("quantity_ordered") or 0)
                             total_val = float(o.get("total_price_birr") or 0)
                             ppu = float(prod.get("price_birr") or (total_val / qty_ord if qty_ord else 0))
-                            
                             preview_html = generate_agreement_preview_html(
                                 producer_name=profile.get("full_name", " "),
                                 producer_phone=profile.get("phone", " "),
@@ -1008,7 +1194,6 @@ with tab_agree:
                             st.components.v1.html(preview_html, height=400, scrolling=True)
                         except Exception as ex:
                             st.caption(f"Preview unavailable: {ex}")
-                        
                         try:
                             pdf_bytes = generate_agreement_pdf(
                                 producer_name=profile.get("full_name", " "),
@@ -1029,27 +1214,20 @@ with tab_agree:
                                 producer_confirmed=True,
                                 merchant_confirmed=o.get("merchant_confirmed", False),
                             )
-                            st.download_button(
-                                "📥 Download PDF",
-                                data=pdf_bytes,
+                            st.download_button("📥 Download PDF", data=pdf_bytes,
                                 file_name=f"agreement_{prod.get('product_name', '')}.pdf",
-                                mime="application/pdf",
-                                key=f"agree_pdf_{o['id']}"
+                                mime="application/pdf", key=f"agree_pdf_{o['id']}"
                             )
                         except Exception:
                             pass
     except Exception as e:
-        logger.error(f"Agreements error: {e}")
         st.error(f"⚠️ Error loading agreements: {str(e)}")
 
-# ══════════════════════════════════════════════
-# TAB — HISTORY (Truncated)
-# ══════════════════════════════════════════════
+# ─── HISTORY TAB ───
 with tab_history:
     try:
         st.markdown('<div class="section-title">Delivery History</div>', unsafe_allow_html=True)
         hist_prod_ids = [p["id"] for p in cached_query("products", filters={"producer_id": user_id}, limit=500)]
-        
         if not hist_prod_ids:
             st.info("No products yet.")
         else:
@@ -1059,7 +1237,6 @@ with tab_history:
                 ).in_("product_id", hist_prod_ids).eq("status", "delivered").order("created_at", desc=True).execute().data or []
             except Exception:
                 hist_orders = []
-            
             if not hist_orders:
                 st.markdown('<div class="alert-box alert-info">📜 No delivered orders yet.</div>', unsafe_allow_html=True)
             else:
@@ -1070,7 +1247,6 @@ with tab_history:
                 with h2:
                     st.markdown(f'<div class="kpi-card"><div class="kpi-label">Completed Orders</div><div class="kpi-value">{len(hist_orders)}</div><div class="kpi-sub">Delivered successfully</div></div>', unsafe_allow_html=True)
                 st.markdown("")
-                
                 monthly = {}
                 for o in hist_orders:
                     month = o.get("created_at", "")[:7]
@@ -1078,10 +1254,9 @@ with tab_history:
                 if monthly:
                     df_monthly = pd.DataFrame({"Month": list(monthly.keys()), "Revenue": list(monthly.values())}).sort_values("Month")
                     st.markdown('<div class="section-title">Monthly Revenue</div>', unsafe_allow_html=True)
-                    st.bar_chart(df_monthly.set_index("Month"), height=200, color="#4ade80")
-                
+                    st.bar_chart(df_monthly.set_index("Month"), height=200, color="#D4A017")
                 st.markdown('<div class="section-title">Delivered Orders</div>', unsafe_allow_html=True)
-                for o in hist_orders[:20]:
+                for o in hist_orders:
                     prod = o.get("products") or {}
                     buyer = o.get("profiles") or {}
                     with st.container(border=True):
@@ -1093,32 +1268,18 @@ with tab_history:
                         with c2:
                             st.markdown(f'<div class="price-tag">{o.get("total_price_birr", 0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr</div>', unsafe_allow_html=True)
     except Exception as e:
-        logger.error(f"History error: {e}")
         st.error(f"⚠️ Error loading history: {str(e)}")
 
-# ── NOTIFICATIONS ──
+# ─── NOTIFICATIONS ───
 with tab_notif:
     try:
         render_notifications_tab(user_id)
     except Exception as e:
-        logger.error(f"Notifications error: {e}")
         st.error(f"⚠️ Error loading notifications: {str(e)}")
 
-# ── PROFILE ──
+# ─── PROFILE ───
 with tab_profile:
     try:
-        if st.session_state.get("show_profile_editor"):
-            st.session_state.show_profile_editor = False
         render_profile_editor_modal(profile, user_id, key_suffix="producer_tab")
     except Exception as e:
-        logger.error(f"Profile error: {e}")
-        st.error(f"⚠️ Error loading profile editor: {str(e)}")
-
-# ─────────────────────────────────────────────
-# FLOATING CHATBOT
-# ─────────────────────────────────────────────
-try:
-    from utils.chatbot import render_floating_chatbot
-    render_floating_chatbot(profile)
-except Exception as e:
-    logger.error(f"Chatbot error: {e}")
+        st.error(f"⚠️ Error loading profile: {str(e)}")
