@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 # IMPORTS
 # ─────────────────────────────────────────────────────────────
 try:
-    from utils.theme import inject_theme, render_theme_toggle
+    from utils.theme import inject_theme
     from utils.auth import sign_in, sign_up, sign_out, forgot_password
     from utils.constants import REGIONS
     from utils.db_helpers import supabase, cached_get_profile, clear_data_cache
@@ -48,6 +48,8 @@ if "user_role" not in st.session_state:
     st.session_state.user_role = None
 if "auth_redirect" not in st.session_state:
     st.session_state.auth_redirect = False
+if "menu_open" not in st.session_state:
+    st.session_state.menu_open = False
 
 # Inject theme
 inject_theme()
@@ -332,61 +334,56 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# HAMBURGER MENU - Using Query Params
+# HAMBURGER MENU - Using Streamlit Button + Session State
 # ─────────────────────────────────────────────────────────────
 def render_hamburger_button():
-    """Render the hamburger menu button."""
+    """Render the hamburger menu button using Streamlit."""
     
-    # Get menu state from query params
-    menu_state = st.query_params.get("menu", "closed")
-    is_open = menu_state == "open"
+    # Create a container at the top-left corner
+    col1, col2, col3 = st.columns([1, 10, 1])
+    with col1:
+        # Use st.button with a custom key
+        menu_label = "☰" if not st.session_state.menu_open else "✕"
+        if st.button(menu_label, key="hamburger_btn", help="Toggle Menu"):
+            st.session_state.menu_open = not st.session_state.menu_open
+            st.rerun()
     
-    # Create button with onclick that sets query param
-    st.markdown(f'''
-    <button class="hamburger-btn" onclick="
-        var current = window.parent.location.search;
-        if (current.includes('menu=open')) {{
-            window.parent.location.href = window.parent.location.pathname + '?menu=closed';
-        }} else {{
-            window.parent.location.href = window.parent.location.pathname + '?menu=open';
-        }}
-    ">☰</button>
-    ''', unsafe_allow_html=True)
-    
-    # Sidebar overlay
-    overlay_class = "active" if is_open else ""
-    st.markdown(f'''
-    <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
-        window.parent.location.href = window.parent.location.pathname + '?menu=closed';
-    "></div>
-    ''', unsafe_allow_html=True)
-    
-    return is_open
+    return st.session_state.menu_open
 
 # ─────────────────────────────────────────────────────────────
 # CUSTOM SIDEBAR
 # ─────────────────────────────────────────────────────────────
-def render_custom_sidebar(profile=None, is_open=False):
+def render_custom_sidebar(profile=None):
     """Render custom sidebar with hamburger menu."""
     
     # Get profile if not provided
     if profile is None:
         profile = st.session_state.get("profile")
     
+    is_open = st.session_state.get("menu_open", False)
     open_class = "open" if is_open else ""
+    overlay_class = "active" if is_open else ""
     
     if not profile or st.session_state.user is None:
         sidebar_html = f'''
         <div class="mobile-sidebar {open_class}" id="mobileSidebar">
-            <button class="close-sidebar-btn" onclick="window.parent.location.href = window.parent.location.pathname + '?menu=closed';">✕</button>
+            <button class="close-sidebar-btn" onclick="
+                fetch(window.location.href + '?menu=close');
+                document.getElementById('mobileSidebar').classList.remove('open');
+                document.getElementById('mobileOverlay').classList.remove('active');
+            ">✕</button>
             <div class="sidebar-profile">
                 <div class="sidebar-avatar">🔐</div>
                 <div class="sidebar-name">Not Signed In</div>
                 <div class="sidebar-role">Please sign in</div>
             </div>
             <hr class="sidebar-divider">
-            <button class="sidebar-nav-btn" onclick="window.parent.location.href='app.py'">🏠 Home</button>
+            <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
         </div>
+        <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+            document.getElementById('mobileSidebar').classList.remove('open');
+            this.classList.remove('active');
+        "></div>
         '''
         st.markdown(sidebar_html, unsafe_allow_html=True)
         return
@@ -398,7 +395,10 @@ def render_custom_sidebar(profile=None, is_open=False):
     
     sidebar_html = f'''
     <div class="mobile-sidebar {open_class}" id="mobileSidebar">
-        <button class="close-sidebar-btn" onclick="window.parent.location.href = window.parent.location.pathname + '?menu=closed';">✕</button>
+        <button class="close-sidebar-btn" onclick="
+            document.getElementById('mobileSidebar').classList.remove('open');
+            document.getElementById('mobileOverlay').classList.remove('active');
+        ">✕</button>
         
         <div class="sidebar-profile">
             <div class="sidebar-avatar">{name[0].upper()}</div>
@@ -409,7 +409,7 @@ def render_custom_sidebar(profile=None, is_open=False):
         <hr class="sidebar-divider">
         
         <div class="sidebar-section-title">📊 Navigation</div>
-        <button class="sidebar-nav-btn" onclick="window.parent.location.href='app.py'">🏠 Home</button>
+        <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
     '''
     
     # Role-specific pages
@@ -422,7 +422,7 @@ def render_custom_sidebar(profile=None, is_open=False):
     
     if role in nav_pages:
         label, page = nav_pages[role]
-        sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.parent.location.href=\'{page}\'">{label}</button>'
+        sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.location.href=\'{page}\'">{label}</button>'
     
     # Verification status
     try:
@@ -441,8 +441,12 @@ def render_custom_sidebar(profile=None, is_open=False):
         <div class="sidebar-section-title">📌 Status</div>
         <div style="margin-bottom: 8px;">{status_html}</div>
         <hr class="sidebar-divider">
-        <button class="sidebar-nav-btn-logout" onclick="window.parent.location.href = window.parent.location.pathname + '?logout=true';">🚪 Log Out</button>
+        <button class="sidebar-nav-btn-logout" onclick="window.location.href = window.location.pathname + '?logout=true';">🚪 Log Out</button>
     </div>
+    <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
+        document.getElementById('mobileSidebar').classList.remove('open');
+        this.classList.remove('active');
+    "></div>
     '''
     
     st.markdown(sidebar_html, unsafe_allow_html=True)
@@ -455,6 +459,7 @@ def render_custom_sidebar(profile=None, is_open=False):
             st.session_state.profile = None
             st.session_state.authenticated = False
             st.session_state.user_role = None
+            st.session_state.menu_open = False
             clear_data_cache()
             st.query_params.clear()
             st.rerun()
@@ -542,12 +547,12 @@ def show_landing():
 def main():
     """Main application."""
     
-    # Render hamburger and get menu state
+    # Render hamburger button
     is_open = render_hamburger_button()
     
     # Render sidebar
     profile = st.session_state.get("profile")
-    render_custom_sidebar(profile, is_open)
+    render_custom_sidebar(profile)
     
     # Auto-redirect after login
     if st.session_state.get("authenticated") and st.session_state.get("auth_redirect"):
