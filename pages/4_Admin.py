@@ -616,8 +616,10 @@ with tab_docs:
                  doc_b64 = doc.get("file_base64") or doc.get("image_base64")
                  if doc_b64:
                      try:
-                         img_data = base64.b64decode(doc_b64)
-                         st.image(img_data, use_container_width=True, caption=doc.get("document_name",""))
+                         doc_b64_clean = doc_b64.replace('\n','').replace('\r','').replace(' ','')
+                         raw = base64.b64decode(doc_b64_clean[:16])
+                         mime = "image/png" if raw[:4] == b'\x89PNG' else "image/jpeg"
+                         st.markdown(f'<img src="data:{mime};base64,{doc_b64_clean}" style="width:100%;border-radius:8px;max-height:300px;object-fit:contain;" alt="{doc.get("document_name","")}">', unsafe_allow_html=True)
                      except Exception:
                          st.info("Could not decode base64 image.")
                  else:
@@ -626,7 +628,7 @@ with tab_docs:
                      if file_url:
                          if file_url.startswith("http"):
                              if any(ext in file_url.lower() for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
-                                 st.image(file_url, caption=doc.get("document_name",""), use_container_width=True)
+                                 st.markdown(f'<img src="{file_url}" style="width:100%;border-radius:8px;max-height:300px;object-fit:contain;" alt="{doc.get("document_name","")}">', unsafe_allow_html=True)
                              elif ".pdf" in file_url.lower():
                                  st.components.v1.iframe(file_url, height=500, scrolling=True)
                              else:
@@ -637,7 +639,9 @@ with tab_docs:
                                  res = supabase.storage.from_(bucket).download(file_url)
                                  fname = file_url.split("/")[-1].lower()
                                  if fname.endswith((".png", ".jpg", ".jpeg", ".webp")):
-                                     st.image(res, caption=doc.get("document_name",""), use_container_width=True)
+                                     res_b64 = base64.b64encode(res).decode()
+                                     mime2 = "image/png" if fname.endswith(".png") else "image/jpeg"
+                                     st.markdown(f'<img src="data:{mime2};base64,{res_b64}" style="width:100%;border-radius:8px;max-height:300px;object-fit:contain;" alt="{doc.get("document_name","")}">', unsafe_allow_html=True)
                                  elif fname.endswith(".pdf"):
                                      b64 = base64.b64encode(res).decode()
                                      pdf_display = f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="500px"></iframe>'
@@ -715,8 +719,10 @@ with tab_products:
                 img_b64 = p.get("image_base64")
                 if img_b64:
                     try:
-                        img_data = base64.b64decode(img_b64)
-                        st.image(img_data, use_container_width=True)
+                        img_b64_clean = img_b64.replace('\n','').replace('\r','').replace(' ','')
+                        raw = base64.b64decode(img_b64_clean[:16])
+                        mime = "image/png" if raw[:4] == b'\x89PNG' else "image/jpeg"
+                        st.markdown(f'<img src="data:{mime};base64,{img_b64_clean}" style="width:100%;border-radius:8px;max-height:100px;object-fit:cover;">', unsafe_allow_html=True)
                     except:
                         st.caption("📷 No img")
                 else:
