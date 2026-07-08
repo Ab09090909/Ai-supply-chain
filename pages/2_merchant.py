@@ -235,7 +235,7 @@ with st.sidebar:
     
     # Update 7: Dark/Light Toggle
     st.markdown("### 🎨 Theme")
-    render_theme_toggle()
+    render_theme_toggle(page="merchant")
     
     st.divider()
     st.markdown("### 📌 Account Status")
@@ -818,11 +818,9 @@ with tab_notif:
 
 # ── PROFILE ──
 with tab_profile:
-    render_profile_editor_modal(profile, user_id)
+    render_profile_editor_modal(profile, user_id, key_suffix="merchant_tab")
 
-# ── Show profile editor modal if triggered from header button ──
-if st.session_state.get("show_profile_editor"):
-    render_profile_editor_modal(profile, user_id)
+# show_profile_editor flag cleared — no duplicate render needed (Profile tab handles it)
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 2_merchant.py)
