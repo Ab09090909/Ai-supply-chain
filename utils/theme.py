@@ -22,7 +22,6 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stSidebar"] {{
     display: none !important;
 }}
-
 [data-testid="collapsedControl"] {{
     display: none !important;
 }}
@@ -45,12 +44,10 @@ html, body, [data-testid="stAppViewContainer"] {{
     color: #e2e8f0 !important;
     cursor: pointer !important;
 }}
-
 .stButton > button:hover {{
     border-color: {accent}55 !important;
     color: {accent} !important;
 }}
-
 .stButton > button[kind="primary"] {{
     background: linear-gradient(135deg, {accent} 0%, {accent_light} 100%) !important;
     border-color: {accent} !important;
@@ -66,7 +63,6 @@ html, body, [data-testid="stAppViewContainer"] {{
     color: #e2e8f0 !important;
     border-radius: 8px !important;
 }}
-
 [data-testid="stSelectbox"] > div > div {{
     background: #1e2a3a !important;
     border-color: #334155 !important;
@@ -81,7 +77,6 @@ html, body, [data-testid="stAppViewContainer"] {{
     color: #64748b !important;
     padding: 8px 16px !important;
 }}
-
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
     color: {accent} !important;
     border-bottom: 2px solid {accent} !important;
@@ -127,9 +122,6 @@ def render_theme_toggle():
         st.session_state.sidebar_light_mode = not is_light
         st.rerun()
 
-# ─────────────────────────────────────────────────────────────
-# HELPER FUNCTIONS
-# ─────────────────────────────────────────────────────────────
 def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); 
@@ -151,12 +143,7 @@ def render_kpi_card(label: str, value: str, subtext: str = "", icon: str = ""):
     """, unsafe_allow_html=True)
 
 def render_alert(message: str, alert_type: str = "info"):
-    type_map = {
-        "info": "alert-info",
-        "success": "alert-success",
-        "warning": "alert-warning",
-        "error": "alert-danger"
-    }
+    type_map = {"info": "alert-info", "success": "alert-success", "warning": "alert-warning", "error": "alert-danger"}
     st.markdown(f'<div class="alert-box {type_map.get(alert_type, "alert-info")}">{message}</div>', unsafe_allow_html=True)
 
 def render_pill(text: str, pill_type: str = "neutral"):
