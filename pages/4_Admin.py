@@ -321,7 +321,7 @@ with st.sidebar:
     
     # Update 7: Dark/Light Toggle
     st.markdown("### 🎨 Theme")
-    render_theme_toggle(page="admin")
+       render_theme_toggle()
     
     st.divider()
     st.markdown("### 📌 System Status")
