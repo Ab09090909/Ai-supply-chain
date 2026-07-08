@@ -108,7 +108,7 @@ p, span, div { color: #e2e8f0; }
 
 # ─────────────────────────────────────────────
 # Light Theme CSS (Ethiopian-inspired)
-# ─────────────────────────────────────────────
+# ────────────────────────────────────────────
 LIGHT_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -218,7 +218,7 @@ def render_theme_toggle():
         st.session_state.theme_mode = "dark"
     
     current_mode = st.session_state.theme_mode
-    btn_label = "☀️ Light Mode" if current_mode == "dark" else "🌙 Dark Mode"
+    btn_label = "️ Light Mode" if current_mode == "dark" else "🌙 Dark Mode"
     
     # FIX: Removed all parameters. Call this simply as render_theme_toggle()
     if st.button(btn_label, key="theme_toggle_btn_global", use_container_width=True):
