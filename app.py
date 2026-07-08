@@ -44,6 +44,8 @@ if "sidebar_light_mode" not in st.session_state:
     st.session_state.sidebar_light_mode = False
 if "auth_redirect" not in st.session_state:
     st.session_state.auth_redirect = False
+if "nav_clicked" not in st.session_state:
+    st.session_state.nav_clicked = False
 
 # Inject theme (both sidebar and main content)
 inject_theme()
@@ -140,19 +142,27 @@ def render_sidebar():
             
             st.divider()
             
-            # Quick navigation links
+            # Quick navigation links - using st.button with switch_page
             if role == "producer":
                 st.markdown("**🚜 Quick Links**")
-                st.page_link("1_producer.py", label="📊 Dashboard", icon="📊")
+                if st.button("📊 Producer Dashboard", key="nav_producer", use_container_width=True):
+                    st.session_state.nav_clicked = True
+                    st.switch_page("1_producer.py")
             elif role == "merchant":
                 st.markdown("**🏬 Quick Links**")
-                st.page_link("2_merchant.py", label="📊 Dashboard", icon="📊")
+                if st.button("📊 Merchant Dashboard", key="nav_merchant", use_container_width=True):
+                    st.session_state.nav_clicked = True
+                    st.switch_page("2_merchant.py")
             elif role == "customer":
                 st.markdown("**🛒 Quick Links**")
-                st.page_link("3_customer.py", label="📊 Dashboard", icon="📊")
+                if st.button("📊 Customer Dashboard", key="nav_customer", use_container_width=True):
+                    st.session_state.nav_clicked = True
+                    st.switch_page("3_customer.py")
             elif role == "admin":
                 st.markdown("**🛡️ Quick Links**")
-                st.page_link("4_Admin.py", label="📊 Dashboard", icon="📊")
+                if st.button("📊 Admin Dashboard", key="nav_admin", use_container_width=True):
+                    st.session_state.nav_clicked = True
+                    st.switch_page("4_Admin.py")
             
             st.divider()
             
@@ -217,7 +227,7 @@ def show_landing():
                 with st.spinner("Authenticating…"):
                     ok, msg = sign_in(email, password)
                 if ok:
-                    # Set flag to prevent multiple reruns
+                    # Set flag to prevent multiple reruns and redirect
                     st.session_state.auth_redirect = True
                     st.rerun()
                 else:
@@ -313,17 +323,26 @@ if st.session_state.get("user") is not None and st.session_state.get("auth_redir
     # Clear the flag to prevent loop
     st.session_state.auth_redirect = False
     
-    # Redirect based on role
-    if role == "producer":
-        st.switch_page("1_producer.py")
-    elif role == "merchant":
-        st.switch_page("2_merchant.py")
-    elif role == "customer":
-        st.switch_page("3_customer.py")
-    elif role == "admin":
-        st.switch_page("4_Admin.py")
-    else:
-        st.session_state.auth_redirect = False
+    # Get profile if not already loaded
+    if profile is None:
+        profile = cached_get_profile(st.session_state.user.id)
+        st.session_state.profile = profile
+    
+    if profile:
+        role = profile.get("role")
+        # Redirect based on role
+        try:
+            if role == "producer":
+                st.switch_page("1_producer.py")
+            elif role == "merchant":
+                st.switch_page("2_merchant.py")
+            elif role == "customer":
+                st.switch_page("3_customer.py")
+            elif role == "admin":
+                st.switch_page("4_Admin.py")
+        except Exception as e:
+            # If switch_page fails, stay on current page
+            st.session_state.auth_redirect = False
 
 # Show landing or dashboard
 if st.session_state.get("user") is None:
@@ -343,10 +362,7 @@ else:
             <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
             <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
             <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
-                👈 Use the sidebar to navigate to your dashboard pages.
-            </p>
-            <p style="margin-top: 12px;">
-                <a href="/{role}" style="color: #F4C430; text-decoration: underline;">Go to your dashboard →</a>
+                👈 Use the sidebar navigation to go to your dashboard.
             </p>
         </div>
         """, unsafe_allow_html=True)
