@@ -8,8 +8,6 @@ import streamlit as st
 # ─────────────────────────────────────────────────────────────
 # STREAMLIT CLOUD SECRETS BRIDGE
 # ─────────────────────────────────────────────────────────────
-# This automatically copies Streamlit Cloud secrets into OS environment variables
-# so your existing os.getenv() code works without changes.
 for key, value in st.secrets.items():
     os.environ[key] = str(value)
 
@@ -32,20 +30,16 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize session keys
 for _k in SESSION_KEYS:
     if _k not in st.session_state:
         st.session_state[_k] = None
 
-# Initialize theme mode
+# Initialize session state flags
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "dark"
-
-# Initialize profile editor flag
 if "show_profile_editor" not in st.session_state:
     st.session_state.show_profile_editor = False
 
-# Inject theme
 inject_theme()
 
 # ═════════════════════════════════════════════════════════════
@@ -118,17 +112,17 @@ def render_sidebar():
                     if verif_status["has_documents"]:
                         st.info("⏳ Documents pending verification")
                     else:
-                        st.warning("⚠️ Upload documents to verify")
+                        st.warning("️ Upload documents to verify")
             except Exception as _verif_err:
                 st.caption(f"⚠️ Verification check failed: {_verif_err}")
             
             unread = cached_unread_count(st.session_state.user.id)
             if unread:
-                st.info(f" {unread} unread notification(s)")
+                st.info(f"🔔 {unread} unread notification(s)")
             
             st.divider()
             
-            if st.button(" Log Out", use_container_width=True, key="sb_logout_btn"):
+            if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
                 sign_out()
                 st.rerun()
             
@@ -147,11 +141,11 @@ def show_landing():
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 52px 48px 44px; margin-bottom: 36px; color: white;">
-        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;margin-bottom:14px;"> Wolaita Sodo University · Department of ECE</p>
+        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;margin-bottom:14px;">🌍 Wolaita Sodo University · Department of ECE</p>
         <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
         <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">⚡ AI Price Engine</span>
+            <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> AI Price Engine</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
@@ -196,7 +190,7 @@ def show_landing():
         st.divider()
         with st.expander("🔑 Forgot Password?"):
             reset_email = st.text_input("Enter your registered email", key="reset_email", placeholder="you@example.com")
-            if st.button(" Send Reset Link", key="reset_btn", use_container_width=True):
+            if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
                 if not reset_email:
                     st.warning("Please enter your email address.")
                 else:
@@ -279,7 +273,7 @@ else:
             sign_out()
             st.rerun()
     else:
-        role_emoji = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
+        role_emoji = {"producer": "🚜", "merchant": "", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
                     border-radius: 16px; padding: 40px; color: white; text-align: center;">
