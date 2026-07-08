@@ -257,7 +257,7 @@ with _hcol3:
 # Sidebar
 # ─────────────────────────────────────────────
 with st.sidebar:
-       render_theme_toggle()
+    render_theme_toggle()
     st.divider()
     st.markdown("### 🚜 Quick Actions")
     if st.button("🔄 Refresh Data", use_container_width=True):
