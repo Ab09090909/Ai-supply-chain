@@ -319,74 +319,77 @@ def render_profile_editor_modal(profile, user_id):
         st.divider()
         
         # Profile Information Form
-        with st.form("profile_info_form"):
-            st.markdown("#### 📝 Profile Information")
-            
-            pe1, pe2 = st.columns(2)
-            with pe1:
-                new_full_name = st.text_input(
-                    "Full Name / Company Name *",
-                    value=profile.get("full_name", ""),
-                    max_chars=100,
-                    help="Enter your full name or company name"
-                )
-                new_phone = st.text_input(
-                    "Phone",
-                    value=profile.get("phone") or "",
-                    placeholder="+251 9xx xxx xxx",
-                    max_chars=20
-                )
-                new_region = st.selectbox(
-                    "Region",
-                    REGIONS,
-                    index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0
-                )
-            
-            with pe2:
-                st.text_input(
-                    "Email (Read-only)",
-                    value=st.session_state.user.email if st.session_state.user else "",
-                    disabled=True
-                )
-                st.text_input(
-                    "Role (Read-only)",
-                    value=profile.get("role", "").capitalize(),
-                    disabled=True
-                )
-                new_company = st.text_input(
-                    "Company/Organization",
-                    value=profile.get("company", ""),
-                    placeholder="Your company name"
-                )
-            
-            st.markdown("")
-            col_save, col_cancel = st.columns(2)
-            with col_save:
-                submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
-            
-            if submitted:
-                if not new_full_name.strip():
-                    st.error("Full name cannot be empty.")
-                else:
-                    phone_val = new_phone.strip()
-                    if phone_val and not _re.match(r"^\+?[\d\s-]{7,20}$", phone_val):
-                        st.error("Invalid phone number format.")
-                    else:
-                        try:
-                            update_data = {
-                                "full_name": new_full_name.strip(),
-                                "phone": phone_val or None,
-                                "region": new_region,
-                                "company": new_company.strip() if new_company else None,
-                            }
-                            supabase.table("profiles").update(update_data).eq("id", user_id).execute()
-                            clear_data_cache()
-                            st.session_state.profile = None
-                            st.success("✅ Profile updated successfully!")
-                            st.session_state.show_profile_editor = False
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Update failed: {e}")
+with st.form("profile_info_form"):
+    st.markdown("#### 📝 Profile Information")
+    pe1, pe2 = st.columns(2)
+    with pe1:
+        new_full_name = st.text_input(
+            "Full Name / Company Name *",
+            value=profile.get("full_name", ""),
+            max_chars=100,
+            help="Enter your full name or company name"
+        )
+        new_phone = st.text_input(
+            "Phone",
+            value=profile.get("phone") or "",
+            placeholder="+251 9xx xxx xxx",
+            max_chars=20
+        )
+        new_region = st.selectbox(
+            "Region",
+            REGIONS,
+            index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0
+        )
+    
+    with pe2:
+        st.text_input(
+            "Email (Read-only)",
+            value=st.session_state.user.email if st.session_state.user else "",
+            disabled=True
+        )
+        st.text_input(
+            "Role (Read-only)",
+            value=profile.get("role", "").capitalize(),
+            disabled=True
+        )
+        new_company = st.text_input(
+            "Company/Organization",
+            value=profile.get("company", ""),
+            placeholder="Your company name"
+        )
+    
+    # Submit button MUST be inside the form
+    submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+
+# Cancel button MUST be outside the form
+if st.button("❌ Cancel", use_container_width=True, key="cancel_profile_edit"):
+    st.session_state.show_profile_editor = False
+    st.rerun()
+
+if submitted:
+    if not new_full_name.strip():
+        st.error("Full name cannot be empty.")
+    else:
+        import re as _re
+        phone_val = new_phone.strip()
+        if phone_val and not _re.match(r"^\+?[\d\s-]{7,20}$", phone_val):
+            st.error("Invalid phone number format.")
+        else:
+            try:
+                update_data = {
+                    "full_name": new_full_name.strip(),
+                    "phone": phone_val or None,
+                    "region": new_region,
+                    "company": new_company.strip() if new_company else None,
+                }
+                supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+                clear_data_cache()
+                st.session_state.profile = None
+                st.success("✅ Profile updated successfully!")
+                st.session_state.show_profile_editor = False
+                st.rerun()
+            except Exception as e:
+                st.error(f"Update failed: {e}")
             
             with col_cancel:
                 if st.button("❌ Cancel", use_container_width=True):
