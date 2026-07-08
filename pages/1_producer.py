@@ -496,39 +496,26 @@ with tab_products:
                     with c2:
                         st.markdown(f'<div class="price-tag">{p.get("price_birr",0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit","")}</div>', unsafe_allow_html=True)
                     with c3:
-                        ba, bb = st.columns(2)
-                        with ba:
-                            tog_label = "🔴 Deactivate" if avail else "🟢 Activate"
-                            if st.button(tog_label, key=f"tog_{pid}", use_container_width=True):
-                                try:
-                                    supabase.table("products").update({"is_available": not avail}).eq("id", pid).execute()
-                                    clear_data_cache()
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Failed: {e}")
-                        
-                        # FIX: Removed nested columns to prevent StreamlitAPIException
-                        with bb:
-                            if st.session_state.get(f"confirm_del_prod_{pid}"):
-                                st.markdown('<div class="confirm-box">⚠️ Delete this product permanently?</div>', unsafe_allow_html=True)
-                                # Buttons are stacked vertically with full width
-                                if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
-                                    try:
-                                        supabase.table("products").delete().eq("id", pid).execute()
-                                        clear_data_cache()
-                                        st.session_state.pop(f"confirm_del_prod_{pid}", None)
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Delete failed: {e}")
-                                if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
-                                    st.session_state.pop(f"confirm_del_prod_{pid}", None)
-                                    st.rerun()
-                            else:
-                                st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
-                                if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
-                                    st.session_state[f"confirm_del_prod_{pid}"] = True
-                                    st.rerun()
-                                st.markdown('</div>', unsafe_allow_html=True)
+    # Stack buttons vertically instead of using nested columns
+    if st.session_state.get(f"confirm_del_prod_{pid}"):
+        st.markdown('<div class="confirm-box">⚠️ Delete permanently?</div>', unsafe_allow_html=True)
+        if st.button("🗑️ Yes", key=f"do_del_prod_{pid}", use_container_width=True, type="primary"):
+            try:
+                supabase.table("products").delete().eq("id", pid).execute()
+                clear_data_cache()
+                st.session_state.pop(f"confirm_del_prod_{pid}", None)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Delete failed: {e}")
+        if st.button("No", key=f"cancel_del_prod_{pid}", use_container_width=True):
+            st.session_state.pop(f"confirm_del_prod_{pid}", None)
+            st.rerun()
+    else:
+        st.markdown('<div class="danger-btn">', unsafe_allow_html=True)
+        if st.button("🗑️", key=f"del_prod_{pid}", use_container_width=True):
+            st.session_state[f"confirm_del_prod_{pid}"] = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="alert-box alert-info">📦 No products listed yet. Use the form above to add your first product.</div>', unsafe_allow_html=True)                           
                         
