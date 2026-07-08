@@ -135,7 +135,7 @@ hr {{
     border-color: {t["card_border"]} !important;
 }}
 
-/* ── Streamlit overrides ── */
+/* Streamlit overrides */
 [data-testid="stMetricValue"] {{
     color: {t["main_text"]} !important;
 }}
@@ -144,7 +144,7 @@ hr {{
     color: {t["sidebar_subtext"]} !important;
 }}
 
-/* ── Input fields ── */
+/* Input fields */
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
 [data-testid="stTextArea"] textarea,
@@ -167,7 +167,7 @@ hr {{
     color: {t["input_text"]} !important;
 }}
 
-/* ── Buttons ── */
+/* Buttons */
 .stButton > button {{
     border-radius: 8px !important;
     font-size: 13px !important;
@@ -189,7 +189,7 @@ hr {{
     color: #fff !important;
 }}
 
-/* ── Tabs ── */
+/* Tabs */
 [data-testid="stTabs"] > div > div > div > button {{
     font-size: 13px !important;
     font-weight: 500 !important;
@@ -201,7 +201,7 @@ hr {{
     border-bottom-color: {accent} !important;
 }}
 
-/* ── Dataframes ── */
+/* Dataframes */
 [data-testid="stDataFrame"] {{
     border-radius: 10px;
     overflow: hidden;
@@ -222,7 +222,7 @@ hr {{
     color: {t["main_text"]} !important;
 }}
 
-/* ── Metrics ── */
+/* Metrics */
 [data-testid="stMetric"] {{
     background: {t["card_bg"]} !important;
     border: 1px solid {t["card_border"]} !important;
@@ -230,12 +230,12 @@ hr {{
     padding: 16px !important;
 }}
 
-/* ── Info/Warning/Success boxes ── */
+/* Info/Warning/Success boxes */
 .stAlert {{
     border-radius: 8px !important;
 }}
 
-/* ── Sidebar ── */
+/* Sidebar */
 [data-testid="stSidebar"] {{
     background: {t["sidebar_bg"]} !important;
     border-right: 1px solid {t["sidebar_border"]} !important;
@@ -289,11 +289,15 @@ hr {{
     border-color: #2563eb44 !important;
 }}
 
-/* ── Hide Streamlit branding ── */
-#MainMenu, footer, header { visibility: hidden; }
-[data-testid="stToolbar"] { display: none; }
+/* Hide Streamlit branding */
+#MainMenu, footer, header {{
+    visibility: hidden !important;
+}}
+[data-testid="stToolbar"] {{
+    display: none !important;
+}}
 
-/* ── KPI Cards ── */
+/* KPI Cards */
 .kpi-card {{
     background: {t["card_bg"]} !important;
     border: 1px solid {t["card_border"]} !important;
@@ -330,7 +334,7 @@ hr {{
     margin-top: 6px;
 }}
 
-/* ── Section Titles ── */
+/* Section Titles */
 .section-title {{
     font-size: 13px;
     font-weight: 700;
@@ -342,7 +346,7 @@ hr {{
     border-bottom: 1px solid {t["card_border"]} !important;
 }}
 
-/* ── Alert boxes ── */
+/* Alert boxes */
 .alert-box {{
     border-radius: 8px;
     padding: 12px 16px;
@@ -355,7 +359,7 @@ hr {{
 .alert-info     {{ background: #1e3a5f22; border-color: #2563eb66; color: #60a5fa; }}
 .alert-success  {{ background: #14532d22; border-color: #16a34a66; color: #4ade80; }}
 
-/* ── Price tag ── */
+/* Price tag */
 .price-tag {{
     font-family: 'JetBrains Mono', monospace;
     font-size: 18px;
@@ -363,14 +367,14 @@ hr {{
     color: {accent} !important;
 }}
 
-/* ── Danger button ── */
+/* Danger button */
 .danger-btn > button {{
     background: #7f1d1d44 !important;
     border: 1px solid #ef444455 !important;
     color: #f87171 !important;
 }}
 
-/* ── Confirm box ── */
+/* Confirm box */
 .confirm-box {{
     background: #7f1d1d22;
     border: 1px solid #ef444455;
@@ -381,7 +385,7 @@ hr {{
     margin-bottom: 8px;
 }}
 
-/* ── Pill styles ── */
+/* Pill styles */
 .pill {{
     display: inline-block;
     font-size: 11px;
@@ -397,11 +401,11 @@ hr {{
 .pill-neutral {{ background: #1e293b; color: #94a3b8; border: 1px solid #334155; }}
 .pill-purple  {{ background: #3b1a6044; color: #a78bfa; border: 1px solid #7c3aed44; }}
 
-/* ── Match bar ── */
+/* Match bar */
 .match-bar-bg {{ background: {t["card_border"]}; border-radius: 4px; height: 6px; margin-top: 6px; overflow: hidden; }}
 .match-bar-fill {{ height: 100%; border-radius: 4px; transition: width 0.4s ease; }}
 
-/* ── Status tracker ── */
+/* Status tracker */
 .status-track {{
     display: flex;
     align-items: center;
@@ -434,7 +438,7 @@ hr {{
 }}
 .track-label {{ font-size: 10px; color: {t["sidebar_subtext"]}; }}
 
-/* ── Admin header ── */
+/* Admin header */
 .admin-header {{
     background: linear-gradient(135deg, #1a2744 0%, #0f172a 60%, #162032 100%);
     border: 1px solid #1e3a5f;
@@ -471,7 +475,7 @@ hr {{
     text-transform: uppercase;
 }}
 
-/* ── Dash header ── */
+/* Dash header */
 .dash-header {{
     background: linear-gradient(135deg, #1a1020 0%, #0f1117 60%, #1a1030 100%);
     border: 1px solid #2a1a4a;
@@ -508,12 +512,12 @@ hr {{
     text-transform: uppercase;
 }}
 
-/* ── Fraud risk badges ── */
+/* Fraud risk badges */
 .fraud-low  {{ color: #4ade80; font-weight: 600; font-size: 12px; }}
 .fraud-med  {{ color: #fbbf24; font-weight: 600; font-size: 12px; }}
 .fraud-high {{ color: #f87171; font-weight: 600; font-size: 12px; }}
 
-/* ── Activity feed ── */
+/* Activity feed */
 .activity-item {{
     display: flex;
     align-items: flex-start;
@@ -530,7 +534,7 @@ hr {{
 .activity-text {{ font-size: 13px; color: {t["main_text"]}; }}
 .activity-time {{ font-size: 11px; color: {t["sidebar_subtext"]}; margin-top: 2px; }}
 
-/* ── Record cards ── */
+/* Record cards */
 .record-card {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -552,7 +556,7 @@ hr {{
     margin: 0;
 }}
 
-/* ── Forecast container ── */
+/* Forecast container */
 .forecast-container {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -561,7 +565,7 @@ hr {{
     margin-top: 16px;
 }}
 
-/* ── Document preview ── */
+/* Document preview */
 .doc-preview-container {{
     background: {t["card_bg"]};
     border: 1px solid {t["card_border"]};
@@ -570,7 +574,7 @@ hr {{
     margin-top: 12px;
 }}
 
-/* ── Product image container ── */
+/* Product image container */
 .product-img-container {{
     background: {t["input_bg"]};
     border-radius: 8px;
@@ -585,6 +589,28 @@ hr {{
     width: 100%;
     height: 100%;
     object-fit: cover;
+}}
+
+/* Profile editor modal */
+.profile-editor-modal {{
+    background: {t["card_bg"]} !important;
+    border: 1px solid {t["card_border"]} !important;
+    border-radius: 16px;
+    padding: 30px;
+    margin: 20px 0;
+    max-height: 90vh;
+    overflow-y: auto;
+}}
+.profile-pic-upload {{
+    text-align: center;
+    margin: 20px 0;
+}}
+@media (max-width: 768px) {{
+    .profile-editor-modal {{
+        padding: 16px;
+        margin: 10px 0;
+        max-height: 95vh;
+    }}
 }}
 </style>
 """, unsafe_allow_html=True)
