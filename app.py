@@ -4,21 +4,60 @@ app.py — Ethiopian AI Supply Chain Platform (Main Entry)
 import sys
 import os
 import streamlit as st
+import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env (local development only)
+load_dotenv()
 
 # ─────────────────────────────────────────────────────────────
-# STREAMLIT CLOUD SECRETS BRIDGE
+# STREAMLIT CLOUD SECRETS BRIDGE (SECURE)
 # ─────────────────────────────────────────────────────────────
-for key, value in st.secrets.items():
-    os.environ[key] = str(value)
+# Only set specific required environment variables from secrets
+# Don't expose all secrets as environment variables
+REQUIRED_SECRETS = [
+    'SUPABASE_URL',
+    'SUPABASE_KEY',
+    'SUPABASE_SERVICE_ROLE',
+    'GROQ_API_KEY',
+    'APP_SECRET_KEY'
+]
 
+# Set only required secrets as environment variables
+if hasattr(st, 'secrets') and st.secrets:
+    for key in REQUIRED_SECRETS:
+        if key in st.secrets:
+            os.environ[key] = str(st.secrets[key])
+        else:
+            # For development, try to get from .env
+            if key not in os.environ:
+                logging.warning(f"Missing required secret: {key}")
+
+# Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from utils.theme import inject_theme, render_theme_toggle
-from utils.auth import sign_in, sign_up, sign_out, forgot_password
-from utils.constants import REGIONS, SECTORS, SESSION_KEYS
-from utils.db_helpers import supabase, cached_get_profile, cached_unread_count, clear_data_cache
-from utils.verification import check_verification_status
-from utils.shared_ui import render_profile_editor_modal
+# ─────────────────────────────────────────────────────────────
+# IMPORTS
+# ─────────────────────────────────────────────────────────────
+try:
+    from utils.theme import inject_theme, render_theme_toggle
+    from utils.auth import sign_in, sign_up, sign_out, forgot_password
+    from utils.constants import REGIONS, SECTORS, SESSION_KEYS
+    from utils.db_helpers import supabase, cached_get_profile, cached_unread_count, clear_data_cache
+    from utils.verification import check_verification_status
+    from utils.shared_ui import render_profile_editor_modal
+except ImportError as e:
+    st.error(f"⚠️ Import Error: {e}")
+    st.stop()
+
+# ═════════════════════════════════════════════════════════════
+# LOGGING CONFIGURATION
+# ═════════════════════════════════════════════════════════════
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ═════════════════════════════════════════════════════════════
 # PAGE CONFIG
@@ -30,28 +69,54 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize session state keys
-for _k in SESSION_KEYS:
-    if _k not in st.session_state:
-        st.session_state[_k] = None
+# ─────────────────────────────────────────────────────────────
+# SESSION STATE INITIALIZATION
+# ─────────────────────────────────────────────────────────────
+def initialize_session_state():
+    """Initialize all session state variables"""
+    # User session
+    default_keys = {
+        'user': None,
+        'profile': None,
+        'authenticated': False,
+        'user_role': None,
+        'user_email': None
+    }
+    
+    # UI state
+    default_ui_keys = {
+        'theme_mode': 'dark',
+        'show_profile_editor': False,
+        'sidebar_light_mode': False,
+        'auth_redirect': False,
+        'nav_clicked': False,
+        'page': 'main'
+    }
+    
+    # Initialize all keys from constants
+    if 'SESSION_KEYS' in globals():
+        for _k in SESSION_KEYS:
+            if _k not in st.session_state:
+                st.session_state[_k] = None
+    
+    # Initialize UI keys
+    for key, default_value in default_ui_keys.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+    
+    # Initialize user keys
+    for key, default_value in default_keys.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
 
-# Initialize theme
-if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "dark"
-if "show_profile_editor" not in st.session_state:
-    st.session_state.show_profile_editor = False
-if "sidebar_light_mode" not in st.session_state:
-    st.session_state.sidebar_light_mode = False
-if "auth_redirect" not in st.session_state:
-    st.session_state.auth_redirect = False
-if "nav_clicked" not in st.session_state:
-    st.session_state.nav_clicked = False
+# Call initialization
+initialize_session_state()
 
-# Inject theme (both sidebar and main content)
+# Inject theme
 inject_theme()
 
 # ═════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR RENDERER
 # ═════════════════════════════════════════════════════════════
 def render_sidebar():
     with st.sidebar:
@@ -67,8 +132,17 @@ def render_sidebar():
             st.caption("Ethiopian Multi-Sector Commerce")
             st.divider()
             
-            profile = st.session_state.get("profile") or cached_get_profile(st.session_state.user.id)
+            # Get profile
+            profile = st.session_state.get("profile")
+            if profile is None:
+                try:
+                    profile = cached_get_profile(st.session_state.user.id)
+                    if profile:
+                        st.session_state.profile = profile
+                except Exception as e:
+                    logger.error(f"Profile fetch error: {e}")
             
+            # Try to create profile if it doesn't exist
             if profile is None:
                 try:
                     default_name = st.session_state.user.email.split('@')[0] if st.session_state.user.email else "User"
@@ -80,15 +154,25 @@ def render_sidebar():
                         "documents_uploaded": False
                     }).execute()
                     profile = cached_get_profile(st.session_state.user.id)
+                    if profile:
+                        st.session_state.profile = profile
                 except Exception as e:
-                    st.error(f"⚠️ Profile creation failed: {e}")
-                    if st.button("Sign Out"):
+                    logger.error(f"Profile creation error: {e}")
+                    st.error(f"⚠️ Profile creation failed: {str(e)}")
+                    if st.button("Sign Out", key="sb_logout_error_btn"):
                         sign_out()
                         st.rerun()
                     st.stop()
             
-            st.session_state.profile = profile
-            role = profile.get("role") if profile else None
+            if profile is None:
+                st.warning("⚠️ Could not load profile. Please sign out and try again.")
+                if st.button("Sign Out", key="sb_logout_profile_error"):
+                    sign_out()
+                    st.rerun()
+                return None, None
+            
+            role = profile.get("role", "customer")
+            st.session_state.user_role = role
             
             # Profile picture section
             profile_pic = profile.get("profile_image")
@@ -108,7 +192,7 @@ def render_sidebar():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Edit button - opens profile editor modal
+            # Edit button
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button("✏️ Edit Profile", key="edit_profile_btn_sidebar", use_container_width=True):
@@ -126,49 +210,58 @@ def render_sidebar():
             st.divider()
             st.caption(f'📍 {profile.get("region", "N/A")}')
             
+            # Verification status
             try:
                 verif_status = check_verification_status(st.session_state.user.id)
-                if not verif_status["is_verified"]:
-                    if verif_status["has_documents"]:
+                if verif_status and not verif_status.get("is_verified", False):
+                    if verif_status.get("has_documents", False):
                         st.info("⏳ Documents pending verification")
                     else:
                         st.warning("⚠️ Upload documents to verify")
-            except Exception:
+            except Exception as e:
+                logger.error(f"Verification check error: {e}")
                 st.caption("⚠️ Verification check failed")
             
-            unread = cached_unread_count(st.session_state.user.id)
-            if unread:
-                st.info(f"🔔 {unread} unread notification(s)")
+            # Notifications
+            try:
+                unread = cached_unread_count(st.session_state.user.id)
+                if unread and unread > 0:
+                    st.info(f"🔔 {unread} unread notification(s)")
+            except Exception as e:
+                logger.error(f"Notification count error: {e}")
             
             st.divider()
             
-            # Quick navigation links - using st.button with switch_page
-            if role == "producer":
-                st.markdown("**🚜 Quick Links**")
-                if st.button("📊 Producer Dashboard", key="nav_producer", use_container_width=True):
-                    st.session_state.nav_clicked = True
-                    st.switch_page("1_producer.py")
-            elif role == "merchant":
-                st.markdown("**🏬 Quick Links**")
-                if st.button("📊 Merchant Dashboard", key="nav_merchant", use_container_width=True):
-                    st.session_state.nav_clicked = True
-                    st.switch_page("2_merchant.py")
-            elif role == "customer":
-                st.markdown("**🛒 Quick Links**")
-                if st.button("📊 Customer Dashboard", key="nav_customer", use_container_width=True):
-                    st.session_state.nav_clicked = True
-                    st.switch_page("3_customer.py")
-            elif role == "admin":
-                st.markdown("**🛡️ Quick Links**")
-                if st.button("📊 Admin Dashboard", key="nav_admin", use_container_width=True):
-                    st.session_state.nav_clicked = True
-                    st.switch_page("4_Admin.py")
+            # Quick navigation links
+            nav_mapping = {
+                "producer": ("🚜 Producer Dashboard", "1_producer.py"),
+                "merchant": ("🏬 Merchant Dashboard", "2_merchant.py"),
+                "customer": ("🛒 Customer Dashboard", "3_customer.py"),
+                "admin": ("🛡️ Admin Dashboard", "4_Admin.py")
+            }
+            
+            if role in nav_mapping:
+                label, page = nav_mapping[role]
+                st.markdown("**Quick Links**")
+                if st.button(label, key=f"nav_{role}", use_container_width=True):
+                    try:
+                        st.switch_page(page)
+                    except Exception as e:
+                        logger.error(f"Navigation error: {e}")
+                        st.warning(f"⚠️ Page '{page}' not found. Please check if the file exists.")
             
             st.divider()
             
             if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
-                sign_out()
-                st.rerun()
+                try:
+                    sign_out()
+                    st.session_state.authenticated = False
+                    st.session_state.user = None
+                    st.session_state.profile = None
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Logout error: {e}")
+                    st.error(f"Logout error: {str(e)}")
             
             return profile, role
 
@@ -178,10 +271,15 @@ def render_sidebar():
 def show_landing():
     try:
         _n_products = supabase.table("products").select("", count="exact").eq("is_available", True).execute().count or 0
-        _n_users = supabase.table("profiles").select("", count="exact").execute().count or 0
-        _n_sectors = len(SECTORS)
     except Exception:
-        _n_products, _n_users, _n_sectors = 0, 0, len(SECTORS)
+        _n_products = 0
+    
+    try:
+        _n_users = supabase.table("profiles").select("", count="exact").execute().count or 0
+    except Exception:
+        _n_users = 0
+    
+    _n_sectors = len(SECTORS) if 'SECTORS' in globals() else 0
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 52px 48px 44px; margin-bottom: 36px; color: white;">
@@ -227,7 +325,7 @@ def show_landing():
                 with st.spinner("Authenticating…"):
                     ok, msg = sign_in(email, password)
                 if ok:
-                    # Set flag to prevent multiple reruns and redirect
+                    st.session_state.authenticated = True
                     st.session_state.auth_redirect = True
                     st.rerun()
                 else:
@@ -255,7 +353,7 @@ def show_landing():
         with col_r:
             reg_role = st.selectbox("I am a…", ["producer", "merchant", "customer"], key="reg_role")
         with col_reg:
-            reg_region = st.selectbox("Region", REGIONS, key="reg_region")
+            reg_region = st.selectbox("Region", REGIONS if 'REGIONS' in globals() else ["Addis Ababa"], key="reg_region")
         reg_phone = st.text_input("Phone (optional)", key="reg_phone", placeholder="+251 9xx xxx xxx")
         
         if st.button("Create Account →", use_container_width=True, type="primary", key="reg_btn"):
@@ -276,93 +374,112 @@ def show_landing():
 # ═════════════════════════════════════════════════════════════
 # MAIN ROUTER
 # ═════════════════════════════════════════════════════════════
-profile, role = render_sidebar()
-
-# ═════════════════════════════════════════════════════════════
-# PROFILE EDITOR MODAL
-# ═════════════════════════════════════════════════════════════
-if st.session_state.get("show_profile_editor") and profile:
-    st.markdown("""
-    <style>
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.85);
-        z-index: 99999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    @media (max-width: 768px) {
+def main():
+    """Main application entry point"""
+    
+    # Render sidebar
+    profile, role = render_sidebar()
+    
+    # Profile editor modal
+    if st.session_state.get("show_profile_editor") and profile:
+        st.markdown("""
+        <style>
         .modal-overlay {
-            padding: 10px;
-            align-items: flex-start;
-            padding-top: 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 4, 1])
-    with col2:
-        render_profile_editor_modal(profile, st.session_state.user.id)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-# ═════════════════════════════════════════════════════════════
-# AUTO-REDIRECT AFTER LOGIN
-# ═════════════════════════════════════════════════════════════
-if st.session_state.get("user") is not None and st.session_state.get("auth_redirect"):
-    # Clear the flag to prevent loop
-    st.session_state.auth_redirect = False
-    
-    # Get profile if not already loaded
-    if profile is None:
-        profile = cached_get_profile(st.session_state.user.id)
-        st.session_state.profile = profile
-    
-    if profile:
-        role = profile.get("role")
-        # Redirect based on role
-        try:
-            if role == "producer":
-                st.switch_page("1_producer.py")
-            elif role == "merchant":
-                st.switch_page("2_merchant.py")
-            elif role == "customer":
-                st.switch_page("3_customer.py")
-            elif role == "admin":
-                st.switch_page("4_Admin.py")
-        except Exception as e:
-            # If switch_page fails, stay on current page
-            st.session_state.auth_redirect = False
-
-# Show landing or dashboard
-if st.session_state.get("user") is None:
-    show_landing()
-else:
-    if profile is None:
-        st.error("Could not load profile. Please sign out and try again.")
-        if st.button("Sign Out"):
-            sign_out()
-            st.rerun()
-    else:
-        role_emoji = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-                    border-radius: 16px; padding: 40px; color: white; text-align: center;">
-            <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
-            <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
-            <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
-                👈 Use the sidebar navigation to go to your dashboard.
-            </p>
-        </div>
+        @media (max-width: 768px) {
+            .modal-overlay {
+                padding: 10px;
+                align-items: flex-start;
+                padding-top: 40px;
+            }
+        }
+        </style>
         """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 4, 1])
+        with col2:
+            render_profile_editor_modal(profile, st.session_state.user.id)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.stop()
+    
+    # Auto-redirect after login
+    if st.session_state.get("authenticated") and st.session_state.get("auth_redirect"):
+        st.session_state.auth_redirect = False
+        
+        # Get profile if not already loaded
+        if profile is None and st.session_state.get("user"):
+            try:
+                profile = cached_get_profile(st.session_state.user.id)
+                if profile:
+                    st.session_state.profile = profile
+            except Exception as e:
+                logger.error(f"Profile fetch for redirect error: {e}")
+        
+        if profile:
+            role = profile.get("role")
+            page_mapping = {
+                "producer": "1_producer.py",
+                "merchant": "2_merchant.py",
+                "customer": "3_customer.py",
+                "admin": "4_Admin.py"
+            }
+            
+            if role in page_mapping:
+                try:
+                    st.switch_page(page_mapping[role])
+                except Exception as e:
+                    logger.error(f"Switch page error: {e}")
+                    # Stay on main page if navigation fails
+                    st.session_state.auth_redirect = False
+    
+    # Show landing or dashboard
+    if st.session_state.get("user") is None or not st.session_state.get("authenticated"):
+        show_landing()
+    else:
+        if profile is None:
+            st.error("Could not load profile. Please sign out and try again.")
+            if st.button("Sign Out", key="main_signout_error"):
+                try:
+                    sign_out()
+                    st.session_state.authenticated = False
+                    st.session_state.user = None
+                    st.session_state.profile = None
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Signout error: {e}")
+        else:
+            role_emoji = {
+                "producer": "🚜", 
+                "merchant": "🏬", 
+                "customer": "🛒", 
+                "admin": "🛡️"
+            }.get(role, "👤")
+            
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
+                        border-radius: 16px; padding: 40px; color: white; text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
+                <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
+                <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
+                    👈 Use the sidebar navigation to go to your dashboard.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+# Run main app
+if __name__ == "__main__":
+    main()
