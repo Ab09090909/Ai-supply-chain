@@ -257,8 +257,7 @@ with _hcol3:
 # Sidebar
 # ─────────────────────────────────────────────
 with st.sidebar:
-    from utils.theme import render_theme_toggle
-    render_theme_toggle()
+    render_theme_toggle(page="producer")
     st.divider()
     st.markdown("### 🚜 Quick Actions")
     if st.button("🔄 Refresh Data", use_container_width=True):
@@ -1111,11 +1110,10 @@ with tab_notif:
 
 # ── PROFILE ──
 with tab_profile:
-    render_profile_editor_modal(profile, user_id)
+    render_profile_editor_modal(profile, user_id, key_suffix="producer_tab")
 
-# ── Show profile editor modal if triggered from header button ──
-if st.session_state.get("show_profile_editor"):
-    render_profile_editor_modal(profile, user_id)
+# ── Header Edit Profile button now just switches to Profile tab (no duplicate render) ──
+# show_profile_editor flag is cleared so it doesn't cause duplicate widget keys
 
 # ═════════════════════════════════════════════════════════════
 # FLOATING CHATBOT (Add this at the end of 1_producer.py)
