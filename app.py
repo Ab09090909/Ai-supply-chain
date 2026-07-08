@@ -1,6 +1,5 @@
 """
 app.py — Ethiopian AI Supply Chain Platform (Main Entry)
-Handles: Landing page, Authentication, Routing to pages/
 """
 import sys
 import os
@@ -85,9 +84,7 @@ def render_sidebar():
             st.session_state.profile = profile
             role = profile.get("role") if profile else None
             
-            # ──────────────────────────────────────
-            # PROFILE PICTURE SECTION WITH EDIT ICON
-            # ──────────────────────────────────────
+            # Profile picture section
             profile_pic = profile.get("profile_image")
             st.markdown(f"""
             <div style="text-align: center; margin: 20px 0;">
@@ -97,14 +94,14 @@ def render_sidebar():
             </div>
             """, unsafe_allow_html=True)
             
-            # Edit button centered
+            # Edit button
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if st.button("✏️ Edit Profile", key="edit_profile_btn_sidebar", use_container_width=True):
                     st.session_state.show_profile_editor = True
                     st.rerun()
             
-            # Show name in bold and large
+            # Show name
             st.markdown(f"""
             <div style="text-align: center; margin: 15px 0;">
                 <div style="font-size: 22px; font-weight: 700; color: #f1f5f9;">{profile.get('full_name', 'User')}</div>
@@ -113,14 +110,13 @@ def render_sidebar():
             """, unsafe_allow_html=True)
             
             st.divider()
-            
-            st.caption(f' {profile.get("region", "N/A")}')
+            st.caption(f'📍 {profile.get("region", "N/A")}')
             
             try:
                 verif_status = check_verification_status(st.session_state.user.id)
                 if not verif_status["is_verified"]:
                     if verif_status["has_documents"]:
-                        st.info(" Documents pending verification")
+                        st.info("⏳ Documents pending verification")
                     else:
                         st.warning("⚠️ Upload documents to verify")
             except Exception as _verif_err:
@@ -128,11 +124,11 @@ def render_sidebar():
             
             unread = cached_unread_count(st.session_state.user.id)
             if unread:
-                st.info(f"🔔 {unread} unread notification(s)")
+                st.info(f" {unread} unread notification(s)")
             
             st.divider()
             
-            if st.button("🚪 Log Out", use_container_width=True, key="sb_logout_btn"):
+            if st.button(" Log Out", use_container_width=True, key="sb_logout_btn"):
                 sign_out()
                 st.rerun()
             
@@ -151,12 +147,12 @@ def show_landing():
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%); border-radius: 20px; padding: 52px 48px 44px; margin-bottom: 36px; color: white;">
-        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;margin-bottom:14px;">🌍 Wolaita Sodo University · Department of ECE</p>
+        <p style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F4C430;margin-bottom:14px;"> Wolaita Sodo University · Department of ECE</p>
         <h1 style="font-size: clamp(28px, 4vw, 46px); font-weight: 800; margin: 0 0 16px; color: white;">Ethiopian <span style="color: #F4C430;">AI Supply Chain</span><br>Platform</h1>
         <p style="font-size: 15px; color: rgba(255,255,255,0.82); line-height: 1.7; max-width: 560px; margin: 0 0 28px;">Connecting smallholder farmers, processing hubs, and consumers through machine-learning–powered matching, real-time price intelligence, and fraud-resistant trade agreements.</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <span style="background: #D4A017; border: 1px solid #F4C430; color: #1B4332; font-weight: 700; padding: 5px 14px; border-radius: 20px; font-size: 12px;">⚡ AI Price Engine</span>
-            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;"> Smart Matchmaking</span>
+            <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🤝 Smart Matchmaking</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">🛡️ Fraud Detection</span>
             <span style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 5px 14px; border-radius: 20px; font-size: 12px;">📈 Demand Forecasting</span>
         </div>
@@ -200,7 +196,7 @@ def show_landing():
         st.divider()
         with st.expander("🔑 Forgot Password?"):
             reset_email = st.text_input("Enter your registered email", key="reset_email", placeholder="you@example.com")
-            if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
+            if st.button(" Send Reset Link", key="reset_btn", use_container_width=True):
                 if not reset_email:
                     st.warning("Please enter your email address.")
                 else:
@@ -243,7 +239,7 @@ def show_landing():
 profile, role = render_sidebar()
 
 # ═════════════════════════════════════════════════════════════
-# PROFILE EDITOR MODAL (Check this BEFORE showing dashboard)
+# PROFILE EDITOR MODAL
 # ═════════════════════════════════════════════════════════════
 if st.session_state.get("show_profile_editor") and profile:
     st.markdown("""
@@ -266,13 +262,12 @@ if st.session_state.get("show_profile_editor") and profile:
     
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
     
-    # Center the modal with columns
     col1, col2, col3 = st.columns([1, 4, 1])
     with col2:
         render_profile_editor_modal(profile, st.session_state.user.id)
     
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()  # Stop rendering the rest of the page
+    st.stop()
 
 # Show landing or dashboard
 if st.session_state.get("user") is None:
@@ -291,7 +286,7 @@ else:
             <div style="font-size: 64px; margin-bottom: 16px;">{role_emoji}</div>
             <h1 style="color: white; margin: 0;">Welcome to Your Dashboard</h1>
             <p style="opacity: 0.9; margin-top: 12px; font-size: 16px;">
-                 Use the sidebar to navigate to your dashboard pages.
+                👈 Use the sidebar to navigate to your dashboard pages.
             </p>
         </div>
         """, unsafe_allow_html=True)
