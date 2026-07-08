@@ -6,7 +6,7 @@ import datetime
 import streamlit as st
 import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from utils.theme import inject_theme
+from utils.theme import inject_theme, render_theme_toggle
 from utils.constants import REGIONS, SECTORS, UNITS
 from utils.db_helpers import supabase, cached_query, clear_data_cache, reduce_product_stock, send_notification
 from utils.verification import check_verification_status, render_document_upload
