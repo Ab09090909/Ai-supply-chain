@@ -299,3 +299,12 @@ def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
         { f'<p style="margin: 6px 0 0; opacity: 0.82; font-size: 14px;">{subtitle}</p>' if subtitle else '' }
     </div>
     """, unsafe_allow_html=True)
+
+def render_theme_toggle():
+    """Render a simple theme toggle button."""
+    if "theme_mode" not in st.session_state:
+        st.session_state.theme_mode = "dark"
+        
+    if st.button(" Toggle Theme", key="theme_toggle_btn", use_container_width=True):
+        st.session_state.theme_mode = "light" if st.session_state.get("theme_mode") == "dark" else "dark"
+        st.rerun()
