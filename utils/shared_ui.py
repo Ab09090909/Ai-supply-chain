@@ -179,7 +179,7 @@ def render_notifications_tab(user_id):
 
 
 def render_profile_edit_tab(profile, user_id):
-    st.subheader(" Edit Profile")
+    st.subheader("✏️ Edit Profile")
     with st.form("profile_edit_form"):
         pe1, pe2 = st.columns(2)
         with pe1:
@@ -220,8 +220,7 @@ def render_profile_editor_modal(profile, user_id, key_suffix="main"):
     """Render profile editor modal with image upload.
     
     key_suffix: unique string to avoid DuplicateWidgetID when this is
-    called from multiple locations. Use 'tab' for the Profile tab call
-    and 'modal' for the header-button triggered call.
+    called from multiple locations.
     """
     st.markdown("""
     <style>
@@ -231,10 +230,19 @@ def render_profile_editor_modal(profile, user_id, key_suffix="main"):
         border-radius: 16px;
         padding: 30px;
         margin: 20px 0;
+        max-height: 90vh;
+        overflow-y: auto;
     }
     .profile-pic-upload {
         text-align: center;
         margin: 20px 0;
+    }
+    @media (max-width: 768px) {
+        .profile-editor-modal {
+            padding: 16px;
+            margin: 10px 0;
+            max-height: 95vh;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -242,6 +250,11 @@ def render_profile_editor_modal(profile, user_id, key_suffix="main"):
     with st.container():
         st.markdown('<div class="profile-editor-modal">', unsafe_allow_html=True)
         st.markdown("### 👤 Edit Profile")
+        
+        # Close button at top-right
+        if st.button("✖ Close", key=f"close_profile_edit_{key_suffix}", use_container_width=False):
+            st.session_state.show_profile_editor = False
+            st.rerun()
         
         # Profile Picture Upload Section
         st.markdown('<div class="profile-pic-upload">', unsafe_allow_html=True)
@@ -288,7 +301,7 @@ def render_profile_editor_modal(profile, user_id, key_suffix="main"):
         
         st.divider()
         
-        # Profile Information Form — key also unique
+        # Profile Information Form
         with st.form(f"profile_info_form_{key_suffix}"):
             st.markdown("#### 📝 Profile Information")
             pe1, pe2 = st.columns(2)
@@ -327,13 +340,7 @@ def render_profile_editor_modal(profile, user_id, key_suffix="main"):
                     placeholder="Your company name"
                 )
             
-            st.markdown("")
             submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
-            
-        # Cancel button — unique key
-        if st.button("✖ Cancel", use_container_width=True, key=f"cancel_profile_edit_{key_suffix}"):
-            st.session_state.show_profile_editor = False
-            st.rerun()
 
         # Handle form submission
         if submitted:
