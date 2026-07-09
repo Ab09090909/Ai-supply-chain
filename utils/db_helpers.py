@@ -2,26 +2,42 @@ import streamlit as st
 from datetime import datetime
 import uuid
 
-# LAZY IMPORT: Only load when function is called
+# ==========================================
+# LAZY IMPORTS (Prevents startup crashes)
+# ==========================================
+
 def get_supabase():
+    """Initialize Supabase client only when needed"""
     from src.db import get_client
     return get_client()
 
-def create_user(name: str, email: str, password: str, role: str, phone: str = "", company_name: str = "") -> tuple:
+def hash_password(password: str):
     from utils.auth import hash_password
+    return hash_password(password)
+
+def verify_password(password: str, stored_hash: str):
+    from utils.auth import verify_password
+    return verify_password(password, stored_hash)
+
+def generate_session_token():
+    from utils.auth import generate_session_token
+    return generate_session_token()
+
+# ==========================================
+# USER OPERATIONS
+# ==========================================
+
+def create_user(name: str, email: str, password: str, role: str, phone: str = "", company_name: str = "") -> tuple:
     supabase = get_supabase()
-    
     try:
-        # Check if email exists
         response = supabase.table('users').select('id').eq('email', email).execute()
         if response.data:
             return False, "Email already registered", None
         
-        password_hash = hash_password(password)
+        pwd_hash = hash_password(password)
         
-        # Insert user
         user_response = supabase.table('users').insert({
-            'name': name, 'email': email, 'password_hash': password_hash,
+            'name': name, 'email': email, 'password_hash': pwd_hash,
             'role': role, 'phone': phone, 'company_name': company_name, 'is_verified': True
         }).execute()
         
@@ -30,17 +46,15 @@ def create_user(name: str, email: str, password: str, role: str, phone: str = ""
             
         user_id = user_response.data[0]['id']
         
-        # Create wallet
         supabase.table('wallets').insert({'user_id': user_id, 'balance': 0.0}).execute()
+        log_activity(user_id, "account_created", f"New {role} account created")
         
         return True, "Account created successfully!", user_id
     except Exception as e:
         return False, f"Error: {str(e)}", None
 
 def authenticate_user(email: str, password: str) -> tuple:
-    from utils.auth import verify_password, generate_session_token
     supabase = get_supabase()
-    
     try:
         response = supabase.table('users').select('*').eq('email', email).eq('is_active', True).execute()
         if not response.data:
@@ -50,7 +64,6 @@ def authenticate_user(email: str, password: str) -> tuple:
         if not verify_password(password, user['password_hash']):
             return False, "Invalid email or password", None
         
-        # Update last login
         supabase.table('users').update({'last_login': datetime.now().isoformat()}).eq('id', user['id']).execute()
         
         user_info = {
@@ -61,9 +74,147 @@ def authenticate_user(email: str, password: str) -> tuple:
     except Exception as e:
         return False, f"Error: {str(e)}", None
 
+# ==========================================
+# PRODUCT OPERATIONS
+# ==========================================
+
+def create_product(name: str, description: str, category: str, price: float,
+                   cost_price: float, stock_quantity: int, producer_id: str, weight: float = 0) -> tuple:
+    supabase = get_supabase()
+    try:
+        sku = f"SKU-{uuid.uuid4().hex[:8].upper()}"
+        
+        response = supabase.table('products').insert({
+            'name': name, 'description': description, 'category': category,
+            'price': price, 'cost_price': cost_price, 'stock_quantity': stock_quantity,
+            'producer_id': producer_id, 'sku': sku, 'weight': weight, 'min_stock': 10
+        }).execute()
+        
+        if not response.data:
+            return False, "Failed to create product", None
+            
+        log_activity(producer_id, "product_created", f"Product '{name}' created")
+        return True, "Product created successfully!", response.data[0]['id']
+    except Exception as e:
+        return False, f"Error: {str(e)}", None
+
+def get_products(producer_id: str = None, category: str = None, active_only: bool = True, limit: int = 100):
+    supabase = get_supabase()
+    try:
+        query = supabase.table('products').select('*').limit(limit)
+        if producer_id: query = query.eq('producer_id', producer_id)
+        if category: query = query.eq('category', category)
+        if active_only: query = query.eq('is_active', True)
+        query = query.order('created_at', desc=True)
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Error fetching products: {e}")
+        return []
+
+def get_low_stock_products(producer_id: str = None):
+    supabase = get_supabase()
+    try:
+        # Supabase doesn't support direct column comparison in filter, so we fetch and filter in Python
+        query = supabase.table('products').select('*').eq('is_active', True)
+        if producer_id: query = query.eq('producer_id', producer_id)
+        response = query.execute()
+        
+        if not response.data: return []
+        
+        # Filter where stock_quantity <= min_stock
+        return [p for p in response.data if p.get('stock_quantity', 0) <= p.get('min_stock', 10)]
+    except Exception as e:
+        return []
+
+def update_product_stock(product_id: str, quantity_change: int) -> bool:
+    supabase = get_supabase()
+    try:
+        response = supabase.table('products').select('stock_quantity').eq('id', product_id).execute()
+        if not response.data: return False
+        
+        new_stock = response.data[0]['stock_quantity'] + quantity_change
+        if new_stock < 0: return False
+        
+        supabase.table('products').update({
+            'stock_quantity': new_stock, 'updated_at': datetime.now().isoformat()
+        }).eq('id', product_id).execute()
+        return True
+    except:
+        return False
+
+# ==========================================
+# ORDER OPERATIONS
+# ==========================================
+
+def get_orders(user_id: str, role: str, status: str = None, limit: int = 50):
+    supabase = get_supabase()
+    try:
+        query = supabase.table('orders').select('*').limit(limit).order('created_at', desc=True)
+        
+        if role == 'customer': query = query.eq('customer_id', user_id)
+        elif role == 'merchant': query = query.eq('merchant_id', user_id)
+        elif role == 'producer': 
+            # For producer, we need to join with products to filter by producer_id
+            # Since Supabase doesn't support complex joins easily in one call, 
+            # we fetch all orders and filter by product_id in a second step if needed.
+            # For simplicity, we'll fetch orders where merchant_id matches (assuming producer is merchant here)
+            # OR we fetch products first. Let's fetch products first.
+            prod_response = supabase.table('products').select('id').eq('producer_id', user_id).execute()
+            prod_ids = [p['id'] for p in prod_response.data] if prod_response.data else []
+            if not prod_ids: return []
+            query = query.in_('product_id', prod_ids)
+            
+        if status: query = query.eq('status', status)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Error fetching orders: {e}")
+        return []
+
+# ==========================================
+# DASHBOARD ANALYTICS
+# ==========================================
+
+def get_dashboard_stats(role: str, user_id: str):
+    supabase = get_supabase()
+    stats = {}
+    
+    try:
+        if role == 'producer':
+            # Total products
+            prod_resp = supabase.table('products').select('id', 'stock_quantity', 'min_stock', 'price').eq('producer_id', user_id).eq('is_active', True).execute()
+            products = prod_resp.data if prod_resp.data else []
+            stats['total_products'] = len(products)
+            stats['low_stock'] = len([p for p in products if p.get('stock_quantity', 0) <= p.get('min_stock', 10)])
+            stats['revenue'] = sum(p.get('price', 0) for p in products) # Simplified revenue calc
+            
+            # Total orders for producer's products
+            prod_ids = [p['id'] for p in products]
+            if prod_ids:
+                order_resp = supabase.table('orders').select('id', 'total_amount', 'status').in_('product_id', prod_ids).execute()
+                orders = order_resp.data if order_resp.data else []
+                stats['total_orders'] = len(orders)
+                stats['revenue'] = sum(o.get('total_amount', 0) for o in orders if o.get('status') not in ['cancelled', 'refunded'])
+            else:
+                stats['total_orders'] = 0
+                stats['revenue'] = 0.0
+                
+    except Exception as e:
+        st.error(f"Error fetching stats: {e}")
+        
+    return stats
+
+# ==========================================
+# ACTIVITY LOG
+# ==========================================
+
 def log_activity(user_id: str, action: str, details: str = ""):
     try:
         supabase = get_supabase()
-        supabase.table('activity_log').insert({'user_id': user_id, 'action': action, 'details': details}).execute()
+        supabase.table('activity_log').insert({
+            'user_id': user_id, 'action': action, 'details': details
+        }).execute()
     except:
         pass
