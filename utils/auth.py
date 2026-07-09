@@ -3,20 +3,16 @@ import re
 import time
 import hashlib
 import secrets
-from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Dict
 
-# Rate limiting storage
 login_attempts: Dict[str, list] = {}
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256 with salt"""
     salt = secrets.token_hex(16)
     pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
     return f"{salt}${pwd_hash}"
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    """Verify password against stored hash"""
     try:
         salt, pwd_hash = stored_hash.split('$')
         return hashlib.sha256((password + salt).encode()).hexdigest() == pwd_hash
@@ -32,40 +28,31 @@ def validate_email(email: str) -> tuple:
 def validate_password(password: str) -> tuple:
     if not password: return False, "Password is required"
     if len(password) < 8: return False, "Password must be at least 8 characters"
-    if not re.search(r'[A-Z]', password): return False, "Password must contain at least one uppercase letter"
-    if not re.search(r'[a-z]', password): return False, "Password must contain at least one lowercase letter"
-    if not re.search(r'\d', password): return False, "Password must contain at least one number"
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password): return False, "Password must contain at least one special character"
+    if not re.search(r'[A-Z]', password): return False, "Must contain uppercase"
+    if not re.search(r'[a-z]', password): return False, "Must contain lowercase"
+    if not re.search(r'\d', password): return False, "Must contain number"
+    if not re.search(r'[!@#$%^&*]', password): return False, "Must contain special char"
     return True, ""
 
-def check_rate_limit(username: str, max_attempts: int = 5, lockout_time: int = 900) -> tuple:
+def check_rate_limit(username: str) -> tuple:
     current_time = time.time()
     if username not in login_attempts: login_attempts[username] = []
-    login_attempts[username] = [a for a in login_attempts[username] if current_time - a < lockout_time]
-    if len(login_attempts[username]) >= max_attempts:
-        remaining = lockout_time - (current_time - login_attempts[username][0])
-        return False, f"Too many attempts. Try again in {int(remaining // 60)}m {int(remaining % 60)}s"
+    login_attempts[username] = [a for a in login_attempts[username] if current_time - a < 900]
+    if len(login_attempts[username]) >= 5:
+        return False, "Too many attempts. Try again in 15m"
     return True, ""
-
-def record_login_attempt(username: str, success: bool):
-    if not success:
-        if username not in login_attempts: login_attempts[username] = []
-        login_attempts[username].append(time.time())
 
 def generate_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 def initialize_session_state():
-    defaults = {
-        'authenticated': False, 'user_info': None, 'session_token': None,
-        'remember_me': False, 'logout_confirmation': False, 'current_page': None,
-    }
+    defaults = {'authenticated': False, 'user_info': None, 'session_token': None, 'logout_confirmation': False}
     for key, value in defaults.items():
         if key not in st.session_state: st.session_state[key] = value
 
 def login_user(email: str, password: str, remember_me: bool = False) -> tuple:
-    # Lazy import to prevent circular dependency
-    from utils.db_helpers import authenticate_user 
+    # LAZY IMPORT
+    from utils.db_helpers import authenticate_user
     
     is_allowed, message = check_rate_limit(email)
     if not is_allowed: return False, message, None
@@ -80,34 +67,27 @@ def login_user(email: str, password: str, remember_me: bool = False) -> tuple:
         st.session_state.authenticated = True
         st.session_state.user_info = user_info
         st.session_state.session_token = user_info['session_token']
-        st.session_state.remember_me = remember_me
         return True, message, user_info
     else:
-        record_login_attempt(email, False)
+        if email not in login_attempts: login_attempts[email] = []
+        login_attempts[email].append(time.time())
         return False, message, None
 
 def register_user(name: str, email: str, password: str, role: str) -> tuple:
-    # Lazy import
-    from utils.db_helpers import create_user 
+    # LAZY IMPORT
+    from utils.db_helpers import create_user
     
-    if not name or not name.strip(): return False, "Name is required"
+    if not name: return False, "Name is required"
     email_valid, email_msg = validate_email(email)
     if not email_valid: return False, email_msg
     password_valid, password_msg = validate_password(password)
     if not password_valid: return False, password_msg
-    if role not in ['producer', 'merchant', 'customer', 'admin']: return False, "Invalid role selected"
     
     success, message, user_id = create_user(name.strip(), email, password, role)
     return success, message
 
 def logout_user():
-    from utils.db_helpers import log_activity
-    if st.session_state.user_info:
-        log_activity(st.session_state.user_info['id'], "logout", "User logged out")
-    
     st.session_state.authenticated = False
     st.session_state.user_info = None
     st.session_state.session_token = None
-    st.session_state.logout_confirmation = False
-    st.session_state.current_page = None
     st.rerun()
