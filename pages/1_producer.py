@@ -7,13 +7,14 @@ import pickle
 import uuid
 import numpy as np
 from datetime import datetime, timedelta
+from PIL import Image
 
 # --- Imports ---
 from utils.auth import initialize_session_state, logout_user
 from utils.db_helpers import (
     get_products, create_product, get_orders, get_dashboard_stats, 
     update_product_stock, get_low_stock_products, update_user,
-    update_product, delete_product  # Add these imports
+    update_product, delete_product
 )
 
 # Initialize session state
@@ -168,36 +169,14 @@ st.markdown("""
     border: 1px solid #475569;
     position: relative;
 }
-.product-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-    justify-content: flex-end;
-}
-.product-actions button {
-    padding: 5px 12px;
-    border-radius: 6px;
-    border: none;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.btn-edit {
-    background: #3b82f6;
-    color: white;
-}
-.btn-edit:hover {
-    background: #2563eb;
-    transform: scale(1.05);
-}
-.btn-delete {
-    background: #ef4444;
-    color: white;
-}
-.btn-delete:hover {
-    background: #dc2626;
-    transform: scale(1.05);
+.product-info-badge {
+    display: inline-block;
+    background: #475569;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #e2e8f0;
+    margin: 2px 4px 2px 0;
 }
 .producer-info {
     background: rgba(102, 126, 234, 0.1);
@@ -207,15 +186,6 @@ st.markdown("""
     border-left: 3px solid #667eea;
     font-size: 12px;
     color: #94a3b8;
-}
-.product-info-badge {
-    display: inline-block;
-    background: #475569;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    color: #e2e8f0;
-    margin: 2px 4px 2px 0;
 }
 @media screen and (max-width: 768px) {
     .business-card {
@@ -447,7 +417,7 @@ with tab_inventory:
     
     # Add/Edit Product Form
     with st.expander("➕ Add New Product" if not edit_mode else "✏️ Edit Product", expanded=edit_mode):
-        with st.form("add_product_form"):
+        with st.form("add_product_form", clear_on_submit=not edit_mode):
             # If in edit mode, load product data
             product_data = None
             if edit_mode:
@@ -486,7 +456,7 @@ with tab_inventory:
                 st.image(current_image, width=200)
             
             uploaded_file = st.file_uploader(
-                "Upload New Product Image" + (" (leave empty to keep current)" if edit_mode else ""),
+                "Upload Product Image" + (" (leave empty to keep current)" if edit_mode else ""),
                 type=['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'],
                 help="Supported formats: JPG, JPEG, PNG, GIF, WEBP, BMP, TIFF"
             )
@@ -593,7 +563,7 @@ with tab_inventory:
         
         for idx, product in enumerate(all_products):
             with cols[idx % 3]:
-                # Product Card
+                # Product Card Container
                 st.markdown('<div class="product-card">', unsafe_allow_html=True)
                 
                 # Display product image if exists
@@ -618,35 +588,32 @@ with tab_inventory:
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Product Info with Producer Details
+                # Product Name
+                st.markdown(f"<h4 style='margin: 10px 0 5px 0; color: #fff; font-size: 16px;'>{product['name']}</h4>", unsafe_allow_html=True)
+                
+                # Producer Information
                 st.markdown(f"""
-                <div style="text-align: left; padding: 10px;">
-                    <h4 style="margin: 10px 0 5px 0; color: #fff; font-size: 16px;">{product['name']}</h4>
-                    
-                    <!-- Producer Information -->
-                    <div class="producer-info">
-                        <strong>👤 Producer:</strong> {user_info.get('name', 'Unknown')}<br>
-                        <strong>🏢 Company:</strong> {user_info.get('company_name', 'N/A')}<br>
-                        <strong>📞 Contact:</strong> {user_info.get('phone', 'N/A')}
-                    </div>
-                    
-                    <!-- Product Information -->
-                    <p style="margin: 5px 0; color: #94a3b8; font-size: 13px;">📂 {product.get('category', 'N/A')}</p>
-                    <p style="margin: 5px 0; color: #10b981; font-weight: bold; font-size: 18px;">
-                        {product.get('price', 0)} ETB
-                    </p>
-                    <p style="margin: 5px 0; color: #f59e0b; font-size: 13px;">
-                        📦 Stock: {product.get('quantity', 0)} units
-                    </p>
-                    <p style="margin: 5px 0; color: #64748b; font-size: 12px;">
-                        SKU: {product.get('sku', 'N/A')}
-                    </p>
-                    
-                    <!-- Product Info Badges -->
-                    <div style="margin-top: 8px;">
-                        <span class="product-info-badge">⚖️ {product.get('weight', 0)} kg</span>
-                        <span class="product-info-badge">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
-                    </div>
+                <div class="producer-info">
+                    <strong>👤 Producer:</strong> {user_info.get('name', 'Unknown')}<br>
+                    <strong>🏢 Company:</strong> {user_info.get('company_name', 'N/A')}<br>
+                    <strong>📞 Contact:</strong> {user_info.get('phone', 'N/A')}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Product Information
+                st.markdown(f"""
+                <p style="margin: 5px 0; color: #94a3b8; font-size: 13px;">📂 {product.get('category', 'N/A')}</p>
+                <p style="margin: 5px 0; color: #10b981; font-weight: bold; font-size: 18px;">{product.get('price', 0)} ETB</p>
+                <p style="margin: 5px 0; color: #f59e0b; font-size: 13px;">📦 Stock: {product.get('quantity', 0)} units</p>
+                <p style="margin: 5px 0; color: #64748b; font-size: 12px;">SKU: {product.get('sku', 'N/A')}</p>
+                """, unsafe_allow_html=True)
+                
+                # Product Info Badges
+                created_date = pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'
+                st.markdown(f"""
+                <div style="margin-top: 8px;">
+                    <span class="product-info-badge">⚖️ {product.get('weight', 0)} kg</span>
+                    <span class="product-info-badge">📅 {created_date}</span>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -658,7 +625,6 @@ with tab_inventory:
                         st.rerun()
                 with col2:
                     if st.button("🗑️ Delete", key=f"delete_{product['id']}", use_container_width=True):
-                        # Show confirmation dialog
                         st.session_state.delete_product_id = product['id']
                         st.rerun()
                 
