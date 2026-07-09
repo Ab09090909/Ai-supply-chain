@@ -75,24 +75,25 @@ def signup_user(email, password, name, phone, company_name, address, region, rol
             else:
                 return False, f"Authentication error: {error_msg}"
         
-        # Create user profile in users table - only include columns that exist
+        # Get current timestamp
+        now = datetime.now().isoformat()
+        
+        # Create user profile - match your table schema exactly
         user_data = {
             'id': user_id,
             'email': email,
             'name': name,
             'role': role,
-            'created_at': datetime.now().isoformat()
+            'phone': phone if phone else None,
+            'company_name': company_name if company_name else None,
+            'address': address if address else None,
+            'region': region if region else None,
+            'created_at': now,
+            'updated_at': now
         }
         
-        # Add optional fields if they exist in the table
-        if phone:
-            user_data['phone'] = phone
-        if company_name:
-            user_data['company_name'] = company_name
-        if address:
-            user_data['address'] = address
-        if region:
-            user_data['region'] = region
+        # Remove None values
+        user_data = {k: v for k, v in user_data.items() if v is not None}
         
         response = supabase.table('users')\
             .insert(user_data)\
@@ -112,6 +113,8 @@ def signup_user(email, password, name, phone, company_name, address, region, rol
         error_msg = str(e)
         if "already exists" in error_msg.lower():
             return False, "User with this email already exists"
+        elif "null value" in error_msg.lower():
+            return False, "Please fill in all required fields"
         else:
             return False, f"Sign up error: {error_msg}"
 
@@ -248,6 +251,8 @@ def render_signup():
                     
                     if success:
                         st.success(f"✅ {message}")
+                        # Auto-redirect to login after 2 seconds
+                        st.balloons()
                         st.session_state.show_signup = False
                         st.rerun()
                     else:
