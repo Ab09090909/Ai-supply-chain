@@ -1,6 +1,6 @@
 # app.py - Main entry point
 import streamlit as st
-from utils.auth import initialize_session_state
+from utils.auth import initialize_session_state, render_login
 
 # Configure page
 st.set_page_config(
@@ -63,9 +63,7 @@ def main():
             st.rerun()
     
     else:
-        # Login page
-        st.sidebar.info("🔐 Please log in to access the platform")
-        from utils.auth import render_login
+        # Login/Signup page
         render_login()
 
 if __name__ == "__main__":
