@@ -1,205 +1,329 @@
-"""
-src/db.py — Supabase Client Initialization
-"""
+import sqlite3
 import os
-import logging
+import streamlit as st
+from contextlib import contextmanager
+from datetime import datetime
 from typing import Optional
-from supabase import create_client, Client
 
-# Configure logging
-logger = logging.getLogger(__name__)
+# Database path
+DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DB_PATH = os.path.join(DB_DIR, "supply_chain.db")
 
-# ─────────────────────────────────────────────────────────────
-# GLOBALS
-# ─────────────────────────────────────────────────────────────
-_supabase_client: Optional[Client] = None
-_supabase_url: Optional[str] = None  # cached for status reporting
 
-# ─────────────────────────────────────────────────────────────
-# CLIENT INITIALIZATION
-# ─────────────────────────────────────────────────────────────
+def ensure_db_directory():
+    """Ensure the data directory exists"""
+    os.makedirs(DB_DIR, exist_ok=True)
 
-def _get_credentials() -> tuple[Optional[str], Optional[str]]:
+
+@contextmanager
+def get_connection():
+    """Context manager for database connections"""
+    ensure_db_directory()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+        conn.execute("PRAGMA journal_mode=WAL")  # Better concurrency
+        conn.execute("PRAGMA foreign_keys=ON")   # Enforce foreign keys
+        yield conn
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+
+def execute_query(query: str, params: tuple = (), fetch: str = "none"):
     """
-    Resolve Supabase credentials.
-    Priority:
-      1. Streamlit secrets  (Streamlit Community Cloud)
-      2. Environment variables (local dev / Docker)
+    Execute a database query.
+    
+    Args:
+        query: SQL query string
+        params: Query parameters (tuple)
+        fetch: 'none' | 'one' | 'all' | 'lastrowid'
+    
+    Returns:
+        Depends on fetch type
     """
-    url, key = None, None
-
-    # 1. Streamlit secrets (preferred on Community Cloud)
-    try:
-        import streamlit as st
-        url = st.secrets.get("SUPABASE_URL")
-        key = st.secrets.get("SUPABASE_KEY")
-        if url and key:
-            logger.info("Supabase credentials loaded from Streamlit secrets")
-            return url, key
-    except Exception:
-        pass  # Streamlit not running or secrets not configured
-
-    # 2. Environment variables (local development)
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY")
-    if url and key:
-        logger.info("Supabase credentials loaded from environment variables")
-        return url, key
-
-    logger.error("Supabase credentials not found in st.secrets or environment variables")
-    return None, None
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        
+        if fetch == "one":
+            result = cursor.fetchone()
+            conn.commit()
+            return dict(result) if result else None
+        elif fetch == "all":
+            results = cursor.fetchall()
+            conn.commit()
+            return [dict(row) for row in results]
+        elif fetch == "lastrowid":
+            conn.commit()
+            return cursor.lastrowid
+        else:
+            conn.commit()
+            return cursor.rowcount
 
 
-def get_supabase_client() -> Optional[Client]:
+def execute_many(query: str, params_list: list):
+    """Execute a query with multiple parameter sets"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.executemany(query, params_list)
+        conn.commit()
+        return cursor.rowcount
+
+
+def init_database():
+    """Initialize all database tables"""
+    ensure_db_directory()
+    
+    schema = """
+    -- ============================================
+    -- USERS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('producer', 'merchant', 'customer', 'admin')),
+        phone TEXT DEFAULT '',
+        address TEXT DEFAULT '',
+        company_name TEXT DEFAULT '',
+        is_active INTEGER DEFAULT 1,
+        is_verified INTEGER DEFAULT 0,
+        last_login TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+    -- ============================================
+    -- PRODUCTS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        category TEXT NOT NULL,
+        price REAL NOT NULL CHECK(price > 0),
+        cost_price REAL NOT NULL CHECK(cost_price > 0),
+        stock_quantity INTEGER NOT NULL DEFAULT 0 CHECK(stock_quantity >= 0),
+        min_stock INTEGER DEFAULT 10,
+        producer_id INTEGER NOT NULL,
+        image_url TEXT DEFAULT '',
+        sku TEXT UNIQUE,
+        weight REAL DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (producer_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_products_producer ON products(producer_id);
+    CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+
+    -- ============================================
+    -- MERCHANT PRODUCT LISTINGS
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS merchant_listings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        merchant_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        listed_price REAL NOT NULL CHECK(listed_price > 0),
+        markup_percentage REAL DEFAULT 20.0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (merchant_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        UNIQUE(merchant_id, product_id)
+    );
+
+    -- ============================================
+    -- ORDERS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_number TEXT UNIQUE NOT NULL,
+        customer_id INTEGER NOT NULL,
+        merchant_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL CHECK(quantity > 0),
+        unit_price REAL NOT NULL CHECK(unit_price > 0),
+        total_amount REAL NOT NULL CHECK(total_amount > 0),
+        status TEXT NOT NULL DEFAULT 'pending' 
+            CHECK(status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
+        payment_status TEXT DEFAULT 'unpaid' 
+            CHECK(payment_status IN ('unpaid', 'paid', 'refunded')),
+        shipping_address TEXT NOT NULL,
+        notes TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (customer_id) REFERENCES users(id),
+        FOREIGN KEY (merchant_id) REFERENCES users(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_merchant ON orders(merchant_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+    -- ============================================
+    -- SHIPMENTS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS shipments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        carrier TEXT DEFAULT '',
+        tracking_number TEXT UNIQUE,
+        status TEXT DEFAULT 'pending' 
+            CHECK(status IN ('pending', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'returned')),
+        estimated_delivery TEXT,
+        actual_delivery TEXT,
+        shipping_cost REAL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+
+    -- ============================================
+    -- WALLETS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS wallets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE NOT NULL,
+        balance REAL DEFAULT 0.0 CHECK(balance >= 0),
+        currency TEXT DEFAULT 'USD',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- ============================================
+    -- TRANSACTIONS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wallet_id INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('credit', 'debit')),
+        amount REAL NOT NULL CHECK(amount > 0),
+        description TEXT DEFAULT '',
+        reference_id TEXT DEFAULT '',
+        balance_after REAL NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
+    );
+
+    -- ============================================
+    -- REVIEWS TABLE
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        order_id INTEGER,
+        rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+        comment TEXT DEFAULT '',
+        is_verified INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES users(id),
+        FOREIGN KEY (order_id) REFERENCES orders(id),
+        UNIQUE(product_id, customer_id)
+    );
+
+    -- ============================================
+    -- AI PREDICTIONS LOG
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS ai_predictions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_name TEXT NOT NULL,
+        input_data TEXT,
+        prediction TEXT,
+        confidence REAL,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ============================================
+    -- ACTIVITY LOG
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action TEXT NOT NULL,
+        details TEXT DEFAULT '',
+        ip_address TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at);
+
+    -- ============================================
+    -- PASSWORD RESET TOKENS
+    -- ============================================
+    CREATE TABLE IF NOT EXISTS password_resets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        used INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
     """
-    Returns a cached Supabase client, initializing it on first call.
-    """
-    global _supabase_client, _supabase_url
-
-    if _supabase_client is not None:
-        return _supabase_client
-
-    url, key = _get_credentials()
-    if not url or not key:
-        return None
-
-    try:
-        _supabase_url = url
-        _supabase_client = create_client(url, key)
-        logger.info(f"Supabase client initialized: {url[:30]}...")
-        return _supabase_client
-    except Exception as e:
-        logger.error(f"Failed to create Supabase client: {e}")
-        return None
+    
+    with get_connection() as conn:
+        conn.executescript(schema)
+    
+    # Insert default admin if not exists
+    _seed_default_admin()
+    
+    st.success("✅ Database initialized successfully!")
 
 
-def get_client() -> Optional[Client]:
-    """Alias for get_supabase_client() — backward compatibility."""
-    return get_supabase_client()
+def _seed_default_admin():
+    """Create default admin user if none exists"""
+    from utils.auth import hash_password
+    
+    admin_exists = execute_query(
+        "SELECT id FROM users WHERE role = 'admin' LIMIT 1",
+        fetch="one"
+    )
+    
+    if not admin_exists:
+        execute_query(
+            """INSERT INTO users (name, email, password_hash, role, is_verified)
+               VALUES (?, ?, ?, 'admin', 1)""",
+            ("System Admin", "admin@supplychain.com", hash_password("Admin@1234")),
+            fetch="none"
+        )
 
 
-def init_supabase() -> Optional[Client]:
-    """
-    Initialize and verify Supabase client.
-    Main entry point called at module load time.
-    """
-    client = get_supabase_client()
-    if client is None:
-        logger.error("Supabase client could not be initialized")
-        return None
-
-    # Single lightweight connection test
-    try:
-        response = client.table("profiles").select("id", count="exact").limit(1).execute()
-        if response is not None:
-            logger.info("Supabase connection verified")
-    except Exception as e:
-        logger.warning(f"Supabase connection test failed (client still returned): {e}")
-
-    return client
-
-# ─────────────────────────────────────────────────────────────
-# CONNECTION STATUS
-# ─────────────────────────────────────────────────────────────
-
-def check_db_connection() -> bool:
-    """Returns True if the database is reachable."""
-    client = get_supabase_client()
-    if client is None:
-        return False
-    try:
-        response = client.table("profiles").select("id", count="exact").limit(1).execute()
-        return response is not None
-    except Exception as e:
-        logger.error(f"DB connection check failed: {e}")
-        return False
+def get_table_stats() -> dict:
+    """Get row counts for all tables"""
+    tables = [
+        'users', 'products', 'merchant_listings', 'orders',
+        'shipments', 'wallets', 'transactions', 'reviews',
+        'ai_predictions', 'activity_log'
+    ]
+    
+    stats = {}
+    for table in tables:
+        try:
+            count = execute_query(f"SELECT COUNT(*) as cnt FROM {table}", fetch="one")
+            stats[table] = count['cnt'] if count else 0
+        except:
+            stats[table] = 0
+    
+    return stats
 
 
-def get_db_status() -> dict:
-    """Returns a dict describing the current connection status."""
-    client = get_supabase_client()
-    short_url = (_supabase_url[:30] + "...") if _supabase_url else "Unknown"
-
-    if client is None:
-        return {
-            "status": "error",
-            "message": "Supabase client not initialized",
-            "url": short_url,
-        }
-
-    try:
-        response = client.table("profiles").select("id", count="exact").limit(1).execute()
-        return {
-            "status": "connected",
-            "message": "Database connection healthy",
-            "has_data": bool(response and response.data),
-            "url": short_url,
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Connection failed: {str(e)[:100]}",
-            "url": short_url,
-        }
-
-# ─────────────────────────────────────────────────────────────
-# TABLE HELPERS
-# ─────────────────────────────────────────────────────────────
-
-def table_exists(table_name: str) -> bool:
-    """Returns True if the given table exists and is queryable."""
-    client = get_supabase_client()
-    if client is None:
-        return False
-    try:
-        client.table(table_name).select("id", count="exact").limit(1).execute()
-        return True
-    except Exception:
-        return False
-
-
-def get_table_count(table_name: str) -> int:
-    """Returns the row count for a table, or 0 on error."""
-    client = get_supabase_client()
-    if client is None:
-        return 0
-    try:
-        response = client.table(table_name).select("id", count="exact").execute()
-        return response.count if response else 0
-    except Exception as e:
-        logger.error(f"Failed to get count for {table_name}: {e}")
-        return 0
-
-# ─────────────────────────────────────────────────────────────
-# MODULE-LEVEL CLIENT (backward compatibility)
-# ─────────────────────────────────────────────────────────────
-
-supabase = init_supabase()
-
-__all__ = [
-    "supabase",
-    "get_supabase_client",
-    "get_client",
-    "init_supabase",
-    "check_db_connection",
-    "get_db_status",
-    "table_exists",
-    "get_table_count",
-]
-
-# ─────────────────────────────────────────────────────────────
-# STANDALONE TEST
-# ─────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    client = init_supabase()
-    if client:
-        print("✅ Supabase client initialized successfully")
-        tables = ["profiles", "products", "orders", "notifications"]
-        for table in tables:
-            exists = table_exists(table)
-            count = get_table_count(table) if exists else 0
-            print(f"  📊 {table}: {'✓' if exists else '✗'} ({count} rows)")
-        status = get_db_status()
-        print(f"  🔌 Status: {status['status']} — {status['message']}")
-    else:
-        print("❌ Failed to initialize Supabase client")
+# Auto-initialize on import
+init_database()
