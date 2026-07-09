@@ -313,3 +313,21 @@ def log_activity(user_id: str, action: str, details: str = ""):
         }).execute()
     except:
         pass
+
+def update_user(user_id: str, **kwargs):
+    """Update user information"""
+    supabase = get_supabase()
+    try:
+        allowed_fields = ['name', 'email', 'phone', 'company_name', 'address', 'region']
+        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+        
+        if not updates:
+            return False
+        
+        updates['updated_at'] = datetime.now().isoformat()
+        
+        response = supabase.table('users').update(updates).eq('id', user_id).execute()
+        return response.data is not None
+    except Exception as e:
+        st.error(f"Error updating user: {e}")
+        return False
