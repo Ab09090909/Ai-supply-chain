@@ -31,7 +31,7 @@ def render_product_card(product, user_info):
         """, unsafe_allow_html=True)
     
     # Product Name
-    st.markdown(f"<h4 style='margin: 10px 0 5px 0; color: #fff; font-size: 16px;'>{product['name']}</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 style='margin: 10px 0 5px 0; color: #fff; font-size: 16px;'>{product.get('name', 'Unknown')}</h4>", unsafe_allow_html=True)
     
     # Producer Information
     st.markdown(f"""
@@ -62,12 +62,12 @@ def render_product_card(product, user_info):
     # Edit and Delete Buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✏️ Edit", key=f"edit_{product['id']}", use_container_width=True):
-            st.session_state.edit_product_id = product['id']
+        if st.button("✏️ Edit", key=f"edit_{product.get('id', '')}", use_container_width=True):
+            st.session_state.edit_product_id = product.get('id')
             st.rerun()
     with col2:
-        if st.button("🗑️ Delete", key=f"delete_{product['id']}", use_container_width=True):
-            st.session_state.delete_product_id = product['id']
+        if st.button("🗑️ Delete", key=f"delete_{product.get('id', '')}", use_container_width=True):
+            st.session_state.delete_product_id = product.get('id')
             st.rerun()
     
     # Close product card
