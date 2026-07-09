@@ -312,3 +312,8 @@ with tab_ai:
                     optimal_price = current_price * 1.15
                     st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
                     st.info("💡 Mock prediction - actual model not loaded.")
+
+def run():
+    """Main function to run the producer dashboard"""
+    # All your existing code runs here
+    pass  # The code above this already runs when the module is imported
