@@ -42,31 +42,19 @@ def main():
                 render_producer_page()
         
         elif user_role == 'merchant':
-            from pages.merchant import render_merchant_page
-            page = st.sidebar.radio(
-                "Navigate",
-                ["Merchant Dashboard"]
-            )
-            if page == "Merchant Dashboard":
-                render_merchant_page()
+            st.sidebar.info("🛒 Merchant features coming soon...")
+            st.title("🛒 Merchant Dashboard")
+            st.info("Merchant page coming soon...")
         
         elif user_role == 'customer':
-            from pages.customer import render_customer_page
-            page = st.sidebar.radio(
-                "Navigate",
-                ["Customer Dashboard"]
-            )
-            if page == "Customer Dashboard":
-                render_customer_page()
+            st.sidebar.info("🛍️ Customer features coming soon...")
+            st.title("🛍️ Customer Dashboard")
+            st.info("Customer page coming soon...")
         
         elif user_role == 'admin':
-            from pages.admin import render_admin_page
-            page = st.sidebar.radio(
-                "Navigate",
-                ["Admin Dashboard"]
-            )
-            if page == "Admin Dashboard":
-                render_admin_page()
+            st.sidebar.info("⚙️ Admin features coming soon...")
+            st.title("⚙️ Admin Dashboard")
+            st.info("Admin page coming soon...")
         
         # Logout button
         if st.sidebar.button("🚪 Logout", use_container_width=True):
