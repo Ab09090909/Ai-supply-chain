@@ -10,6 +10,7 @@ def initialize_session_state():
         st.session_state.user_info = {}
         st.session_state.user_id = None
         st.session_state.show_signup = False
+        st.session_state.show_forgot_password = False
 
 def login_user(email, password):
     """Login user and store session"""
@@ -20,6 +21,7 @@ def login_user(email, password):
         st.session_state.user_info = user_info
         st.session_state.user_id = user_info.get('id')
         st.session_state.show_signup = False
+        st.session_state.show_forgot_password = False
         st.success(f"✅ Welcome back, {user_info.get('name', 'User')}!")
         return True, "Login successful"
     else:
@@ -33,6 +35,7 @@ def logout_user():
     st.session_state.user_info = {}
     st.session_state.user_id = None
     st.session_state.show_signup = False
+    st.session_state.show_forgot_password = False
     st.success("✅ Logged out successfully")
 
 def signup_user(email, password, name, phone, company_name, address, region, role):
@@ -72,18 +75,24 @@ def signup_user(email, password, name, phone, company_name, address, region, rol
             else:
                 return False, f"Authentication error: {error_msg}"
         
-        # Create user profile in users table
+        # Create user profile in users table - only include columns that exist
         user_data = {
             'id': user_id,
             'email': email,
             'name': name,
-            'phone': phone,
-            'company_name': company_name,
-            'address': address,
-            'region': region,
             'role': role,
             'created_at': datetime.now().isoformat()
         }
+        
+        # Add optional fields if they exist in the table
+        if phone:
+            user_data['phone'] = phone
+        if company_name:
+            user_data['company_name'] = company_name
+        if address:
+            user_data['address'] = address
+        if region:
+            user_data['region'] = region
         
         response = supabase.table('users')\
             .insert(user_data)\
@@ -106,12 +115,45 @@ def signup_user(email, password, name, phone, company_name, address, region, rol
         else:
             return False, f"Sign up error: {error_msg}"
 
+def reset_password(email):
+    """Send password reset email"""
+    try:
+        supabase = get_supabase_client()
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        # Check if user exists
+        user = supabase.table('users')\
+            .select('email')\
+            .eq('email', email)\
+            .execute()
+        
+        if not user.data:
+            return False, "No account found with this email"
+        
+        # Send password reset email
+        supabase.auth.reset_password_for_email(email)
+        
+        return True, "Password reset link sent to your email!"
+        
+    except Exception as e:
+        error_msg = str(e)
+        if "invalid" in error_msg.lower():
+            return False, "Invalid email address"
+        else:
+            return False, f"Error sending reset email: {error_msg}"
+
 def render_login():
-    """Render login form with sign up toggle"""
+    """Render login form with sign up and forgot password toggles"""
     
     # Check if showing signup
     if st.session_state.get('show_signup', False):
         render_signup()
+        return
+    
+    # Check if showing forgot password
+    if st.session_state.get('show_forgot_password', False):
+        render_forgot_password()
         return
     
     st.title("🌾 Ethiopian AgriTech")
@@ -135,11 +177,15 @@ def render_login():
     
     st.markdown("---")
     
-    # Sign up link
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🆕 Don't have an account? Sign Up", use_container_width=True):
+    # Sign up and Forgot Password links
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🆕 Sign Up", use_container_width=True):
             st.session_state.show_signup = True
+            st.rerun()
+    with col2:
+        if st.button("🔑 Forgot Password?", use_container_width=True):
+            st.session_state.show_forgot_password = True
             st.rerun()
 
 def render_signup():
@@ -152,10 +198,10 @@ def render_signup():
         col1, col2 = st.columns(2)
         
         with col1:
-            name = st.text_input("👤 Full Name", placeholder="John Doe")
-            email = st.text_input("📧 Email", placeholder="your@email.com")
-            password = st.text_input("🔑 Password", type="password", placeholder="Min 6 characters")
-            confirm_password = st.text_input("🔑 Confirm Password", type="password", placeholder="Re-enter password")
+            name = st.text_input("👤 Full Name *", placeholder="John Doe")
+            email = st.text_input("📧 Email *", placeholder="your@email.com")
+            password = st.text_input("🔑 Password *", type="password", placeholder="Min 6 characters")
+            confirm_password = st.text_input("🔑 Confirm Password *", type="password", placeholder="Re-enter password")
         
         with col2:
             phone = st.text_input("📞 Phone Number", placeholder="09XX XXX XXX")
@@ -167,13 +213,13 @@ def render_signup():
             region = st.selectbox("🌍 Region", regions)
             
             role = st.selectbox(
-                "👔 I want to register as", 
+                "👔 I want to register as *", 
                 ["producer", "merchant", "customer"],
                 format_func=lambda x: x.capitalize()
             )
         
         st.markdown("---")
-        st.caption("📝 By signing up, you agree to our Terms of Service")
+        st.caption("📝 * Required fields")
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
@@ -182,7 +228,7 @@ def render_signup():
         if submit:
             # Validation
             if not name or not email or not password or not confirm_password:
-                st.error("❌ Please fill in all required fields")
+                st.error("❌ Please fill in all required fields (*)")
             elif password != confirm_password:
                 st.error("❌ Passwords do not match")
             elif len(password) < 6:
@@ -214,4 +260,42 @@ def render_signup():
     with col2:
         if st.button("🔙 Back to Login", use_container_width=True):
             st.session_state.show_signup = False
+            st.rerun()
+
+def render_forgot_password():
+    """Render forgot password form"""
+    
+    st.title("🌾 Ethiopian AgriTech")
+    st.subheader("🔑 Reset Your Password")
+    st.info("Enter your email address and we'll send you a link to reset your password.")
+    
+    with st.form("forgot_password_form"):
+        email = st.text_input("📧 Email Address", placeholder="your@email.com")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            submit = st.form_submit_button("📧 Send Reset Link", use_container_width=True, type="primary")
+        
+        if submit:
+            if not email:
+                st.error("❌ Please enter your email address")
+            else:
+                with st.spinner("Sending reset link..."):
+                    success, message = reset_password(email)
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.info("📧 Please check your email for the password reset link.")
+                        if st.button("🔙 Back to Login"):
+                            st.session_state.show_forgot_password = False
+                            st.rerun()
+                    else:
+                        st.error(f"❌ {message}")
+    
+    st.markdown("---")
+    
+    # Back to login
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔙 Back to Login", use_container_width=True):
+            st.session_state.show_forgot_password = False
             st.rerun()
