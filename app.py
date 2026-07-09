@@ -24,6 +24,7 @@ initialize_session_state()
 # Render custom CSS
 render_custom_css()
 
+
 def render_login_page():
     """Render the login page with enhanced validation and UX"""
     col1, col2 = st.columns([1, 1])
@@ -76,6 +77,7 @@ def render_login_page():
         </div>
         """, unsafe_allow_html=True)
 
+
 def render_login_form():
     """Render login form with validation"""
     with st.form("login_form", clear_on_submit=False):
@@ -106,6 +108,7 @@ def render_login_form():
                     st.rerun()
                 else:
                     st.error(message)
+
 
 def render_signup_form():
     """Render signup form with validation"""
@@ -148,9 +151,13 @@ def render_signup_form():
                 else:
                     st.error(message)
 
+
 def render_forgot_password_form():
-    """Render forgot password form"""
+    """Render forgot password form - FIXED: Two separate forms"""
+    
+    # === FORM 1: Request password reset ===
     with st.form("forgot_password_form", clear_on_submit=False):
+        st.markdown("### Step 1: Request Reset Token")
         email = st.text_input("Email Address", placeholder="Enter your registered email")
         submit = st.form_submit_button("Send Reset Link", use_container_width=True, type="primary")
         
@@ -167,10 +174,12 @@ def render_forgot_password_form():
                     st.success(message)
                 else:
                     st.error(message)
-        
-        # Password reset section (shown when token is provided)
-        st.markdown("---")
-        st.markdown("### Reset Password")
+    
+    st.markdown("---")
+    
+    # === FORM 2: Reset password with token ===
+    with st.form("reset_password_form", clear_on_submit=False):
+        st.markdown("### Step 2: Reset Password")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -181,7 +190,8 @@ def render_forgot_password_form():
         new_password = st.text_input("New Password", type="password", key="new_password")
         confirm_new_password = st.text_input("Confirm New Password", type="password", key="confirm_new_password")
         
-        reset_submit = st.button("Reset Password", use_container_width=True, type="secondary")
+        # FIXED: Use form_submit_button instead of st.button
+        reset_submit = st.form_submit_button("Reset Password", use_container_width=True, type="secondary")
         
         if reset_submit:
             if not reset_email or not reset_token or not new_password:
@@ -200,6 +210,7 @@ def render_forgot_password_form():
                     st.success(message)
                 else:
                     st.error(message)
+
 
 def render_dashboard():
     """Render main dashboard based on user role"""
@@ -245,6 +256,7 @@ def render_dashboard():
         elif role == 'admin':
             render_admin_dashboard()
 
+
 def render_producer_dashboard():
     """Render producer-specific dashboard"""
     st.header("Producer Dashboard")
@@ -255,6 +267,7 @@ def render_producer_dashboard():
         st.info("📦 Total Products: 156")
     with col2:
         st.info("🏭 Production Capacity: 85%")
+
 
 def render_merchant_dashboard():
     """Render merchant-specific dashboard"""
@@ -267,6 +280,7 @@ def render_merchant_dashboard():
     with col2:
         st.info("💰 Monthly Revenue: $8,450")
 
+
 def render_customer_dashboard():
     """Render customer-specific dashboard"""
     st.header("Customer Dashboard")
@@ -274,9 +288,10 @@ def render_customer_dashboard():
     
     col1, col2 = st.columns(2)
     with col1:
-        st.info("📦 Active Orders: 3")
+        st.info(" Active Orders: 3")
     with col2:
         st.info("💳 Wallet Balance: $250")
+
 
 def render_admin_dashboard():
     """Render admin-specific dashboard"""
@@ -290,6 +305,7 @@ def render_admin_dashboard():
         st.info("📊 System Health: 99.9%")
     with col3:
         st.info("🔔 Alerts: 2")
+
 
 # Main application
 if __name__ == "__main__":
