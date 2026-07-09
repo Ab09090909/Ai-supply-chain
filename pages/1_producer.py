@@ -18,7 +18,7 @@ initialize_session_state()
 
 # --- Authentication Guard ---
 if not st.session_state.authenticated:
-    st.error(" Please log in to access this page.")
+    st.error("🔒 Please log in to access this page.")
     st.stop()
 
 if st.session_state.user_info['role'] != 'producer':
@@ -49,87 +49,10 @@ if 'show_edit_profile' not in st.session_state:
     st.session_state.show_edit_profile = False
 
 # ==========================================
-# BUSINESS CARD STYLE PROFILE
-# ==========================================
-st.markdown("""
-<style>
-.business-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border-radius: 16px;
-    padding: 30px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    border: 1px solid #e2e8f0;
-    max-width: 800px;
-    margin: 0 auto 20px auto;
-}
-.card-left {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 200px;
-    border-right: 2px solid #1e293b;
-    padding-right: 30px;
-}
-.profile-pic-large {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 48px;
-    font-weight: bold;
-    color: white;
-    border: 4px solid #fff;
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-    margin-bottom: 15px;
-}
-.card-name {
-    font-size: 22px;
-    font-weight: bold;
-    color: #1e293b;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin: 0;
-    text-align: center;
-}
-.card-title {
-    font-size: 13px;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 5px 0 0 0;
-    text-align: center;
-}
-.card-right {
-    flex: 1;
-}
-.contact-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    font-size: 14px;
-    color: #1e293b;
-}
-.contact-icon {
-    font-size: 18px;
-    width: 24px;
-    text-align: center;
-}
-.contact-label {
-    font-weight: 600;
-    color: #475569;
-    min-width: 80px;
-}
-.contact-value {
-# ==========================================
 # RESPONSIVE BUSINESS CARD PROFILE
 # ==========================================
+
+# CSS - NO f-string
 st.markdown("""
 <style>
 .business-card {
@@ -233,7 +156,6 @@ st.markdown("""
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-/* MOBILE RESPONSIVE */
 @media screen and (max-width: 768px) {
     .business-card {
         padding: 20px 15px;
@@ -274,7 +196,6 @@ st.markdown("""
     }
 }
 
-/* TABLET RESPONSIVE */
 @media screen and (min-width: 769px) and (max-width: 1024px) {
     .business-card {
         padding: 22px;
@@ -301,7 +222,7 @@ company = user_info.get('company_name', 'Not specified')
 address = user_info.get('address', 'Not specified')
 region = user_info.get('region', 'Addis Ababa')
 
-# Business Card Display - RESPONSIVE
+# HTML - WITH f-string (escape onclick with double {{ }})
 st.markdown(f"""
 <div class="business-card">
     <div class="card-container">
@@ -317,7 +238,7 @@ st.markdown(f"""
                 <span class="contact-value">{address}, {region}</span>
             </div>
             <div class="contact-item">
-                <span class="contact-icon">📞</span>
+                <span class="contact-icon"></span>
                 <span class="contact-label">Phone:</span>
                 <span class="contact-value">{phone}</span>
             </div>
@@ -369,7 +290,7 @@ with st.expander("✏️ Edit Profile Information", expanded=st.session_state.sh
         
         col1, col2 = st.columns(2)
         with col1:
-            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
+            save_btn = st.form_submit_button(" Save Changes", use_container_width=True, type="primary")
         with col2:
             cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
         
@@ -408,7 +329,7 @@ st.markdown("---")
 
 # --- Navigation Tabs ---
 tab_dashboard, tab_inventory, tab_orders, tab_ai = st.tabs([
-    " Dashboard", "📦 Inventory", " Orders", "🤖 AI Insights"
+    "📊 Dashboard", "📦 Inventory", "🚚 Orders", " AI Insights"
 ])
 
 # ==========================================
@@ -497,7 +418,7 @@ with tab_inventory:
     
     low_stock = get_low_stock_products(producer_id=user_info['id'])
     if low_stock:
-        st.warning(f"️ **{len(low_stock)} products are below minimum stock level!**")
+        st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
         df_low = pd.DataFrame(low_stock)
         st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
     
@@ -586,7 +507,7 @@ with tab_ai:
             if price_model:
                 st.info("✅ Model loaded: `price_predictor.pkl`")
             else:
-                st.info("ℹ️ Using mock price data")
+                st.info("️ Using mock price data")
             
             current_price = next((p['price'] for p in products if p['id'] == selected_prod_id), 0)
             st.write(f"Current Price: **{current_price} ETB**")
