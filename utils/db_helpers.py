@@ -2,12 +2,8 @@ import streamlit as st
 from datetime import datetime
 import uuid
 
-# ==========================================
-# LAZY IMPORTS (Prevents startup crashes)
-# ==========================================
-
 def get_supabase():
-    """Initialize Supabase client only when needed"""
+    """Initialize Supabase client"""
     from src.db import get_client
     return get_client()
 
@@ -86,8 +82,9 @@ def create_product(name: str, description: str, category: str, price: float,
         
         response = supabase.table('products').insert({
             'name': name, 'description': description, 'category': category,
-            'price': price, 'cost_price': cost_price, 'stock_quantity': stock_quantity,
-            'producer_id': producer_id, 'sku': sku, 'weight': weight, 'min_stock': 10
+            'price': price, 'cost_price': cost_price, 'quantity': stock_quantity,
+            'producer_id': producer_id, 'sku': sku, 'weight': weight, 'min_stock': 10,
+            'is_active': True
         }).execute()
         
         if not response.data:
@@ -106,12 +103,16 @@ def get_products(producer_id: str = None, category: str = None, active_only: boo
             query = query.eq('producer_id', producer_id)
         if category: 
             query = query.eq('category', category)
-        # Remove is_active filter if column doesn't exist
-        # if active_only: 
-        #     query = query.eq('is_active', True)
         query = query.order('created_at', desc=True)
         response = query.execute()
-        return response.data if response.data else []
+        
+        products = response.data if response.data else []
+        
+        # Filter in Python if needed
+        if active_only:
+            products = [p for p in products if p.get('is_active', True)]
+        
+        return products
     except Exception as e:
         st.error(f"Error fetching products: {e}")
         return []
@@ -127,10 +128,10 @@ def get_low_stock_products(producer_id: str = None):
         if not response.data: 
             return []
         
-        # Filter in Python instead of database
+        # Filter in Python
         low_stock = []
         for p in response.data:
-            stock = p.get('quantity', p.get('stock_quantity', 0))
+            stock = p.get('quantity', 0)
             min_stock = p.get('min_stock', 10)
             if stock <= min_stock:
                 low_stock.append(p)
@@ -139,6 +140,26 @@ def get_low_stock_products(producer_id: str = None):
     except Exception as e:
         st.error(f"Error fetching low stock: {e}")
         return []
+
+def update_product_stock(product_id: str, quantity_change: int) -> bool:
+    supabase = get_supabase()
+    try:
+        response = supabase.table('products').select('quantity').eq('id', product_id).execute()
+        if not response.data: 
+            return False
+        
+        current_stock = response.data[0]['quantity']
+        new_stock = current_stock + quantity_change
+        if new_stock < 0: 
+            return False
+        
+        supabase.table('products').update({
+            'quantity': new_stock, 'updated_at': datetime.now().isoformat()
+        }).eq('id', product_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"Error updating stock: {e}")
+        return False
 
 # ==========================================
 # ORDER OPERATIONS
@@ -149,20 +170,20 @@ def get_orders(user_id: str, role: str, status: str = None, limit: int = 50):
     try:
         query = supabase.table('orders').select('*').limit(limit).order('created_at', desc=True)
         
-        if role == 'customer': query = query.eq('customer_id', user_id)
-        elif role == 'merchant': query = query.eq('merchant_id', user_id)
-        elif role == 'producer': 
-            # For producer, we need to join with products to filter by producer_id
-            # Since Supabase doesn't support complex joins easily in one call, 
-            # we fetch all orders and filter by product_id in a second step if needed.
-            # For simplicity, we'll fetch orders where merchant_id matches (assuming producer is merchant here)
-            # OR we fetch products first. Let's fetch products first.
+        if role == 'customer': 
+            query = query.eq('customer_id', user_id)
+        elif role == 'merchant': 
+            query = query.eq('merchant_id', user_id)
+        elif role == 'producer':
+            # Get products for this producer first
             prod_response = supabase.table('products').select('id').eq('producer_id', user_id).execute()
             prod_ids = [p['id'] for p in prod_response.data] if prod_response.data else []
-            if not prod_ids: return []
+            if not prod_ids: 
+                return []
             query = query.in_('product_id', prod_ids)
             
-        if status: query = query.eq('status', status)
+        if status: 
+            query = query.eq('status', status)
         
         response = query.execute()
         return response.data if response.data else []
@@ -170,29 +191,58 @@ def get_orders(user_id: str, role: str, status: str = None, limit: int = 50):
         st.error(f"Error fetching orders: {e}")
         return []
 
+def create_order(customer_id: str, merchant_id: str, product_id: str,
+                 quantity: int, unit_price: float, shipping_address: str, notes: str = "") -> tuple:
+    supabase = get_supabase()
+    try:
+        # Check stock
+        stock_response = supabase.table('products').select('quantity').eq('id', product_id).execute()
+        if not stock_response.data or stock_response.data[0]['quantity'] < quantity:
+            return False, "Insufficient stock", None
+        
+        order_number = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        total_amount = unit_price * quantity
+        
+        order_response = supabase.table('orders').insert({
+            'order_number': order_number, 'customer_id': customer_id,
+            'merchant_id': merchant_id, 'product_id': product_id,
+            'quantity': quantity, 'unit_price': unit_price,
+            'total_amount': total_amount, 'shipping_address': shipping_address,
+            'notes': notes, 'status': 'pending', 'payment_status': 'unpaid'
+        }).execute()
+        
+        if not order_response.data:
+            return False, "Failed to create order", None
+        
+        # Reduce stock
+        update_product_stock(product_id, -quantity)
+        
+        log_activity(customer_id, "order_created", f"Order {order_number} created")
+        return True, f"Order {order_number} created successfully!", order_response.data[0]['id']
+    except Exception as e:
+        return False, f"Error: {str(e)}", None
+
 # ==========================================
 # DASHBOARD ANALYTICS
 # ==========================================
 
-# Find and replace these column references in get_dashboard_stats function:
-
 def get_dashboard_stats(role: str, user_id: str):
     supabase = get_supabase()
-    stats = {}
+    stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0.0}
     
     try:
         if role == 'producer':
-            # Use correct column names - Supabase might use 'quantity' instead of 'stock_quantity'
+            # Get all products for this producer
             prod_resp = supabase.table('products').select('*').eq('producer_id', user_id).execute()
             products = prod_resp.data if prod_resp.data else []
             
-            # Filter active products (check if column exists)
+            # Filter active products
             active_products = [p for p in products if p.get('is_active', True)]
             stats['total_products'] = len(active_products)
             
-            # Check for low stock (use 'quantity' or 'stock_quantity')
+            # Check for low stock
             low_stock = [p for p in active_products 
-                        if p.get('quantity', p.get('stock_quantity', 100)) <= p.get('min_stock', 10)]
+                        if p.get('quantity', 0) <= p.get('min_stock', 10)]
             stats['low_stock'] = len(low_stock)
             
             # Get orders for producer's products
@@ -209,10 +259,47 @@ def get_dashboard_stats(role: str, user_id: str):
                 
     except Exception as e:
         st.error(f"Error fetching stats: {e}")
-        # Return default values on error
-        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0.0}
         
     return stats
+
+# ==========================================
+# WALLET OPERATIONS
+# ==========================================
+
+def get_wallet_balance(user_id: str) -> float:
+    supabase = get_supabase()
+    try:
+        response = supabase.table('wallets').select('balance').eq('user_id', user_id).execute()
+        return response.data[0]['balance'] if response.data else 0.0
+    except:
+        return 0.0
+
+def wallet_transaction(user_id: str, amount: float, trans_type: str, description: str = "") -> bool:
+    supabase = get_supabase()
+    try:
+        wallet_response = supabase.table('wallets').select('*').eq('user_id', user_id).execute()
+        if not wallet_response.data:
+            return False
+        
+        wallet = wallet_response.data[0]
+        
+        if trans_type == 'debit' and wallet['balance'] < amount:
+            return False
+        
+        new_balance = wallet['balance'] + amount if trans_type == 'credit' else wallet['balance'] - amount
+        
+        supabase.table('wallets').update({
+            'balance': new_balance, 'updated_at': datetime.now().isoformat()
+        }).eq('user_id', user_id).execute()
+        
+        supabase.table('transactions').insert({
+            'wallet_id': wallet['id'], 'type': trans_type,
+            'amount': amount, 'description': description, 'balance_after': new_balance
+        }).execute()
+        
+        return True
+    except:
+        return False
 
 # ==========================================
 # ACTIVITY LOG
@@ -226,18 +313,3 @@ def log_activity(user_id: str, action: str, details: str = ""):
         }).execute()
     except:
         pass
-
-def check_and_fix_columns():
-    """Check if required columns exist in Supabase"""
-    supabase = get_supabase()
-    
-    try:
-        # Try to get products table structure
-        response = supabase.table('products').select('*').limit(1).execute()
-        if response.data:
-            columns = list(response.data[0].keys())
-            print(f"Available columns in products table: {columns}")
-            return columns
-    except Exception as e:
-        st.error(f"Error checking columns: {e}")
-    return []
