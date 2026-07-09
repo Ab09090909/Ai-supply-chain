@@ -249,28 +249,98 @@ def update_product_stock(product_id, new_quantity):
     except Exception as e:
         return False, f"Error updating stock: {e}"
 
+# utils/db_helpers.py - Fix the get_low_stock_products function
+
 def get_low_stock_products(producer_id=None):
     """Get products with low stock"""
     try:
         if supabase is None:
             return []
         
+        # Use the correct column name and ensure proper type handling
         query = supabase.table('products')\
-            .select('*')\
-            .lt('quantity', 'min_stock')
+            .select('*')
         
         if producer_id:
             query = query.eq('producer_id', producer_id)
         
+        # Get all products first, then filter in Python
         response = query.execute()
         
         if response.data:
-            return response.data
+            low_stock_products = []
+            for product in response.data:
+                # Convert to int safely
+                try:
+                    quantity = int(product.get('quantity', 0))
+                    min_stock = int(product.get('min_stock', 0))
+                    
+                    # Check if quantity is less than min_stock (treat None as 0)
+                    if min_stock > 0 and quantity < min_stock:
+                        low_stock_products.append(product)
+                except (ValueError, TypeError):
+                    # If conversion fails, skip this product
+                    continue
+            
+            return low_stock_products
         return []
     
     except Exception as e:
         st.error(f"Error fetching low stock products: {e}")
         return []
+
+def get_dashboard_stats(role, user_id):
+    """Get dashboard statistics"""
+    try:
+        if supabase is None:
+            return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        
+        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        
+        if role == 'producer':
+            # Get total products
+            products = supabase.table('products')\
+                .select('id, quantity, min_stock')\
+                .eq('producer_id', user_id)\
+                .execute()
+            
+            if products.data:
+                stats['total_products'] = len(products.data)
+                
+                # Count low stock products
+                low_stock_count = 0
+                for product in products.data:
+                    try:
+                        quantity = int(product.get('quantity', 0))
+                        min_stock = int(product.get('min_stock', 0))
+                        if min_stock > 0 and quantity < min_stock:
+                            low_stock_count += 1
+                    except (ValueError, TypeError):
+                        continue
+                stats['low_stock'] = low_stock_count
+            
+            # Get total orders
+            orders = supabase.table('orders')\
+                .select('id')\
+                .eq('producer_id', user_id)\
+                .execute()
+            stats['total_orders'] = len(orders.data) if orders.data else 0
+            
+            # Get revenue (sum of order totals)
+            revenue = supabase.table('orders')\
+                .select('total_amount')\
+                .eq('producer_id', user_id)\
+                .eq('status', 'delivered')\
+                .execute()
+            
+            if revenue.data:
+                stats['revenue'] = sum(float(o.get('total_amount', 0)) for o in revenue.data)
+        
+        return stats
+    
+    except Exception as e:
+        st.error(f"Error fetching dashboard stats: {e}")
+        return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
 
 # --- Order Functions ---
 def get_orders(user_id, role, limit=100):
@@ -303,53 +373,6 @@ def get_orders(user_id, role, limit=100):
         st.error(f"Error fetching orders: {e}")
         return []
 
-# --- Dashboard Stats ---
-def get_dashboard_stats(role, user_id):
-    """Get dashboard statistics"""
-    try:
-        if supabase is None:
-            return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
-        
-        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
-        
-        if role == 'producer':
-            # Get total products
-            products = supabase.table('products')\
-                .select('id')\
-                .eq('producer_id', user_id)\
-                .execute()
-            stats['total_products'] = len(products.data) if products.data else 0
-            
-            # Get low stock
-            low_stock = supabase.table('products')\
-                .select('id')\
-                .eq('producer_id', user_id)\
-                .lt('quantity', 'min_stock')\
-                .execute()
-            stats['low_stock'] = len(low_stock.data) if low_stock.data else 0
-            
-            # Get total orders
-            orders = supabase.table('orders')\
-                .select('id')\
-                .eq('producer_id', user_id)\
-                .execute()
-            stats['total_orders'] = len(orders.data) if orders.data else 0
-            
-            # Get revenue (sum of order totals)
-            revenue = supabase.table('orders')\
-                .select('total_amount')\
-                .eq('producer_id', user_id)\
-                .eq('status', 'delivered')\
-                .execute()
-            
-            if revenue.data:
-                stats['revenue'] = sum(o.get('total_amount', 0) for o in revenue.data)
-        
-        return stats
-    
-    except Exception as e:
-        st.error(f"Error fetching dashboard stats: {e}")
-        return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
 
 # Add this function to utils/db_helpers.py if not already present
 
