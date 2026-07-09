@@ -203,7 +203,7 @@ def render_edit_profile(user_info):
     """Render the edit profile section"""
     st.markdown('<div id="edit-profile-section"></div>', unsafe_allow_html=True)
     
-    with st.expander("✏️ Edit Profile Information", expanded=st.session_state.show_edit_profile):
+    with st.expander("✏️ Edit Profile Information", expanded=st.session_state.get('show_edit_profile', False)):
         st.markdown("### Update Your Business Card Information")
         
         with st.form("edit_profile_form"):
