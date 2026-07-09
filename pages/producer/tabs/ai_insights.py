@@ -35,14 +35,22 @@ def render_ai_insights(user_info, ai):
                 st.info(f"No price data for {sel_product}. Check local market rates.")
 
             st.markdown("### 📈 Demand Forecast")
-            st.info(
-                f"Demand for **{sel_product}** in {sel_region} is typically high during "
-                "harvest season. Consider stocking 10–20% more during peak months."
-            )
+            try:
+                demand = ai.predict_demand(sel_product, sel_region)
+                st.info(
+                    f"Daily: **{demand['daily_demand']}** units | "
+                    f"Weekly: **{demand['weekly_demand']}** | "
+                    f"Monthly: **{demand['monthly_demand']}** | "
+                    f"Confidence: **{demand['confidence']*100:.0f}%**"
+                )
+            except Exception:
+                st.info(f"Demand for **{sel_product}** in {sel_region} is typically high during harvest season.")
 
             st.markdown("### 💡 Market Tips")
-            tip = (
-                ai.get_market_tip() if hasattr(ai, 'get_market_tip')
-                else f"Keep your **{sel_product}** listing updated with accurate stock levels."
-            )
-            st.success(tip)
+            try:
+                analysis = ai.analyze_product({'name': sel_product, 'price': 0, 'cost_price': 0})
+                if analysis:
+                    st.success(f"📊 Market trend: **{analysis['market_trend']}** | Demand: **{analysis['demand_level']}**")
+                    st.success(f"💰 Recommended price: **{analysis['recommended_price']} ETB**")
+            except Exception:
+                st.success(f"Keep your **{sel_product}** listing updated with accurate stock levels.")
