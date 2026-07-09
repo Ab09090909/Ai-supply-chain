@@ -469,6 +469,7 @@ with tab_inventory:
         st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
     
     # All Products Display
+        # All Products Display
     st.subheader("All Products")
     all_products = get_products(producer_id=user_info['id'])
     
@@ -485,10 +486,20 @@ with tab_inventory:
             with cols[idx % 3]:
                 # Display product image if exists
                 image_url = product.get('image_url')
-                if image_url and os.path.exists(image_url):
-                    st.image(image_url, use_container_width=True)
-                else:
-                    # Placeholder for no image
+                
+                # Safe image display with error handling
+                image_displayed = False
+                if image_url:
+                    try:
+                        if os.path.exists(image_url):
+                            st.image(image_url, use_container_width=True)
+                            image_displayed = True
+                    except Exception as e:
+                        # If image fails to load, show placeholder
+                        pass
+                
+                # Show placeholder if no image or image failed
+                if not image_displayed:
                     st.markdown("""
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                 height: 150px; border-radius: 8px;
@@ -502,12 +513,12 @@ with tab_inventory:
                 st.markdown(f"""
                 <div style="text-align: left; padding: 10px;">
                     <h4 style="margin: 10px 0 5px 0; color: #fff; font-size: 16px;">{product['name']}</h4>
-                    <p style="margin: 0; color: #94a3b8; font-size: 13px;">📂 {product['category']}</p>
+                    <p style="margin: 0; color: #94a3b8; font-size: 13px;">📂 {product.get('category', 'N/A')}</p>
                     <p style="margin: 5px 0; color: #10b981; font-weight: bold; font-size: 18px;">
-                        {product['price']} ETB
+                        {product.get('price', 0)} ETB
                     </p>
                     <p style="margin: 5px 0; color: #f59e0b; font-size: 13px;">
-                        📦 Stock: {product['quantity']} units
+                        📦 Stock: {product.get('quantity', 0)} units
                     </p>
                     <p style="margin: 5px 0; color: #64748b; font-size: 12px;">
                         SKU: {product.get('sku', 'N/A')}
