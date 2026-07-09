@@ -1,417 +1,466 @@
-"""
-utils/db_helpers.py — Cached DB queries and shared database utilities.
-
-The Supabase client is sourced from src/db.py (single source of truth).
-Use get_client() for direct access; use cached_* functions for read queries.
-"""
-import logging
-from typing import Optional, Dict, Any, List, Union
 import streamlit as st
+from src.db import execute_query, execute_many
+from utils.auth import hash_password, verify_password, generate_session_token
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+import uuid
 
-logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────
-# CLIENT — delegate to src/db.py (single source of truth)
-# ─────────────────────────────────────────────────────────────
-def get_client():
-    """Return the shared Supabase client from src/db.py."""
-    from src.db import get_supabase_client
-    return get_supabase_client()
+# =====================================================
+# USER OPERATIONS
+# =====================================================
 
-# ─────────────────────────────────────────────────────────────
-# CACHED QUERIES
-# ─────────────────────────────────────────────────────────────
-@st.cache_data(ttl=60, show_spinner=False)
-def cached_query(
-    table_name: str,
-    filters: Optional[Dict[str, Any]] = None,
-    order_by: str = "created_at",
-    desc: bool = True,
-    limit: int = 200,
-    select_fields: str = "*",
-) -> List[Dict[str, Any]]:
-    """
-    Generic cached Supabase query.
-
-    Supports eq, ilike (value contains '%'), and in_ (value is a list) filters.
-    Returns [] on any error.
-    """
-    client = get_client()
-    if not client:
-        return []
-
+def create_user(name: str, email: str, password: str, role: str, 
+                phone: str = "", company_name: str = "") -> tuple:
+    """Create a new user with wallet"""
     try:
-        query = client.table(table_name).select(select_fields)
-
-        if filters:
-            for key, value in filters.items():
-                if value is None or value == "":
-                    continue
-                if isinstance(value, list) and value:
-                    query = query.in_(key, value)
-                elif isinstance(value, bool):
-                    query = query.eq(key, value)
-                elif isinstance(value, str) and "%" in value:
-                    query = query.ilike(key, value)
-                else:
-                    query = query.eq(key, value)
-
-        if order_by:
-            query = query.order(order_by, desc=desc)
-
-        if limit and limit > 0:
-            query = query.limit(min(limit, 1000))
-
-        response = query.execute()
-        return (response.data or []) if response else []
-
-    except Exception as e:
-        logger.error(f"cached_query failed on '{table_name}': {e}")
-        return []
-
-
-@st.cache_data(ttl=120, show_spinner=False)
-def cached_get_profile(user_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch and cache a user's profile row by user ID."""
-    if not user_id:
-        return None
-
-    client = get_client()
-    if not client:
-        return None
-
-    try:
-        response = (
-            client.table("profiles")
-            .select("*")
-            .eq("id", user_id)
-            .execute()
+        # Check if email exists
+        existing = execute_query(
+            "SELECT id FROM users WHERE email = ?", (email,), fetch="one"
         )
-        if response and response.data:
-            return response.data[0]
-        logger.warning(f"No profile found for user_id: {user_id}")
-        return None
-    except Exception as e:
-        logger.error(f"cached_get_profile error for {user_id}: {e}")
-        return None
-
-
-@st.cache_data(ttl=30, show_spinner=False)
-def cached_unread_count(user_id: str) -> int:
-    """Return the number of unread notifications for a user."""
-    if not user_id:
-        return 0
-
-    client = get_client()
-    if not client:
-        return 0
-
-    try:
-        response = (
-            client.table("notifications")
-            .select("id", count="exact")
-            .eq("recipient_id", user_id)
-            .eq("is_read", False)
-            .execute()
+        if existing:
+            return False, "Email already registered", None
+        
+        password_hash = hash_password(password)
+        
+        user_id = execute_query(
+            """INSERT INTO users (name, email, password_hash, role, phone, company_name, is_verified)
+               VALUES (?, ?, ?, ?, ?, ?, 1)""",
+            (name, email, password_hash, role, phone, company_name),
+            fetch="lastrowid"
         )
-        return response.count if response else 0
+        
+        # Create wallet for the user
+        execute_query(
+            "INSERT INTO wallets (user_id, balance) VALUES (?, 0.0)",
+            (user_id,), fetch="none"
+        )
+        
+        # Log activity
+        log_activity(user_id, "account_created", f"New {role} account created")
+        
+        return True, "Account created successfully!", user_id
+    
     except Exception as e:
-        logger.error(f"cached_unread_count error for {user_id}: {e}")
-        return 0
+        return False, f"Error creating account: {str(e)}", None
 
 
-@st.cache_data(ttl=300, show_spinner=False)
-def cached_get_all_products(
-    sector: Optional[str] = None,
-    region: Optional[str] = None,
-    is_available: bool = True,
-    limit: int = 50,
-) -> List[Dict[str, Any]]:
-    """Fetch available products with optional sector/region filter."""
-    filters: Dict[str, Any] = {"is_available": is_available}
-    if sector:
-        filters["sector"] = sector
-    if region:
-        filters["region"] = region
+def authenticate_user(email: str, password: str) -> tuple:
+    """Authenticate user and return user info"""
+    try:
+        user = execute_query(
+            "SELECT * FROM users WHERE email = ? AND is_active = 1",
+            (email,), fetch="one"
+        )
+        
+        if not user:
+            return False, "Invalid email or password", None
+        
+        if not verify_password(password, user['password_hash']):
+            return False, "Invalid email or password", None
+        
+        # Update last login
+        execute_query(
+            "UPDATE users SET last_login = datetime('now') WHERE id = ?",
+            (user['id'],), fetch="none"
+        )
+        
+        # Log activity
+        log_activity(user['id'], "login", "User logged in")
+        
+        # Return safe user info (no password hash)
+        user_info = {
+            'id': user['id'],
+            'name': user['name'],
+            'email': user['email'],
+            'role': user['role'],
+            'phone': user['phone'],
+            'company_name': user['company_name'],
+            'session_token': generate_session_token()
+        }
+        
+        return True, "Login successful!", user_info
+    
+    except Exception as e:
+        return False, f"Authentication error: {str(e)}", None
 
-    return cached_query(
-        table_name="products",
-        filters=filters,
-        order_by="created_at",
-        desc=True,
-        limit=limit,
-        select_fields=(
-            "id, product_name, sector, region, price_birr, "
-            "quantity, unit, producer_id, is_available, created_at"
-        ),
+
+def get_user_by_id(user_id: int) -> Optional[Dict]:
+    """Get user by ID"""
+    return execute_query(
+        "SELECT id, name, email, role, phone, company_name, is_active, created_at FROM users WHERE id = ?",
+        (user_id,), fetch="one"
     )
 
 
-@st.cache_data(ttl=300, show_spinner=False)
-def cached_get_users_by_role(role: str, limit: int = 100) -> List[Dict[str, Any]]:
-    """Fetch users by role. Note: email lives in Supabase Auth, not profiles."""
-    return cached_query(
-        table_name="profiles",
-        filters={"role": role},
-        order_by="full_name",
-        desc=False,
-        limit=limit,
-        # 'email' is NOT in profiles — it's in Supabase Auth only
-        select_fields="id, full_name, region, phone, is_verified, created_at",
-    )
-
-# ─────────────────────────────────────────────────────────────
-# CACHE MANAGEMENT
-# ─────────────────────────────────────────────────────────────
-def clear_data_cache() -> None:
-    """Clear all @st.cache_data caches and force fresh data on next fetch."""
-    try:
-        st.cache_data.clear()
-        logger.info("All data caches cleared")
-    except Exception as e:
-        logger.error(f"clear_data_cache error: {e}")
-
-
-def clear_specific_caches(cache_names: List[str]) -> None:
-    """
-    Clear specific named caches.
-
-    Valid names: 'profile', 'unread', 'products', 'users', 'query'
-    """
-    cache_map = {
-        "profile":  cached_get_profile,
-        "unread":   cached_unread_count,
-        "products": cached_get_all_products,
-        "users":    cached_get_users_by_role,
-        "query":    cached_query,
-    }
-    for name in cache_names:
-        if name in cache_map:
-            try:
-                cache_map[name].clear()
-                logger.info(f"Cleared cache: {name}")
-            except Exception as e:
-                logger.error(f"Failed to clear '{name}' cache: {e}")
-
-# ─────────────────────────────────────────────────────────────
-# NOTIFICATION FUNCTIONS
-# ─────────────────────────────────────────────────────────────
-def send_notification(
-    recipient_id: str,
-    title: str,
-    message: str,
-    notif_type: str = "info",
-    order_id: Optional[str] = None,
-    link: Optional[str] = None,
-) -> bool:
-    """
-    Insert a notification row for the given user.
-    Returns True on success, False on failure.
-    """
-    if not recipient_id or not title or not message:
-        logger.warning("send_notification: missing required fields")
-        return False
-
-    client = get_client()
-    if not client:
-        return False
-
-    try:
-        payload: Dict[str, Any] = {
-            "recipient_id": str(recipient_id),
-            "title": title[:100],
-            "message": message[:500],
-            "type": notif_type,
-            "is_read": False,
-            # Omit created_at — let Supabase column default handle it
-        }
-        if order_id:
-            payload["order_id"] = str(order_id)
-        if link:
-            payload["link"] = link
-
-        client.table("notifications").insert(payload).execute()
-
-        # Invalidate unread count cache for this user
-        try:
-            cached_unread_count.clear()
-        except Exception:
-            pass
-
-        logger.info(f"Notification sent to {recipient_id}: {title}")
-        return True
-
-    except Exception as e:
-        logger.error(f"send_notification error: {e}")
-        return False
-
-
-def get_notifications(
-    user_id: str,
-    limit: int = 20,
-    unread_only: bool = False,
-) -> List[Dict[str, Any]]:
-    """Fetch notifications for a user, newest first."""
-    filters: Dict[str, Any] = {"recipient_id": user_id}
-    if unread_only:
-        filters["is_read"] = False
-
-    return cached_query(
-        table_name="notifications",
-        filters=filters,
-        order_by="created_at",
-        desc=True,
-        limit=limit,
-        select_fields="id, title, message, type, is_read, created_at, link, order_id",
-    )
-
-
-def mark_notification_read(notification_id: str) -> bool:
-    """Mark a single notification as read."""
-    if not notification_id:
-        return False
-
-    client = get_client()
-    if not client:
-        return False
-
-    try:
-        client.table("notifications").update({"is_read": True}).eq("id", notification_id).execute()
-        try:
-            cached_unread_count.clear()
-        except Exception:
-            pass
-        return True
-    except Exception as e:
-        logger.error(f"mark_notification_read error: {e}")
-        return False
-
-
-def mark_all_notifications_read(user_id: str) -> bool:
-    """Mark all unread notifications as read for a user."""
-    if not user_id:
-        return False
-
-    client = get_client()
-    if not client:
-        return False
-
-    try:
-        (
-            client.table("notifications")
-            .update({"is_read": True})
-            .eq("recipient_id", user_id)
-            .eq("is_read", False)
-            .execute()
+def get_all_users(role: str = None, limit: int = 100) -> List[Dict]:
+    """Get all users, optionally filtered by role"""
+    if role:
+        return execute_query(
+            "SELECT id, name, email, role, phone, is_active, created_at FROM users WHERE role = ? ORDER BY created_at DESC LIMIT ?",
+            (role, limit), fetch="all"
         )
-        try:
-            cached_unread_count.clear()
-        except Exception:
-            pass
-        return True
-    except Exception as e:
-        logger.error(f"mark_all_notifications_read error: {e}")
-        return False
+    return execute_query(
+        "SELECT id, name, email, role, phone, is_active, created_at FROM users ORDER BY created_at DESC LIMIT ?",
+        (limit,), fetch="all"
+    )
 
-# ─────────────────────────────────────────────────────────────
-# PRODUCT FUNCTIONS
-# ─────────────────────────────────────────────────────────────
-def reduce_product_stock(product_id: str, qty_sold: Union[int, float]) -> bool:
+
+def update_user(user_id: int, **kwargs) -> bool:
+    """Update user fields"""
+    allowed_fields = {'name', 'phone', 'address', 'company_name', 'is_active'}
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    
+    if not updates:
+        return False
+    
+    set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+    set_clause += ", updated_at = datetime('now')"
+    values = list(updates.values()) + [user_id]
+    
+    execute_query(f"UPDATE users SET {set_clause} WHERE id = ?", tuple(values))
+    return True
+
+
+def delete_user(user_id: int) -> bool:
+    """Soft delete user (set inactive)"""
+    execute_query(
+        "UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
+        (user_id,)
+    )
+    log_activity(user_id, "account_deactivated", "User account deactivated")
+    return True
+
+
+# =====================================================
+# PRODUCT OPERATIONS
+# =====================================================
+
+def create_product(name: str, description: str, category: str, price: float,
+                   cost_price: float, stock_quantity: int, producer_id: int,
+                   weight: float = 0) -> tuple:
+    """Create a new product"""
+    try:
+        sku = f"SKU-{uuid.uuid4().hex[:8].upper()}"
+        
+        product_id = execute_query(
+            """INSERT INTO products 
+               (name, description, category, price, cost_price, stock_quantity, producer_id, sku, weight)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, description, category, price, cost_price, stock_quantity, producer_id, sku, weight),
+            fetch="lastrowid"
+        )
+        
+        log_activity(producer_id, "product_created", f"Product '{name}' created (SKU: {sku})")
+        return True, "Product created successfully!", product_id
+    
+    except Exception as e:
+        return False, f"Error creating product: {str(e)}", None
+
+
+def get_products(producer_id: int = None, category: str = None, 
+                 active_only: bool = True, limit: int = 100) -> List[Dict]:
+    """Get products with optional filters"""
+    query = "SELECT * FROM products WHERE 1=1"
+    params = []
+    
+    if producer_id:
+        query += " AND producer_id = ?"
+        params.append(producer_id)
+    if category:
+        query += " AND category = ?"
+        params.append(category)
+    if active_only:
+        query += " AND is_active = 1"
+    
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    
+    return execute_query(query, tuple(params), fetch="all")
+
+
+def update_product_stock(product_id: int, quantity_change: int) -> bool:
+    """Update product stock (positive to add, negative to subtract)"""
+    product = execute_query("SELECT stock_quantity FROM products WHERE id = ?", (product_id,), fetch="one")
+    if not product:
+        return False
+    
+    new_stock = product['stock_quantity'] + quantity_change
+    if new_stock < 0:
+        return False
+    
+    execute_query(
+        "UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?",
+        (new_stock, product_id)
+    )
+    return True
+
+
+def get_low_stock_products(producer_id: int = None) -> List[Dict]:
+    """Get products below minimum stock level"""
+    if producer_id:
+        return execute_query(
+            """SELECT * FROM products 
+               WHERE stock_quantity <= min_stock AND is_active = 1 AND producer_id = ?
+               ORDER BY stock_quantity ASC""",
+            (producer_id,), fetch="all"
+        )
+    return execute_query(
+        """SELECT * FROM products 
+           WHERE stock_quantity <= min_stock AND is_active = 1
+           ORDER BY stock_quantity ASC""",
+        fetch="all"
+    )
+
+
+# =====================================================
+# ORDER OPERATIONS
+# =====================================================
+
+def create_order(customer_id: int, merchant_id: int, product_id: int,
+                 quantity: int, unit_price: float, shipping_address: str,
+                 notes: str = "") -> tuple:
+    """Create a new order"""
+    try:
+        # Check stock
+        product = execute_query("SELECT stock_quantity FROM products WHERE id = ?", (product_id,), fetch="one")
+        if not product or product['stock_quantity'] < quantity:
+            return False, "Insufficient stock", None
+        
+        order_number = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        total_amount = unit_price * quantity
+        
+        order_id = execute_query(
+            """INSERT INTO orders 
+               (order_number, customer_id, merchant_id, product_id, quantity, unit_price, total_amount, shipping_address, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (order_number, customer_id, merchant_id, product_id, quantity, unit_price, total_amount, shipping_address, notes),
+            fetch="lastrowid"
+        )
+        
+        # Reduce stock
+        update_product_stock(product_id, -quantity)
+        
+        log_activity(customer_id, "order_created", f"Order {order_number} created")
+        return True, f"Order {order_number} created successfully!", order_id
+    
+    except Exception as e:
+        return False, f"Error creating order: {str(e)}", None
+
+
+def get_orders(user_id: int, role: str, status: str = None, limit: int = 50) -> List[Dict]:
+    """Get orders for a user based on their role"""
+    query = """
+        SELECT o.*, 
+               p.name as product_name,
+               c.name as customer_name,
+               m.name as merchant_name
+        FROM orders o
+        LEFT JOIN products p ON o.product_id = p.id
+        LEFT JOIN users c ON o.customer_id = c.id
+        LEFT JOIN users m ON o.merchant_id = m.id
+        WHERE 1=1
     """
-    Deduct qty_sold from a product's quantity.
-    Sets is_available=False if stock reaches zero.
-    Returns True on success.
-    """
-    if not product_id or qty_sold <= 0:
-        logger.warning("reduce_product_stock: invalid product_id or quantity")
-        return False
+    params = []
+    
+    if role == 'customer':
+        query += " AND o.customer_id = ?"
+        params.append(user_id)
+    elif role == 'merchant':
+        query += " AND o.merchant_id = ?"
+        params.append(user_id)
+    elif role == 'producer':
+        query += " AND p.producer_id = ?"
+        params.append(user_id)
+    
+    if status:
+        query += " AND o.status = ?"
+        params.append(status)
+    
+    query += " ORDER BY o.created_at DESC LIMIT ?"
+    params.append(limit)
+    
+    return execute_query(query, tuple(params), fetch="all")
 
-    client = get_client()
-    if not client:
-        return False
 
+def update_order_status(order_id: int, new_status: str) -> bool:
+    """Update order status"""
+    valid_statuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
+    if new_status not in valid_statuses:
+        return False
+    
+    execute_query(
+        "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?",
+        (new_status, order_id)
+    )
+    return True
+
+
+# =====================================================
+# WALLET OPERATIONS
+# =====================================================
+
+def get_wallet_balance(user_id: int) -> float:
+    """Get user's wallet balance"""
+    wallet = execute_query(
+        "SELECT balance FROM wallets WHERE user_id = ?", (user_id,), fetch="one"
+    )
+    return wallet['balance'] if wallet else 0.0
+
+
+def wallet_transaction(user_id: int, amount: float, trans_type: str, description: str = "") -> bool:
+    """Process wallet transaction (credit or debit)"""
+    wallet = execute_query("SELECT * FROM wallets WHERE user_id = ?", (user_id,), fetch="one")
+    if not wallet:
+        return False
+    
+    if trans_type == 'debit' and wallet['balance'] < amount:
+        return False
+    
+    if trans_type == 'credit':
+        new_balance = wallet['balance'] + amount
+    else:
+        new_balance = wallet['balance'] - amount
+    
+    execute_query(
+        "UPDATE wallets SET balance = ?, updated_at = datetime('now') WHERE user_id = ?",
+        (new_balance, user_id)
+    )
+    
+    execute_query(
+        """INSERT INTO transactions (wallet_id, type, amount, description, balance_after)
+           VALUES (?, ?, ?, ?, ?)""",
+        (wallet['id'], trans_type, amount, description, new_balance)
+    )
+    
+    return True
+
+
+def get_transaction_history(user_id: int, limit: int = 20) -> List[Dict]:
+    """Get transaction history for a user"""
+    return execute_query(
+        """SELECT t.* FROM transactions t
+           JOIN wallets w ON t.wallet_id = w.id
+           WHERE w.user_id = ?
+           ORDER BY t.created_at DESC LIMIT ?""",
+        (user_id, limit), fetch="all"
+    )
+
+
+# =====================================================
+# ACTIVITY LOG
+# =====================================================
+
+def log_activity(user_id: int, action: str, details: str = ""):
+    """Log user activity"""
     try:
-        response = client.table("products").select("quantity").eq("id", product_id).execute()
-        if not response or not response.data:
-            logger.warning(f"Product not found: {product_id}")
-            return False
-
-        current_qty = float(response.data[0].get("quantity") or 0)
-        new_qty = max(0.0, current_qty - float(qty_sold))
-
-        update_payload: Dict[str, Any] = {"quantity": new_qty}
-        if new_qty <= 0:
-            update_payload["is_available"] = False
-            update_payload["quantity"] = 0.0
-
-        client.table("products").update(update_payload).eq("id", product_id).execute()
-
-        try:
-            cached_query.clear()
-            cached_get_all_products.clear()
-        except Exception:
-            pass
-
-        logger.info(f"Stock updated for {product_id}: {current_qty} → {new_qty}")
-        return True
-
-    except Exception as e:
-        logger.error(f"reduce_product_stock error for {product_id}: {e}")
-        return False
+        execute_query(
+            "INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)",
+            (user_id, action, details)
+        )
+    except:
+        pass  # Don't fail main operation if logging fails
 
 
-def get_product_by_id(product_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch a single product row by ID."""
-    if not product_id:
-        return None
-
-    client = get_client()
-    if not client:
-        return None
-
-    try:
-        response = client.table("products").select("*").eq("id", product_id).execute()
-        return response.data[0] if (response and response.data) else None
-    except Exception as e:
-        logger.error(f"get_product_by_id error: {e}")
-        return None
-
-# ─────────────────────────────────────────────────────────────
-# DATABASE HEALTH
-# ─────────────────────────────────────────────────────────────
-def check_db_connection() -> bool:
-    """Return True if the database is reachable."""
-    client = get_client()
-    if not client:
-        return False
-    try:
-        client.table("profiles").select("id", count="exact").limit(1).execute()
-        return True
-    except Exception as e:
-        logger.error(f"DB health check failed: {e}")
-        return False
+def get_activity_log(user_id: int = None, limit: int = 50) -> List[Dict]:
+    """Get activity log"""
+    if user_id:
+        return execute_query(
+            """SELECT a.*, u.name as user_name FROM activity_log a
+               LEFT JOIN users u ON a.user_id = u.id
+               WHERE a.user_id = ?
+               ORDER BY a.created_at DESC LIMIT ?""",
+            (user_id, limit), fetch="all"
+        )
+    return execute_query(
+        """SELECT a.*, u.name as user_name FROM activity_log a
+           LEFT JOIN users u ON a.user_id = u.id
+           ORDER BY a.created_at DESC LIMIT ?""",
+        (limit,), fetch="all"
+    )
 
 
-def get_db_status() -> Dict[str, Any]:
-    """Return a dict describing the current DB connection status."""
-    client = get_client()
-    if not client:
-        return {"status": "error", "message": "Supabase client not initialized"}
-    try:
-        response = client.table("profiles").select("id", count="exact").limit(1).execute()
-        return {
-            "status": "connected",
-            "message": "Database connection healthy",
-            "has_data": bool(response and response.data),
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Connection failed: {str(e)[:100]}",
-        }
+# =====================================================
+# DASHBOARD ANALYTICS
+# =====================================================
 
-# ─────────────────────────────────────────────────────────────
-# BACKWARD COMPATIBILITY EXPORT
-# ─────────────────────────────────────────────────────────────
-# Existing code that does `from utils.db_helpers import supabase` still works.
-supabase = get_client()
+def get_dashboard_stats(role: str, user_id: int) -> Dict:
+    """Get dashboard statistics based on role"""
+    stats = {}
+    
+    if role == 'producer':
+        stats['total_products'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM products WHERE producer_id = ? AND is_active = 1",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['low_stock'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM products WHERE producer_id = ? AND stock_quantity <= min_stock",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['total_orders'] = execute_query(
+            """SELECT COUNT(*) as cnt FROM orders o 
+               JOIN products p ON o.product_id = p.id WHERE p.producer_id = ?""",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['revenue'] = execute_query(
+            """SELECT COALESCE(SUM(o.total_amount), 0) as total FROM orders o 
+               JOIN products p ON o.product_id = p.id 
+               WHERE p.producer_id = ? AND o.status NOT IN ('cancelled', 'refunded')""",
+            (user_id,), fetch="one"
+        )['total']
+    
+    elif role == 'merchant':
+        stats['active_listings'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM merchant_listings WHERE merchant_id = ? AND is_active = 1",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['total_orders'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM orders WHERE merchant_id = ?",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['pending_orders'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM orders WHERE merchant_id = ? AND status = 'pending'",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['revenue'] = execute_query(
+            """SELECT COALESCE(SUM(total_amount), 0) as total FROM orders 
+               WHERE merchant_id = ? AND status NOT IN ('cancelled', 'refunded')""",
+            (user_id,), fetch="one"
+        )['total']
+    
+    elif role == 'customer':
+        stats['total_orders'] = execute_query(
+            "SELECT COUNT(*) as cnt FROM orders WHERE customer_id = ?",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['active_orders'] = execute_query(
+            """SELECT COUNT(*) as cnt FROM orders 
+               WHERE customer_id = ? AND status NOT IN ('delivered', 'cancelled', 'refunded')""",
+            (user_id,), fetch="one"
+        )['cnt']
+        
+        stats['total_spent'] = execute_query(
+            """SELECT COALESCE(SUM(total_amount), 0) as total FROM orders 
+               WHERE customer_id = ? AND status NOT IN ('cancelled', 'refunded')""",
+            (user_id,), fetch="one"
+        )['total']
+        
+        stats['wallet_balance'] = get_wallet_balance(user_id)
+    
+    elif role == 'admin':
+        stats['total_users'] = execute_query("SELECT COUNT(*) as cnt FROM users WHERE is_active = 1", fetch="one")['cnt']
+        stats['total_products'] = execute_query("SELECT COUNT(*) as cnt FROM products WHERE is_active = 1", fetch="one")['cnt']
+        stats['total_orders'] = execute_query("SELECT COUNT(*) as cnt FROM orders", fetch="one")['cnt']
+        stats['total_revenue'] = execute_query(
+            "SELECT COALESCE(SUM(total_amount), 0) as total FROM orders WHERE status NOT IN ('cancelled', 'refunded')",
+            fetch="one"
+        )['total']
+    
+    return stats
