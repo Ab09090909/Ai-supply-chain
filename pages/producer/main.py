@@ -38,6 +38,9 @@ def render_producer_page():
     if 'edit_product_id' not in st.session_state:
         st.session_state.edit_product_id = None
     
+    if 'delete_product_id' not in st.session_state:
+        st.session_state.delete_product_id = None
+    
     if 'ai_selected_product' not in st.session_state:
         st.session_state.ai_selected_product = None
     
