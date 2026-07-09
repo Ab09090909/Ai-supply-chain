@@ -12,7 +12,7 @@ class SelfLearningAI:
         self.knowledge_base = self.load_knowledge_base()
         self.learning_data = self.load_learning_data()
         
-        # Ethiopian market price ranges
+        # Ethiopian market price ranges (realistic)
         self.ethiopian_price_ranges = {
             'Teff': {'min': 80, 'max': 150, 'avg': 115, 'unit': 'kg'},
             'Wheat': {'min': 45, 'max': 75, 'avg': 60, 'unit': 'kg'},
