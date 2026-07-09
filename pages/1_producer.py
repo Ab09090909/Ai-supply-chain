@@ -1,38 +1,68 @@
 import streamlit as st
-from utils.auth import initialize_session_state
+import os
+import pickle
+from utils.auth import initialize_session_state, logout_user
 
-# Initialize
+# --- IMPORTS FROM PRODUCER MODULE (The Connection) ---
+from producer.profile import render_profile
+from producer.dashboard import render_dashboard
+from producer.inventory import render_inventory
+from producer.orders import render_orders
+from producer.ai_insights import render_ai_insights
+
+# Initialize session state
 initialize_session_state()
 
-# Auth check
+# --- Authentication Guard ---
 if not st.session_state.authenticated:
-    st.error("Please login")
+    st.error("🔒 Please log in to access this page.")
     st.stop()
 
 if st.session_state.user_info['role'] != 'producer':
-    st.error("Producer access only")
+    st.error("⛔ Access Denied. This page is for Producers only.")
     st.stop()
 
-st.title("🏭 Producer Dashboard")
-st.write("Testing modular structure...")
+user_info = st.session_state.user_info
 
-# Try importing
-try:
-    from producer.profile import render_profile
-    st.success("✅ Imports working!")
-    
-    # Show profile
-    render_profile(st.session_state.user_info)
-    
-    # Simple tabs
-    tab1, tab2 = st.tabs(["Dashboard", "Inventory"])
-    
-    with tab1:
-        st.write("Dashboard tab works!")
-    
-    with tab2:
-        st.write("Inventory tab works!")
-        
-except ImportError as e:
-    st.error(f" Import failed: {e}")
-    st.error("Check that producer/__init__.py exists")
+# --- AI Model Loader (Silent) ---
+@st.cache_resource
+def load_ai_model(model_name):
+    try:
+        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", model_name)
+        if not os.path.exists(model_path) or os.path.getsize(model_path) < 10:
+            return None
+        with open(model_path, 'rb') as f:
+            return pickle.load(f)
+    except Exception:
+        return None
+
+# We load models here so we can pass them to tabs if needed later
+demand_model = load_ai_model("demand_forecaster.pkl")
+price_model = load_ai_model("price_predictor.pkl")
+
+# ==========================================
+# MAIN PAGE LAYOUT
+# ==========================================
+
+# 1. Render Profile (Always visible at the top)
+render_profile(user_info)
+
+st.markdown("---")
+
+# 2. Create the Tabs
+tab_dashboard, tab_inventory, tab_orders, tab_ai = st.tabs([
+    "📊 Dashboard", " Inventory", "🚚 Orders", " AI Insights"
+])
+
+# 3. Connect Tabs to their respective files
+with tab_dashboard:
+    render_dashboard(user_info['id'])
+
+with tab_inventory:
+    render_inventory(user_info['id'], user_info)
+
+with tab_orders:
+    render_orders(user_info['id'])
+
+with tab_ai:
+    render_ai_insights(user_info['id'])
