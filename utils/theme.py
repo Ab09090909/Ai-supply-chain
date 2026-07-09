@@ -1,263 +1,317 @@
-"""
-theme.py — Global dark theme + reusable UI helpers
-"""
-import streamlit as st
-
-
-def inject_theme():
-    """Inject the global dark theme CSS into the current page."""
-    is_light = st.session_state.get("sidebar_light_mode", False)
-    accent       = "#D4A017" if not is_light else "#1B4332"
-    accent_light = "#F4C430" if not is_light else "#2D6A4F"
-
-    st.markdown(f"""
-<style>
-/* ─── BASE ─── */
-html, body, [data-testid="stAppViewContainer"] {{
-    background: #0f1117 !important;
-    color: #e2e8f0 !important;
-    font-family: 'Inter', sans-serif;
-}}
-
-/* ─── HIDE DEFAULT SIDEBAR & BRANDING ─── */
-[data-testid="stSidebar"],
-[data-testid="stSidebarContent"],
-[data-testid="collapsedControl"] {{
-    display: none !important;
-}}
-#MainMenu, footer, header {{
-    visibility: hidden !important;
-}}
-[data-testid="stToolbar"] {{
-    display: none !important;
-}}
-
-/* ─── BUTTONS ─── */
-.stButton > button {{
-    border-radius: 8px !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    transition: all 0.15s ease !important;
-    background: #1e2a3a !important;
-    border: 1px solid #334155 !important;
-    color: #e2e8f0 !important;
-    cursor: pointer !important;
-}}
-.stButton > button:hover {{
-    border-color: {accent}55 !important;
-    color: {accent} !important;
-}}
-.stButton > button[kind="primary"] {{
-    background: linear-gradient(135deg, {accent} 0%, {accent_light} 100%) !important;
-    border-color: {accent} !important;
-    color: #1B4332 !important;
-    font-weight: 600 !important;
-}}
-
-/* ─── INPUTS ─── */
-[data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input,
-[data-testid="stTextArea"] textarea {{
-    background: #1e2a3a !important;
-    border-color: #334155 !important;
-    color: #e2e8f0 !important;
-    border-radius: 8px !important;
-}}
-[data-testid="stSelectbox"] > div > div {{
-    background: #1e2a3a !important;
-    border-color: #334155 !important;
-    color: #e2e8f0 !important;
-    border-radius: 8px !important;
-}}
-
-/* ─── TABS ─── */
-[data-testid="stTabs"] > div > div > div > button {{
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    color: #64748b !important;
-    padding: 8px 16px !important;
-}}
-[data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {{
-    color: {accent} !important;
-    border-bottom: 2px solid {accent} !important;
-}}
-
-/* ─── KPI CARDS ─── */
-.kpi-card {{
-    background: #161b27;
-    border: 1px solid #1e2a3a;
-    border-radius: 12px;
-    padding: 18px 20px;
-    margin-bottom: 12px;
-    transition: border-color 0.15s;
-}}
-.kpi-card:hover {{
-    border-color: {accent}44;
-}}
-.kpi-label {{
-    font-size: 11px;
-    font-weight: 600;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-}}
-.kpi-value {{
-    font-size: 26px;
-    font-weight: 700;
-    color: {accent};
-    line-height: 1.1;
-}}
-.kpi-sub {{
-    font-size: 12px;
-    color: #94a3b8;
-    margin-top: 4px;
-}}
-
-/* ─── ALERT BOXES ─── */
-.alert-box {{
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    margin: 8px 0;
-    line-height: 1.5;
-}}
-.alert-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
-.alert-success {{ background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }}
-.alert-warning {{ background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }}
-.alert-danger  {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
-
-/* ─── PILLS ─── */
-.pill {{
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.3px;
-    margin: 2px 0;
-}}
-.pill-success {{ background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }}
-.pill-warning {{ background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }}
-.pill-danger  {{ background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }}
-.pill-info    {{ background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }}
-.pill-neutral {{ background: #1e293b;   color: #94a3b8; border: 1px solid #334155;   }}
-
-/* ─── PRICE TAG ─── */
-.price-tag {{
-    font-size: 18px;
-    font-weight: 700;
-    color: {accent};
-    font-variant-numeric: tabular-nums;
-}}
-
-/* ─── SECTION TITLE ─── */
-.section-title {{
-    font-size: 13px;
-    font-weight: 600;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin: 16px 0 8px 0;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #1e2a3a;
-}}
-
-/* ─── RESPONSIVE ─── */
-@media (max-width: 768px) {{
-    [data-testid="stAppViewBlockContainer"] {{
-        padding-top: 70px !important;
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }}
-    [data-testid="stTabs"] > div > div > div > button {{
-        font-size: 12px !important;
-        padding: 6px 10px !important;
-        white-space: nowrap !important;
-    }}
-    [data-testid="stTabs"] > div > div {{
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch;
-    }}
-    div.stButton > button {{
-        width: 100% !important;
-    }}
-    .kpi-value {{
-        font-size: 22px;
-    }}
-}}
-
-@media (min-width: 769px) {{
-    [data-testid="stAppViewBlockContainer"] {{
-        padding-top: 80px !important;
-        padding-left: 24px !important;
-        padding-right: 24px !important;
-    }}
-}}
-</style>
-""", unsafe_allow_html=True)
-
-
-def render_theme_toggle():
-    """Render a light/dark mode toggle button."""
-    if "sidebar_light_mode" not in st.session_state:
-        st.session_state.sidebar_light_mode = False
-
-    is_light = st.session_state.sidebar_light_mode
-    label = "☀️ Light" if not is_light else "🌙 Dark"
-
-    if st.button(label, key="theme_toggle_sidebar", use_container_width=True):
-        st.session_state.sidebar_light_mode = not is_light
-        st.rerun()
-
-
-def render_page_header(title: str, subtitle: str = "", icon: str = "🌾"):
-    """Render a full-width gradient page header."""
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
-                border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; color: white;">
-        <div style="font-size: 32px; margin-bottom: 8px;">{icon}</div>
-        <h2 style="margin: 0; font-size: clamp(18px, 3vw, 24px); font-weight: 700; color: white;">{title}</h2>
-        {f'<p style="margin: 4px 0 0; opacity: 0.82; font-size: 13px; color: white;">{subtitle}</p>' if subtitle else ''}
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_kpi_card(label: str, value: str, subtext: str = "", icon: str = ""):
-    """Render a KPI metric card."""
-    st.markdown(f"""
-    <div class="kpi-card">
-        {f'<div style="font-size: 24px; margin-bottom: 8px;">{icon}</div>' if icon else ''}
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        {f'<div class="kpi-sub">{subtext}</div>' if subtext else ''}
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_alert(message: str, alert_type: str = "info"):
-    """Render a styled alert box. alert_type: info | success | warning | error"""
-    type_map = {
-        "info":    "alert-info",
-        "success": "alert-success",
-        "warning": "alert-warning",
-        "error":   "alert-danger",
+def get_custom_css():
+    """Return enhanced custom CSS"""
+    return """
+    <style>
+    /* Global Styles */
+    .stApp {
+        background-color: #0f172a;
+        color: #e2e8f0;
     }
-    css_class = type_map.get(alert_type, "alert-info")
-    st.markdown(f'<div class="alert-box {css_class}">{message}</div>', unsafe_allow_html=True)
+    
+    /* Login Page Styles */
+    .login-header {
+        text-align: center;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .login-header h1 {
+        font-size: 3rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    
+    .login-header p {
+        color: #94a3b8;
+        font-size: 1.1rem;
+    }
+    
+    .login-features {
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .login-features h2 {
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .feature {
+        display: flex;
+        align-items: center;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        transition: transform 0.3s ease;
+    }
+    
+    .feature:hover {
+        transform: translateX(10px);
+        background: rgba(255, 255, 255, 0.08);
+    }
+    
+    .feature-icon {
+        font-size: 2.5rem;
+        margin-right: 1.5rem;
+    }
+    
+    .feature-text h3 {
+        margin-bottom: 0.5rem;
+        color: #e2e8f0;
+    }
+    
+    .feature-text p {
+        color: #94a3b8;
+        margin: 0;
+    }
+    
+    /* User Profile in Sidebar */
+    .user-profile {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    
+    .user-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-right: 1rem;
+    }
+    
+    .user-info {
+        flex: 1;
+    }
+    
+    .user-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #e2e8f0;
+    }
+    
+    .user-role {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        text-transform: capitalize;
+    }
+    
+    /* Page Header */
+    .page-header {
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.75rem;
+        border-left: 4px solid #667eea;
+    }
+    
+    .page-title {
+        font-size: 2rem;
+        margin: 0;
+        color: #e2e8f0;
+    }
+    
+    .page-subtitle {
+        color: #94a3b8;
+        margin: 0.5rem 0 0 0;
+    }
+    
+    /* Welcome Banner */
+    .welcome-banner {
+        padding: 2rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid;
+    }
+    
+    .welcome-banner h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 2rem;
+    }
+    
+    .welcome-banner p {
+        margin: 0;
+        opacity: 0.9;
+    }
+    
+    /* Info Cards */
+    .info-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .info-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .card-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+    
+    .card-title {
+        margin: 0;
+        font-size: 1.25rem;
+        color: #e2e8f0;
+    }
+    
+    .card-content {
+        color: #94a3b8;
+        line-height: 1.6;
+    }
+    
+    /* Metric Cards */
+    .metric-card {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        text-align: center;
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: scale(1.05);
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #e2e8f0;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-delta {
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .metric-delta.green {
+        color: #10b981;
+    }
+    
+    .metric-delta.red {
+        color: #ef4444;
+    }
+    
+    /* Form Styles */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > select {
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #e2e8f0;
+        border-radius: 0.5rem;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Button Styles */
+    .stButton > button {
+        border-radius: 0.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Sidebar */
+    .css-1d391kg {
+        background-color: #1e293b;
+    }
+    
+    /* Success/Error Messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+    
+    /* Spinner */
+    .stSpinner > div {
+        border-color: #667eea transparent transparent transparent;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .login-header h1 {
+            font-size: 2rem;
+        }
+        
+        .welcome-banner h1 {
+            font-size: 1.5rem;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+        }
+    }
+    </style>
+    """
 
-
-def render_pill(text: str, pill_type: str = "neutral"):
-    """Render an inline status pill. pill_type: success | warning | danger | info | neutral"""
-    st.markdown(f'<span class="pill pill-{pill_type}">{text}</span>', unsafe_allow_html=True)
-
-
-def render_price(amount: float, currency: str = "ETB"):
-    """Render a formatted price with accent styling."""
-    st.markdown(f'<span class="price-tag">{currency} {amount:,.2f}</span>', unsafe_allow_html=True)
-
-
-def render_section_title(title: str):
-    """Render a subtle section divider with title."""
-    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+def get_role_colors(role: str) -> dict:
+    """Get color scheme based on user role"""
+    colors = {
+        'producer': {
+            'primary': '#10b981',
+            'secondary': '#059669',
+            'accent': '#34d399'
+        },
+        'merchant': {
+            'primary': '#667eea',
+            'secondary': '#764ba2',
+            'accent': '#818cf8'
+        },
+        'customer': {
+            'primary': '#f59e0b',
+            'secondary': '#d97706',
+            'accent': '#fbbf24'
+        },
+        'admin': {
+            'primary': '#ef4444',
+            'secondary': '#dc2626',
+            'accent': '#f87171'
+        }
+    }
+    
+    return colors.get(role, colors['merchant'])
