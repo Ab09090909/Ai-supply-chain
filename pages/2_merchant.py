@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 try:
     from utils.theme import inject_theme
-    from utils.shared_ui import render_hamburger_menu
     from utils.constants import REGIONS, SECTORS
     from utils.db_helpers import supabase, cached_query, clear_data_cache, send_notification
     from utils.verification import check_verification_status, render_document_upload
@@ -41,6 +40,62 @@ try:
 except ImportError as e:
     st.error(f"⚠️ Import error: {e}")
     st.stop()
+
+# ─────────────────────────────────────────────
+# HELPER FUNCTIONS (inline to avoid missing imports)
+# ─────────────────────────────────────────────
+def render_hamburger_menu():
+    """Render a hamburger menu toggle for mobile navigation."""
+    st.markdown("""
+    <style>
+    .hamburger-menu {
+        display: none;
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 999999;
+        background: #1B4332;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 20px;
+        cursor: pointer;
+    }
+    @media (max-width: 768px) {
+        .hamburger-menu {
+            display: block;
+        }
+    }
+    </style>
+    <div class="hamburger-menu" onclick="document.querySelector('[data-testid=\"stSidebar\"]').style.display='block'">
+        ☰
+    </div>
+    """, unsafe_allow_html=True)
+
+def get_notifications(user_id, limit=20):
+    """Fetch notifications for a user."""
+    try:
+        result = supabase.table("notifications").select("*").eq("recipient_id", user_id).order("created_at", desc=True).limit(limit).execute()
+        return result.data or []
+    except Exception:
+        return []
+
+def mark_notification_read(notification_id):
+    """Mark a single notification as read."""
+    try:
+        supabase.table("notifications").update({"is_read": True}).eq("id", notification_id).execute()
+        return True
+    except Exception:
+        return False
+
+def mark_all_notifications_read(user_id):
+    """Mark all notifications as read for a user."""
+    try:
+        supabase.table("notifications").update({"is_read": True}).eq("recipient_id", user_id).eq("is_read", False).execute()
+        return True
+    except Exception:
+        return False
 
 # ─────────────────────────────────────────────
 # SESSION STATE
@@ -61,6 +116,10 @@ inject_theme()
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Hide Streamlit branding */
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
 
 .dash-header {
     background: linear-gradient(135deg, #1a1a2e 0%, #0f1117 60%, #16213e 100%);
@@ -112,12 +171,51 @@ st.markdown("""
 
 .confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
 
+/* Pills */
+.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.3px; }
+.pill-success { background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }
+.pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
+.pill-danger  { background: #7f1d1d44; color: #f87171; border: 1px solid #ef444444; }
+.pill-info    { background: #1e3a5f44; color: #60a5fa; border: 1px solid #2563eb44; }
+.pill-neutral { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+
 .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%) !important;
     border-color: #2563eb !important; color: #fff !important;
 }
+
+.stButton > button {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s !important;
+    background: #1e2a3a !important;
+    border: 1px solid #334155 !important;
+    color: #e2e8f0 !important;
+}
+.stButton > button:hover { border-color: #60a5fa55 !important; color: #60a5fa !important; }
+
+[data-testid="stTabs"] > div > div > div > button {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #64748b !important;
+}
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
     color: #60a5fa !important; border-bottom-color: #2563eb !important;
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+[data-testid="stSelectbox"] > div > div {
+    background: #1e2a3a !important;
+    border-color: #334155 !important;
+    border-radius: 8px !important;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -128,6 +226,8 @@ st.markdown("""
     .dash-header { flex-direction: column !important; padding: 16px !important; text-align: center; }
     .kpi-card { padding: 12px !important; }
     div.stButton > button { width: 100%; }
+    [data-testid="stTabs"] > div > div { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+    [data-testid="stTabs"] > div > div > div > button { font-size: 11px !important; padding: 6px 8px !important; white-space: nowrap; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -142,11 +242,13 @@ def check_auth() -> bool:
         st.warning("⚠️ Please sign in first.")
         st.page_link("app.py", label="← Go to Login", icon="🔐")
         st.stop()
+        return False
     profile = st.session_state.get("profile")
     if profile is None or profile.get("role") != "merchant":
         st.error("🚫 Access denied. This page is for merchants only.")
         st.page_link("app.py", label="← Go to Login", icon="🔐")
         st.stop()
+        return False
     return True
 
 check_auth()
@@ -180,8 +282,13 @@ verif_badge = (
     else '<span class="dash-badge" style="background:#78350f44;border-color:#d9770644;color:#fbbf24;">⏳ Pending</span>'
 )
 
-name_initial = profile.get("full_name", "M")[0].upper()
-avatar_html = f'<div style="width:80px;height:80px;border-radius:50%;border:3px solid #2563eb;background:#1e2a3a;display:flex;align-items:center;justify-content:center;font-size:32px;color:#f1f5f9;font-weight:700;">{name_initial}</div>'
+# Profile picture for header
+profile_pic = profile.get("profile_image")
+if profile_pic:
+    avatar_html = f'<img src="data:image/jpeg;base64,{profile_pic}" style="width:80px;height:80px;border-radius:50%;border:3px solid #2563eb;object-fit:cover;">'
+else:
+    name_initial = profile.get("full_name", "M")[0].upper()
+    avatar_html = f'<div style="width:80px;height:80px;border-radius:50%;border:3px solid #2563eb;background:#1e2a3a;display:flex;align-items:center;justify-content:center;font-size:32px;color:#f1f5f9;font-weight:700;">{name_initial}</div>'
 
 st.markdown(f"""
 <div class="dash-header">
@@ -195,7 +302,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Quick action row (replaces hidden sidebar)
-qa1, qa2, qa3 = st.columns([1, 1, 4])
+qa1, qa2, qa3, qa4 = st.columns([1, 1, 1, 3])
 with qa1:
     if st.button("🔄 Refresh", use_container_width=True):
         clear_data_cache()
@@ -205,6 +312,11 @@ with qa2:
         st.markdown('<span class="pill pill-success">● Verified</span>', unsafe_allow_html=True)
     else:
         st.markdown('<span class="pill pill-warning">● Pending</span>', unsafe_allow_html=True)
+with qa3:
+    if st.button("✏️ Edit Profile", use_container_width=True):
+        st.session_state.show_profile_editor = True
+        st.rerun()
+st.markdown("---")
 
 # ─────────────────────────────────────────────
 # VERIFICATION GATE
@@ -362,7 +474,7 @@ with tab_orders:
                 supabase.table("orders")
                 .select("*, products(product_name, sector, quality_grade, unit, region, price_birr, producer_id)")
                 .eq("buyer_id", user_id)
-                .neq("status", "delivered")
+                .in_("status", ["pending", "confirmed"])
                 .order("created_at", desc=True)
                 .limit(50)
                 .execute().data or []
@@ -373,7 +485,7 @@ with tab_orders:
 
         of1, of2 = st.columns(2)
         with of1:
-            ord_status = st.selectbox("Status", ["All", "pending", "confirmed", "cancelled"], key="mord_status")
+            ord_status = st.selectbox("Status", ["All", "pending", "confirmed"], key="mord_status")
         with of2:
             ord_search = st.text_input("🔍 Search", key="mord_search", placeholder="Product name…")
 
@@ -685,7 +797,8 @@ with tab_pref:
                     max_budget = st.number_input("💰 Max Order Budget (Birr)", min_value=0.0,
                         value=float(existing_pref.get("max_budget_birr") or 50000) if existing_pref else 50000.0, step=1000.0)
                     pref_payment = st.selectbox("💳 Payment Method",
-                        ["Bank Transfer", "Cash on Delivery", "Mobile Money", "Letter of Credit"])
+                        ["Bank Transfer", "Cash on Delivery", "Mobile Money", "Letter of Credit"],
+                        index=0)
                     needs_delivery = st.checkbox("🚚 Require Delivery Service",
                         value=bool((existing_pref or {}).get("needs_delivery", False)))
 
@@ -901,13 +1014,12 @@ with tab_ai_insights:
 # ══════════════════════════════════════════════
 with tab_notif:
     try:
-        from utils.db_helpers import get_notifications, mark_notification_read, mark_all_notifications_read
         st.markdown('<div class="section-title">🔔 Notifications</div>', unsafe_allow_html=True)
         notifs = get_notifications(user_id, limit=20)
         if not notifs:
             st.info("No notifications yet.")
         else:
-            if st.button("✅ Mark All Read", key="notif_mark_all"):
+            if st.button("✅ Mark All Read", key="notif_mark_all", use_container_width=True):
                 mark_all_notifications_read(user_id)
                 st.rerun()
             for n in notifs:
@@ -957,6 +1069,18 @@ with tab_profile:
                     st.error(f"Update failed: {e}")
     except Exception as e:
         st.error(f"Profile error: {e}")
+
+# ─────────────────────────────────────────────
+# PROFILE EDITOR MODAL (triggered by header button)
+# ─────────────────────────────────────────────
+if st.session_state.get("show_profile_editor"):
+    try:
+        from utils.shared_ui import render_profile_editor_modal
+        render_profile_editor_modal(profile, user_id, key_suffix="merchant_modal")
+        st.session_state.show_profile_editor = False
+    except Exception as e:
+        st.error(f"Profile editor error: {e}")
+        st.session_state.show_profile_editor = False
 
 # ─────────────────────────────────────────────
 # FLOATING CHATBOT (optional)
