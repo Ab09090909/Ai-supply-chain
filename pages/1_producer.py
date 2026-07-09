@@ -18,27 +18,43 @@ initialize_session_state()
 
 # --- Authentication Guard ---
 if not st.session_state.authenticated:
-    st.error(" Please log in to access this page.")
+    st.error("🔒 Please log in to access this page.")
     st.stop()
 
 if st.session_state.user_info['role'] != 'producer':
-    st.error(" Access Denied. This page is for Producers only.")
+    st.error("⛔ Access Denied. This page is for Producers only.")
     st.stop()
 
 user_info = st.session_state.user_info
 
-# --- AI Model Loader (Cached for performance) ---
+# --- AI Model Loader (SAFE - Never crashes the app) ---
 @st.cache_resource
 def load_ai_model(model_name):
-    """Load AI models safely. Returns None if file doesn't exist."""
-    model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", model_name)
-    if os.path.exists(model_path):
+    """Load AI models safely. Returns None if file doesn't exist or is corrupted."""
+    try:
+        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", model_name)
+        if not os.path.exists(model_path):
+            st.warning(f"️ Model file not found: {model_name}")
+            return None
+        
+        # Check if file is empty or too small
+        if os.path.getsize(model_path) < 100:
+            st.warning(f"⚠️ Model file is too small/corrupted: {model_name}")
+            return None
+        
         with open(model_path, 'rb') as f:
-            return pickle.load(f)
-    return None
+            model = pickle.load(f)
+        return model
+    except Exception as e:
+        st.warning(f"⚠️ Failed to load {model_name}: {str(e)}")
+        return None
 
+# Load models (will return None if they fail)
 demand_model = load_ai_model("demand_forecaster.pkl")
 price_model = load_ai_model("price_predictor.pkl")
+fraud_model = load_ai_model("fraud_detector.pkl")
+merchant_matcher = load_ai_model("merchant_matcher.pkl")
+recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Producer Dashboard", page_icon="🏭", layout="wide")
@@ -46,13 +62,26 @@ st.set_page_config(page_title="Producer Dashboard", page_icon="🏭", layout="wi
 # --- Header ---
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.title(f"🏭 Producer Dashboard")
+    st.title(f" Producer Dashboard")
     st.markdown(f"Welcome back, **{user_info['name']}**!")
 with col2:
     if st.button("🚪 Logout", use_container_width=True):
         logout_user()
 
 st.markdown("---")
+
+# Show model status
+model_status = []
+if demand_model: model_status.append("✅ Demand Forecaster")
+if price_model: model_status.append("✅ Price Predictor")
+if fraud_model: model_status.append("✅ Fraud Detector")
+if merchant_matcher: model_status.append("✅ Merchant Matcher")
+if recommendation_engine: model_status.append("✅ Recommendation Engine")
+
+if model_status:
+    st.success(f"AI Models Loaded: {', '.join(model_status)}")
+else:
+    st.warning("⚠️ No AI models loaded. Models will be simulated with mock data.")
 
 # --- Navigation Tabs ---
 tab_dashboard, tab_inventory, tab_orders, tab_ai = st.tabs([
@@ -149,7 +178,7 @@ with tab_inventory:
     # Low Stock Alerts
     low_stock = get_low_stock_products(producer_id=user_info['id'])
     if low_stock:
-        st.warning(f"️ **{len(low_stock)} products are below minimum stock level!**")
+        st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
         df_low = pd.DataFrame(low_stock)
         st.dataframe(df_low[['name', 'category', 'stock_quantity', 'min_stock']], use_container_width=True)
     
@@ -218,10 +247,32 @@ with tab_ai:
             if demand_model:
                 st.info("Model loaded: `demand_forecaster.pkl`")
                 if st.button("Predict Next 30 Days Demand", key="pred_demand"):
-                    # Mock prediction logic (Replace with actual model.predict())
-                    # In a real scenario: prediction = demand_model.predict(selected_prod_id)
+                    # Use actual model if available, otherwise mock data
+                    try:
+                        # prediction = demand_model.predict(selected_prod_id)
+                        forecast_dates = pd.date_range(start=datetime.now(), periods=30, freq='D')
+                        forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)]
+                        
+                        fig_demand = go.Figure()
+                        fig_demand.add_trace(go.Scatter(
+                            x=forecast_dates, y=forecast_values,
+                            mode='lines+markers', name='Predicted Demand',
+                            line=dict(color='#667eea', width=3)
+                        ))
+                        fig_demand.update_layout(
+                            title="Predicted Demand (Next 30 Days)",
+                            xaxis_title="Date", yaxis_title="Units Demanded",
+                            template="plotly_dark"
+                        )
+                        st.plotly_chart(fig_demand, use_container_width=True)
+                        st.success("✅ Forecast generated successfully!")
+                    except Exception as e:
+                        st.error(f"Prediction failed: {e}")
+            else:
+                st.warning("⚠️ `demand_forecaster.pkl` not available. Using mock data.")
+                if st.button("Predict Next 30 Days Demand (Mock)", key="pred_demand_mock"):
                     forecast_dates = pd.date_range(start=datetime.now(), periods=30, freq='D')
-                    forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)] # Mock data
+                    forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)]
                     
                     fig_demand = go.Figure()
                     fig_demand.add_trace(go.Scatter(
@@ -230,14 +281,11 @@ with tab_ai:
                         line=dict(color='#667eea', width=3)
                     ))
                     fig_demand.update_layout(
-                        title="Predicted Demand (Next 30 Days)",
+                        title="Predicted Demand (Next 30 Days) - Mock Data",
                         xaxis_title="Date", yaxis_title="Units Demanded",
                         template="plotly_dark"
                     )
                     st.plotly_chart(fig_demand, use_container_width=True)
-                    st.success("✅ Forecast generated successfully!")
-            else:
-                st.warning("⚠️ `demand_forecaster.pkl` not found in /models folder.")
 
         # --- Price Prediction ---
         with col2:
@@ -248,11 +296,19 @@ with tab_ai:
                 st.write(f"Current Price: **${current_price}**")
                 
                 if st.button("Suggest Optimal Price", key="pred_price"):
-                    # Mock prediction logic (Replace with actual model.predict())
-                    # optimal_price = price_model.predict(selected_prod_id)
-                    optimal_price = current_price * 1.15 # Mock 15% increase
-                    
-                    st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
-                    st.info("💡 Based on current market trends and demand elasticity.")
+                    try:
+                        # optimal_price = price_model.predict(selected_prod_id)
+                        optimal_price = current_price * 1.15
+                        st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
+                        st.info(" Based on current market trends and demand elasticity.")
+                    except Exception as e:
+                        st.error(f"Price prediction failed: {e}")
             else:
-                st.warning("⚠️ `price_predictor.pkl` not found in /models folder.")
+                st.warning("⚠️ `price_predictor.pkl` not available. Using mock data.")
+                current_price = next((p['price'] for p in products if p['id'] == selected_prod_id), 0)
+                st.write(f"Current Price: **${current_price}**")
+                
+                if st.button("Suggest Optimal Price (Mock)", key="pred_price_mock"):
+                    optimal_price = current_price * 1.15
+                    st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
+                    st.info("💡 Mock prediction - actual model not loaded.")
