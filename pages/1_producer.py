@@ -56,8 +56,6 @@ fraud_model = load_ai_model("fraud_detector.pkl")
 merchant_matcher = load_ai_model("merchant_matcher.pkl")
 recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
-# --- Page Configuration ---
-st.set_page_config(page_title="Producer Dashboard", page_icon="🏭", layout="wide")
 
 # --- Header ---
 col1, col2 = st.columns([3, 1])
