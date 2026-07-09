@@ -469,7 +469,7 @@ with tab_inventory:
             with col2:
                 stock = st.number_input("Stock Quantity", min_value=0, step=1,
                                        value=int(product_data['quantity']) if product_data else 0)
-                min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, value=10,
+                min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, step=1,
                                            value=int(product_data.get('min_stock', 10)) if product_data else 10)
                 weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1,
                                         value=float(product_data.get('weight', 0)) if product_data else 0.0)
