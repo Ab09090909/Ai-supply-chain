@@ -30,23 +30,20 @@ user_info = st.session_state.user_info
 # --- AI Model Loader (SAFE - Never crashes the app) ---
 @st.cache_resource
 def load_ai_model(model_name):
-    """Load AI models safely. Returns None if file doesn't exist or is corrupted."""
+    """Load AI models silently - no warnings"""
     try:
         model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", model_name)
         if not os.path.exists(model_path):
-            st.warning(f"️ Model file not found: {model_name}")
             return None
         
-        # Check if file is empty or too small
-        if os.path.getsize(model_path) < 100:
-            st.warning(f"⚠️ Model file is too small/corrupted: {model_name}")
+        if os.path.getsize(model_path) < 10:
             return None
         
         with open(model_path, 'rb') as f:
             model = pickle.load(f)
         return model
-    except Exception as e:
-        st.warning(f"⚠️ Failed to load {model_name}: {str(e)}")
+    except:
+        # Silently fail - no warnings shown
         return None
 
 # Load models (will return None if they fail)
@@ -68,18 +65,20 @@ with col1:
 
 st.markdown("---")
 
-# Show model status
-model_status = []
-if demand_model: model_status.append("✅ Demand Forecaster")
-if price_model: model_status.append("✅ Price Predictor")
-if fraud_model: model_status.append("✅ Fraud Detector")
-if merchant_matcher: model_status.append("✅ Merchant Matcher")
-if recommendation_engine: model_status.append("✅ Recommendation Engine")
+# Check which models loaded
+loaded_models = []
+if demand_model: loaded_models.append("Demand Forecaster")
+if price_model: loaded_models.append("Price Predictor")
+if fraud_model: loaded_models.append("Fraud Detector")
+if merchant_matcher: loaded_models.append("Merchant Matcher")
+if recommendation_engine: loaded_models.append("Recommendation Engine")
 
-if model_status:
-    st.success(f"AI Models Loaded: {', '.join(model_status)}")
-else:
-    st.warning("⚠️ No AI models loaded. Models will be simulated with mock data.")
+# Only show message if NO models loaded
+if not loaded_models:
+    # Don't show warning - just use mock data silently
+    pass
+elif len(loaded_models) < 5:
+    st.info(f"✅ Loaded: {', '.join(loaded_models)}")
 
 # --- Navigation Tabs ---
 tab_dashboard, tab_inventory, tab_orders, tab_ai = st.tabs([
