@@ -54,14 +54,220 @@ merchant_matcher = load_ai_model("merchant_matcher.pkl")
 recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
 
-# --- Header ---
-col1, col2 = st.columns([3, 1])
+# --- Header with Profile ---
+col1, col2 = st.columns([2, 1])
+
 with col1:
-    st.title(f" Producer Dashboard")
-    st.markdown(f"Welcome back, **{user_info['name']}**!")
-#with col2:
-   # if st.button("🚪 Logout", use_container_width=True):
-        #logout_user()
+    st.title("🏭 Producer Dashboard")
+    
+with col2:
+    # Profile Section
+    st.markdown("""
+    <style>
+    .profile-container {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 15px;
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        padding: 15px 20px;
+        border-radius: 15px;
+        border: 2px solid #667eea;
+    }
+    .profile-pic {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: bold;
+        color: white;
+        border: 3px solid #fff;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    .profile-info h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: bold;
+        color: #fff;
+    }
+    .profile-info p {
+        margin: 2px 0 0 0;
+        font-size: 13px;
+        color: #94a3b8;
+    }
+    .edit-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    .edit-btn:hover {
+        background: #764ba2;
+        transform: translateY(-2px);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Display profile
+    initial = user_info['name'][0].upper() if user_info['name'] else "P"
+    st.markdown(f"""
+    <div class="profile-container">
+        <div class="profile-pic">{initial}</div>
+        <div class="profile-info">
+            <h3>{user_info['name']}</h3>
+            <p>Producer</p>
+        </div>
+        <button class="edit-btn" onclick="document.getElementById('edit-profile').scrollIntoView({{behavior: 'smooth'}})">✏️ Edit</button>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ==========================================
+# EDIT PROFILE SECTION
+# ==========================================
+if 'show_edit_profile' not in st.session_state:
+    st.session_state.show_edit_profile = False
+
+with st.expander("✏️ Edit Profile", expanded=st.session_state.show_edit_profile):
+    st.markdown("### Update Your Information")
+    
+    with st.form("edit_profile_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            new_name = st.text_input("Full Name", value=user_info.get('name', ''))
+            new_email = st.text_input("Email", value=user_info.get('email', ''))
+            new_phone = st.text_input("Phone Number", value=user_info.get('phone', ''))
+        
+        with col2:
+            new_company = st.text_input("Company Name", value=user_info.get('company_name', ''))
+            new_address = st.text_area("Address", value=user_info.get('address', ''), height=100)
+            # Location/Region
+            regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", "Afar", 
+                      "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
+            new_region = st.selectbox("Region", regions, index=regions.index(user_info.get('region', 'Addis Ababa')) if user_info.get('region') in regions else 0)
+        
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
+        with col2:
+            cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+        
+        if save_btn:
+            if new_name and new_email:
+                # Update user info in database
+                from utils.db_helpers import update_user
+                try:
+                    update_user(user_info['id'], 
+                               name=new_name, 
+                               email=new_email,
+                               phone=new_phone,
+                               company_name=new_company,
+                               address=new_address,
+                               region=new_region)
+                    
+                    # Update session state
+                    st.session_state.user_info['name'] = new_name
+                    st.session_state.user_info['email'] = new_email
+                    st.session_state.user_info['phone'] = new_phone
+                    st.session_state.user_info['company_name'] = new_company
+                    st.session_state.user_info['address'] = new_address
+                    st.session_state.user_info['region'] = new_region
+                    
+                    st.success("✅ Profile updated successfully!")
+                    st.session_state.show_edit_profile = False
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error updating profile: {e}")
+            else:
+                st.error("Name and Email are required!")
+        
+        if cancel_btn:
+            st.session_state.show_edit_profile = False
+            st.rerun()
+
+# ==========================================
+# PRODUCER INFORMATION CARD
+# ==========================================
+st.markdown("### 📋 Producer Information")
+
+# Fetch latest user data
+from utils.db_helpers import get_user_by_id
+latest_user = get_user_by_id(user_info['id'])
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #667eea22, #764ba222); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #667eea; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">👤 FULL NAME</p>
+        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #fff;">
+            {latest_user.get('name', user_info['name']) if latest_user else user_info['name']}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #10b98122, #05966922); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #10b981; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📧 EMAIL</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff; word-break: break-all;">
+            {latest_user.get('email', user_info['email']) if latest_user else user_info['email']}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏢 COMPANY</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {latest_user.get('company_name', 'Not specified') if latest_user else 'Not specified'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #ef444422, #dc262622); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #ef4444; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📱 PHONE</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {latest_user.get('phone', 'Not specified') if latest_user else 'Not specified'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;"> REGION</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {latest_user.get('region', 'Addis Ababa') if latest_user else 'Addis Ababa'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #06b6d4; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏠 ADDRESS</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff;">
+            {latest_user.get('address', 'Not specified') if latest_user else 'Not specified'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("---")
 
