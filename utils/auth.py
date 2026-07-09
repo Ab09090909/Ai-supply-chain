@@ -1,332 +1,264 @@
-"""Authentication utilities for Supabase."""
 import streamlit as st
-import logging
-from typing import Optional, Tuple, Dict, Any
+import hashlib
+import re
+import time
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
+import secrets
 
-logger = logging.getLogger(__name__)
+# Rate limiting storage
+login_attempts: Dict[str, list] = {}
 
-# ─────────────────────────────────────────────────────────────
-# LAZY IMPORT — avoids circular imports
-# ─────────────────────────────────────────────────────────────
-def get_supabase():
-    """Lazy-load Supabase client to avoid circular imports."""
-    from utils.db_helpers import supabase, clear_data_cache
-    return supabase, clear_data_cache
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt"""
+    salt = secrets.token_hex(16)
+    pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}${pwd_hash}"
 
-# ─────────────────────────────────────────────────────────────
-# SIGN UP
-# ─────────────────────────────────────────────────────────────
-def sign_up(
-    email: str,
-    password: str,
-    full_name: str,
-    role: str,
-    region: str,
-    phone: str = "",
-) -> Tuple[bool, str]:
-    """
-    Register a new user and create their profile row.
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash"""
+    try:
+        salt, pwd_hash = stored_hash.split('$')
+        return hashlib.sha256((password + salt).encode()).hexdigest() == pwd_hash
+    except:
+        return False
 
-    Returns:
-        (success, message)
-    """
-    # Input validation
-    if not email or "@" not in email:
-        return False, "Please enter a valid email address."
+def validate_email(email: str) -> tuple[bool, str]:
+    """Validate email format"""
+    if not email:
+        return False, "Email is required"
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(pattern, email):
+        return False, "Invalid email format"
+    return True, ""
+
+def validate_password(password: str) -> tuple[bool, str]:
+    """Validate password strength"""
+    if not password:
+        return False, "Password is required"
     if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
-    if not full_name or len(full_name.strip()) < 2:
-        return False, "Please enter your full name."
+        return False, "Password must be at least 8 characters"
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number"
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one special character"
+    return True, ""
 
-    try:
-        supabase, _ = get_supabase()
+def check_rate_limit(username: str, max_attempts: int = 5, lockout_time: int = 900) -> tuple[bool, str]:
+    """Check if user is rate limited"""
+    current_time = time.time()
+    
+    if username not in login_attempts:
+        login_attempts[username] = []
+    
+    # Clean old attempts (older than lockout time)
+    login_attempts[username] = [
+        attempt for attempt in login_attempts[username] 
+        if current_time - attempt < lockout_time
+    ]
+    
+    if len(login_attempts[username]) >= max_attempts:
+        remaining_time = lockout_time - (current_time - login_attempts[username][0])
+        minutes = int(remaining_time // 60)
+        seconds = int(remaining_time % 60)
+        return False, f"Too many failed attempts. Try again in {minutes}m {seconds}s"
+    
+    return True, ""
 
-        # Create auth user
-        response = supabase.auth.sign_up({
-            "email": email,
-            "password": password,
-            "options": {
-                "data": {
-                    "full_name": full_name,
-                    "role": role,
-                    "region": region,
-                }
-            },
-        })
+def record_login_attempt(username: str, success: bool):
+    """Record login attempt for rate limiting"""
+    if not success:
+        current_time = time.time()
+        if username not in login_attempts:
+            login_attempts[username] = []
+        login_attempts[username].append(current_time)
 
-        if not (response and response.user):
-            logger.warning(f"Signup failed for {email}: no user returned")
-            return False, "Signup failed. Please try again."
+def generate_session_token() -> str:
+    """Generate secure session token"""
+    return secrets.token_urlsafe(32)
 
-        user_id = response.user.id
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'user_info' not in st.session_state:
+        st.session_state.user_info = None
+    if 'session_token' not in st.session_state:
+        st.session_state.session_token = None
+    if 'remember_me' not in st.session_state:
+        st.session_state.remember_me = False
+    if 'logout_confirmation' not in st.session_state:
+        st.session_state.logout_confirmation = False
 
-        # Create profile row — omit timestamps, let Supabase defaults handle them
-        profile_data = {
-            "id": user_id,
-            "full_name": full_name.strip(),
-            "role": role.lower(),
-            "region": region,
-            "phone": phone.strip() if phone else None,
-            "is_verified": False,
-            "documents_uploaded": False,
-        }
-
-        try:
-            supabase.table("profiles").insert(profile_data).execute()
-            logger.info(f"User registered: {email} / role: {role}")
-            return True, "Account created! Please check your email to verify your account before signing in."
-        except Exception as e:
-            logger.error(f"Profile creation failed for {email}: {e}")
-            # Note: admin.delete_user requires service-role key, not anon key.
-            # The orphaned auth user will need manual cleanup in the Supabase dashboard.
-            return False, f"Account created but profile setup failed: {str(e)}"
-
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Signup error for {email}: {error_msg}")
-
-        if "already registered" in error_msg.lower():
-            return False, "This email is already registered. Please sign in."
-        if "password" in error_msg.lower():
-            return False, "Password does not meet requirements. Use at least 8 characters."
-        return False, f"Registration error: {error_msg}"
-
-# ─────────────────────────────────────────────────────────────
-# SIGN IN
-# ─────────────────────────────────────────────────────────────
-def sign_in(email: str, password: str) -> Tuple[bool, str]:
+def login_user(username: str, password: str, remember_me: bool = False) -> tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Sign in an existing user and populate session state.
-
-    Returns:
-        (success, message)
+    Login user with validation and rate limiting
+    Returns: (success, message, user_info)
     """
-    if not email or not password:
-        return False, "Please enter both email and password."
+    # Check rate limit
+    is_allowed, message = check_rate_limit(username)
+    if not is_allowed:
+        return False, message, None
+    
+    # Validate inputs
+    email_valid, email_msg = validate_email(username)
+    if not email_valid:
+        return False, email_msg, None
+    
+    # Check if user exists
+    if 'users' not in st.session_state:
+        st.session_state.users = {}
+    
+    if username not in st.session_state.users:
+        record_login_attempt(username, False)
+        return False, "Invalid email or password", None
+    
+    user_data = st.session_state.users[username]
+    
+    # Verify password
+    if not verify_password(password, user_data['password']):
+        record_login_attempt(username, False)
+        return False, "Invalid email or password", None
+    
+    # Successful login - clear rate limit
+    if username in login_attempts:
+        del login_attempts[username]
+    
+    # Generate session token
+    session_token = generate_session_token()
+    
+    # Update user info
+    user_info = {
+        'email': username,
+        'name': user_data['name'],
+        'role': user_data['role'],
+        'session_token': session_token,
+        'last_login': datetime.now().isoformat()
+    }
+    
+    # Set session state
+    st.session_state.authenticated = True
+    st.session_state.user_info = user_info
+    st.session_state.session_token = session_token
+    st.session_state.remember_me = remember_me
+    
+    return True, "Login successful!", user_info
 
-    try:
-        supabase, clear_data_cache = get_supabase()
-
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password,
-        })
-
-        if not (response and response.user):
-            return False, "Invalid email or password. Please try again."
-
-        # Populate session
-        st.session_state.user = response.user
-        st.session_state.authenticated = True
-        st.session_state.user_email = response.user.email
-        clear_data_cache()
-
-        # Load profile
-        try:
-            profile_resp = (
-                supabase.table("profiles")
-                .select("*")
-                .eq("id", response.user.id)
-                .execute()
-            )
-            if profile_resp and profile_resp.data:
-                st.session_state.profile = profile_resp.data[0]
-                st.session_state.user_role = profile_resp.data[0].get("role", "customer")
-                logger.info(f"Signed in: {email} as {st.session_state.user_role}")
-            else:
-                # Profile missing — create a default one
-                logger.warning(f"No profile found for {email}, creating default")
-                default_name = email.split("@")[0]
-                profile_data = {
-                    "id": response.user.id,
-                    "full_name": default_name,
-                    "role": "customer",
-                    "region": "Addis Ababa",
-                    "is_verified": False,
-                    "documents_uploaded": False,
-                }
-                supabase.table("profiles").insert(profile_data).execute()
-                profile_resp = (
-                    supabase.table("profiles")
-                    .select("*")
-                    .eq("id", response.user.id)
-                    .execute()
-                )
-                if profile_resp and profile_resp.data:
-                    st.session_state.profile = profile_resp.data[0]
-                    st.session_state.user_role = "customer"
-        except Exception as e:
-            logger.error(f"Profile load error for {email}: {e}")
-            # Non-fatal — profile will be fetched on next render
-
-        return True, "Signed in successfully!"
-
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Login error for {email}: {error_msg}")
-
-        if "Invalid login credentials" in error_msg:
-            return False, "Invalid email or password. Please try again."
-        if "email not confirmed" in error_msg.lower():
-            return False, "Please verify your email before signing in. Check your inbox."
-        return False, f"Login error: {error_msg}"
-
-# ─────────────────────────────────────────────────────────────
-# SIGN OUT
-# ─────────────────────────────────────────────────────────────
-def sign_out() -> None:
-    """Sign out the current user and clear all session state."""
-    try:
-        supabase, clear_data_cache = get_supabase()
-        supabase.auth.sign_out()
-        clear_data_cache()
-    except Exception as e:
-        logger.error(f"Sign out error: {e}")
-
-    # Remove keys cleanly rather than setting to None
-    for key in ["user", "profile", "authenticated", "user_role", "user_email",
-                "auth_redirect", "nav_clicked", "menu_open"]:
-        st.session_state.pop(key, None)
-
-    logger.info("User signed out")
-
-# ─────────────────────────────────────────────────────────────
-# FORGOT PASSWORD
-# ─────────────────────────────────────────────────────────────
-def forgot_password(email: str) -> Tuple[bool, str]:
+def register_user(name: str, email: str, password: str, role: str) -> tuple[bool, str]:
     """
-    Send a password reset email via Supabase Auth.
-
-    Returns:
-        (success, message)
+    Register new user with validation
+    Returns: (success, message)
     """
-    if not email or "@" not in email:
-        return False, "Please enter a valid email address."
+    # Validate inputs
+    if not name or not name.strip():
+        return False, "Name is required"
+    
+    email_valid, email_msg = validate_email(email)
+    if not email_valid:
+        return False, email_msg
+    
+    password_valid, password_msg = validate_password(password)
+    if not password_valid:
+        return False, password_msg
+    
+    if role not in ['producer', 'merchant', 'customer', 'admin']:
+        return False, "Invalid role selected"
+    
+    # Initialize users dict if not exists
+    if 'users' not in st.session_state:
+        st.session_state.users = {}
+    
+    # Check if user already exists
+    if email in st.session_state.users:
+        return False, "Email already registered"
+    
+    # Create new user
+    st.session_state.users[email] = {
+        'name': name.strip(),
+        'email': email,
+        'password': hash_password(password),
+        'role': role,
+        'created_at': datetime.now().isoformat()
+    }
+    
+    return True, "Registration successful! Please login."
 
-    try:
-        supabase, _ = get_supabase()
-        supabase.auth.reset_password_for_email(email)
-        logger.info(f"Password reset email sent to: {email}")
-        return True, "Password reset link sent! Check your inbox (and spam folder)."
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Password reset error for {email}: {error_msg}")
-        if "not found" in error_msg.lower():
-            return False, "No account found with this email address."
-        return False, f"Failed to send reset email: {error_msg}"
-
-# ─────────────────────────────────────────────────────────────
-# SESSION HELPERS
-# ─────────────────────────────────────────────────────────────
-def get_current_user() -> Optional[Any]:
-    """Return the current user from session state, refreshing from Supabase if needed."""
-    if st.session_state.get("user"):
-        return st.session_state.user
-
-    try:
-        supabase, _ = get_supabase()
-        session = supabase.auth.get_session()
-        if session and session.user:
-            st.session_state.user = session.user
-            st.session_state.authenticated = True
-            st.session_state.user_email = session.user.email
-            return session.user
-    except Exception as e:
-        logger.error(f"get_current_user error: {e}")
-
-    return None
-
-
-def refresh_user_session() -> bool:
+def forgot_password(email: str) -> tuple[bool, str]:
     """
-    Verify the current session is still valid.
-
-    Returns:
-        True if session is active, False if expired.
+    Handle forgot password request
+    Returns: (success, message)
     """
-    try:
-        supabase, _ = get_supabase()
-        session = supabase.auth.get_session()
-        if session and session.user:
-            st.session_state.user = session.user
-            st.session_state.authenticated = True
-            return True
-        # Session gone — sign out cleanly
-        if st.session_state.get("user"):
-            sign_out()
-        return False
-    except Exception as e:
-        logger.error(f"Session refresh error: {e}")
-        return False
+    email_valid, email_msg = validate_email(email)
+    if not email_valid:
+        return False, email_msg
+    
+    if 'users' not in st.session_state or email not in st.session_state.users:
+        # Don't reveal if email exists for security
+        return True, "If the email exists, a password reset link has been sent."
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    
+    # Store reset token (in production, send via email)
+    if 'password_resets' not in st.session_state:
+        st.session_state.password_resets = {}
+    
+    st.session_state.password_resets[email] = {
+        'token': reset_token,
+        'expires_at': (datetime.now() + timedelta(hours=1)).isoformat()
+    }
+    
+    # In production, send email with reset_token
+    # For demo, show the token
+    return True, f"Password reset token (demo): {reset_token}\n\nIn production, this would be sent via email."
 
-
-def require_auth() -> bool:
+def reset_password(email: str, token: str, new_password: str) -> tuple[bool, str]:
     """
-    Guard function for pages that require authentication.
-    Shows a warning and returns False if the user is not signed in.
+    Reset password using token
+    Returns: (success, message)
     """
-    if not st.session_state.get("authenticated") or not st.session_state.get("user"):
-        st.warning("⚠️ Please sign in to access this page.")
-        return False
-    if not refresh_user_session():
-        st.warning("⚠️ Your session has expired. Please sign in again.")
-        return False
-    return True
+    if 'password_resets' not in st.session_state or email not in st.session_state.password_resets:
+        return False, "Invalid reset request"
+    
+    reset_data = st.session_state.password_resets[email]
+    
+    # Verify token
+    if reset_data['token'] != token:
+        return False, "Invalid reset token"
+    
+    # Check expiration
+    expires_at = datetime.fromisoformat(reset_data['expires_at'])
+    if datetime.now() > expires_at:
+        del st.session_state.password_resets[email]
+        return False, "Reset token has expired"
+    
+    # Validate new password
+    password_valid, password_msg = validate_password(new_password)
+    if not password_valid:
+        return False, password_msg
+    
+    # Update password
+    st.session_state.users[email]['password'] = hash_password(new_password)
+    
+    # Remove used token
+    del st.session_state.password_resets[email]
+    
+    return True, "Password reset successful! Please login with your new password."
 
+def logout_user():
+    """Logout current user"""
+    st.session_state.authenticated = False
+    st.session_state.user_info = None
+    st.session_state.session_token = None
+    st.session_state.logout_confirmation = False
+    st.rerun()
 
-def require_role(allowed_roles: list) -> bool:
-    """
-    Guard function for pages that require a specific role.
-
-    Args:
-        allowed_roles: e.g. ["producer", "admin"]
-    """
-    if not require_auth():
-        return False
-    user_role = st.session_state.get("user_role")
-    if user_role not in allowed_roles:
-        st.error(f"⚠️ Access denied. Required role(s): {', '.join(allowed_roles)}")
-        return False
-    return True
-
-# ─────────────────────────────────────────────────────────────
-# ROLE SHORTCUTS
-# ─────────────────────────────────────────────────────────────
-def is_producer() -> bool:
-    return st.session_state.get("user_role") == "producer"
-
-def is_merchant() -> bool:
-    return st.session_state.get("user_role") == "merchant"
-
-def is_customer() -> bool:
-    return st.session_state.get("user_role") == "customer"
-
-def is_admin() -> bool:
-    return st.session_state.get("user_role") == "admin"
-
-# ─────────────────────────────────────────────────────────────
-# PROFILE HELPER
-# ─────────────────────────────────────────────────────────────
-def get_user_profile() -> Optional[Dict[str, Any]]:
-    """
-    Return the current user's profile dict from session,
-    loading it from Supabase if not already cached.
-    """
-    if st.session_state.get("profile"):
-        return st.session_state.profile
-
-    user = get_current_user()
-    if not user:
-        return None
-
-    try:
-        supabase, _ = get_supabase()
-        response = supabase.table("profiles").select("*").eq("id", user.id).execute()
-        if response and response.data:
-            st.session_state.profile = response.data[0]
-            st.session_state.user_role = response.data[0].get("role", "customer")
-            return st.session_state.profile
-    except Exception as e:
-        logger.error(f"Profile load error: {e}")
-
-    return None
+def require_auth():
+    """Decorator to require authentication"""
+    if not st.session_state.authenticated:
+        st.warning("Please login to access this page")
+        st.stop()
