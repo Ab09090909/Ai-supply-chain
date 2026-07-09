@@ -288,3 +288,18 @@ class SelfLearningAI:
             return "📉 Decrease Price - Competitive pricing needed for market share"
         else:
             return "✅ Maintain Price - Current price is well-positioned in the market"
+
+def get_market_tip(self):
+        """Get a random market tip"""
+        tips = [
+            "📦 Keep your stock levels updated daily for better merchant matching.",
+            "💰 Review your prices weekly against market averages to stay competitive.",
+            "🌍 Addis Ababa merchants pay premium prices — target them for high-value products.",
+            "📈 Coffee and Teff have the highest demand during export seasons (Oct–Jan).",
+            "🤝 Respond to merchant inquiries within 24 hours to build trust ratings.",
+            "📸 Products with clear descriptions get 3x more merchant views.",
+            "🌧️ Stock up on grains before rainy season (June–Sept) when supply drops.",
+            "💡 Offer bulk discounts to attract larger merchants and move stock faster.",
+        ]
+        import random
+        return random.choice(tips)
