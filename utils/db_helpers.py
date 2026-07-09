@@ -75,17 +75,31 @@ def authenticate_user(email: str, password: str) -> tuple:
 # ==========================================
 
 def create_product(name: str, description: str, category: str, price: float,
-                   cost_price: float, stock_quantity: int, producer_id: str, weight: float = 0) -> tuple:
+                   cost_price: float, stock_quantity: int, producer_id: str, 
+                   weight: float = 0, image_url: str = None) -> tuple:
     supabase = get_supabase()
     try:
         sku = f"SKU-{uuid.uuid4().hex[:8].upper()}"
         
-        response = supabase.table('products').insert({
-            'name': name, 'description': description, 'category': category,
-            'price': price, 'cost_price': cost_price, 'quantity': stock_quantity,
-            'producer_id': producer_id, 'sku': sku, 'weight': weight, 'min_stock': 10,
+        product_data = {
+            'name': name, 
+            'description': description, 
+            'category': category,
+            'price': price, 
+            'cost_price': cost_price, 
+            'quantity': stock_quantity,
+            'producer_id': producer_id, 
+            'sku': sku, 
+            'weight': weight, 
+            'min_stock': 10,
             'is_active': True
-        }).execute()
+        }
+        
+        # Add image_url if provided
+        if image_url:
+            product_data['image_url'] = image_url
+        
+        response = supabase.table('products').insert(product_data).execute()
         
         if not response.data:
             return False, "Failed to create product", None
