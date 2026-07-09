@@ -1,10 +1,10 @@
 import streamlit as st
 
-# Set page config FIRST
+# Set page config
 st.set_page_config(
-    page_title="PlyChain - AI Supply Chain",
+    page_title="PlyChain - Login",
     page_icon="🚀",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="collapsed"
 )
 
@@ -27,10 +27,10 @@ st.markdown("""
 # MAIN APP
 # ==========================================
 if not st.session_state.authenticated:
-    st.title("🚀 PlyChain")
+    st.title(" SupplyChain")
     st.markdown("### Intelligent Supply Chain Management for Ethiopia")
     
-    tab1, tab2 = st.tabs(["🔐 Login", " Sign Up"])
+    tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
     
     with tab1:
         with st.form("login_form", clear_on_submit=False):
@@ -40,20 +40,18 @@ if not st.session_state.authenticated:
             
             if submit:
                 if not email or not password:
-                    st.error(" Please fill in all fields")
+                    st.error("❌ Please fill in all fields")
                 else:
-                    try:
-                        from utils.db_helpers import login_user
-                        success, msg, user = login_user(email, password)
-                        if success:
-                            st.success(msg)
-                            st.session_state.authenticated = True
-                            st.session_state.user_info = user
-                            st.rerun()
-                        else:
-                            st.error(msg)
-                    except Exception as e:
-                        st.error(f"Login error: {str(e)}")
+                    # Import from utils.auth
+                    from utils.db_helpers import login_user
+                    success, msg, user = login_user(email, password)
+                    if success:
+                        st.success(msg)
+                        st.session_state.authenticated = True
+                        st.session_state.user_info = user
+                        st.rerun()
+                    else:
+                        st.error(msg)
     
     with tab2:
         with st.form("signup_form", clear_on_submit=False):
@@ -74,23 +72,21 @@ if not st.session_state.authenticated:
                 if not name or not email or not password:
                     st.error("❌ Please fill in all required fields")
                 else:
-                    try:
-                        from utils.db_helpers import register_user
-                        success, msg = register_user(
-                            name=name, email=email, password=password, 
-                            role=role, phone=phone, company_name=company
-                        )
-                        if success:
-                            st.success(msg)
-                        else:
-                            st.error(msg)
-                    except Exception as e:
-                        st.error(f"Registration error: {str(e)}")
+                    # Import from utils.auth
+                    from utils.db_helpers import register_user
+                    success, msg = register_user(
+                        name=name, email=email, password=password, 
+                        role=role, phone=phone, company_name=company
+                    )
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
 else:
     # User is logged in
     user_info = st.session_state.user_info
     
-    st.title(f"Welcome back, {user_info['name']}! ")
+    st.title(f"Welcome back, {user_info['name']}! 👋")
     st.write(f"Role: **{user_info['role'].title()}**")
     
     if st.button("🚪 Logout", use_container_width=True):
