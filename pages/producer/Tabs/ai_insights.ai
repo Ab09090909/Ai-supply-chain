@@ -1,0 +1,237 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+
+from utils.db_helpers import get_products
+
+def render_ai_insights(user_info, ai):
+    """Render AI Insights tab with Ethiopian market data"""
+    st.subheader("🤖 AI-Powered Ethiopian Market Insights")
+    st.markdown("### 📊 Real-Time Ethiopian Market Analysis")
+    
+    # CSS for AI Insights
+    st.markdown("""
+    <style>
+    .ai-insight-card {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #475569;
+        margin: 10px 0;
+        color: #e2e8f0;
+    }
+    .market-price-indicator {
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin: 5px 0;
+        font-weight: bold;
+    }
+    .price-above {
+        background: #ef4444;
+        color: white;
+    }
+    .price-below {
+        background: #10b981;
+        color: white;
+    }
+    .price-at {
+        background: #f59e0b;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Get all products for analysis
+    all_products = get_products(producer_id=user_info['id'])
+    
+    if not all_products:
+        st.warning("⚠️ Add products first to get AI insights")
+        st.info("📝 Go to the Inventory tab to add your products")
+        return
+    
+    # Product selection
+    product_names = {p['id']: p['name'] for p in all_products}
+    selected_prod_id = st.selectbox(
+        "Select Product for Analysis", 
+        list(product_names.keys()), 
+        format_func=lambda x: product_names[x]
+    )
+    
+    selected_product = next((p for p in all_products if p['id'] == selected_prod_id), None)
+    
+    if not selected_product:
+        return
+    
+    # Region selection
+    regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
+              "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
+    selected_region = st.selectbox(
+        "Select Region for Price Comparison",
+        regions,
+        index=regions.index(st.session_state.ai_selected_region) if st.session_state.ai_selected_region in regions else 0
+    )
+    st.session_state.ai_selected_region = selected_region
+    
+    st.markdown("---")
+    st.markdown(f"### 📊 Analysis for: **{selected_product['name']}** in {selected_region}")
+    
+    # Get AI analysis
+    analysis = ai.analyze_product(selected_product)
+    
+    if not analysis:
+        st.error("Failed to analyze product")
+        return
+    
+    # Market Price Comparison
+    st.markdown("#### 💰 Market Price Comparison (Ethiopian Market)")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Your Price", f"{analysis['price_analysis']['user_price']:.2f} ETB")
+    with col2:
+        st.metric("Market Average", f"{analysis['price_analysis']['market_avg']:.2f} ETB")
+    with col3:
+        diff = analysis['price_analysis']['difference']
+        pct = analysis['price_analysis']['percentage']
+        st.metric(
+            "Price Difference", 
+            f"{diff:+.2f} ETB", 
+            delta=f"{pct:+.1f}%" if pct != 0 else "At Market"
+        )
+    
+    # Price status indicator
+    status = analysis['price_status']
+    if "Above" in status:
+        st.markdown(f'<div class="market-price-indicator price-above">⚠️ {status}</div>', unsafe_allow_html=True)
+        st.info("💡 Your price is above market average. Consider adjusting to stay competitive.")
+    elif "Below" in status:
+        st.markdown(f'<div class="market-price-indicator price-below">✅ {status}</div>', unsafe_allow_html=True)
+        st.info("💡 Your price is below market average. Good for attracting buyers!")
+    else:
+        st.markdown(f'<div class="market-price-indicator price-at">✅ {status}</div>', unsafe_allow_html=True)
+        st.info("💡 Your price is at market rate. Well-positioned!")
+    
+    # Market Details
+    st.markdown("#### 📈 Market Details")
+    market_data = analysis['market_data']
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Price Range", f"{market_data.get('min_price', 0)} - {market_data.get('max_price', 0)} ETB")
+    with col2:
+        st.metric("Unit", market_data.get('unit', 'kg'))
+    with col3:
+        st.metric("Market Trend", market_data.get('price_trend', 'N/A').title())
+    with col4:
+        st.metric("Demand Level", market_data.get('demand_level', 'N/A').title())
+    
+    # Demand Prediction
+    st.markdown("#### 📊 Demand Prediction")
+    
+    demand_prediction = ai.predict_demand(selected_product['name'], selected_region)
+    
+    if demand_prediction:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Daily Demand Forecast", f"{demand_prediction['daily_demand']:.0f} units")
+        with col2:
+            st.metric("Weekly Demand", f"{demand_prediction['weekly_demand']:.0f} units")
+        with col3:
+            st.metric("Monthly Demand", f"{demand_prediction['monthly_demand']:.0f} units")
+        
+        st.markdown(f"""
+        <div class="ai-insight-card">
+            <strong>📍 Region Factor:</strong> {demand_prediction['region_factor']:.2f}x<br>
+            <strong>📅 Seasonal Factor:</strong> {demand_prediction['seasonal_factor']:.2f}x<br>
+            <strong>📊 Confidence Level:</strong> {demand_prediction['confidence']*100:.1f}%
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Stock level analysis
+        current_stock = selected_product.get('quantity', 0)
+        daily_demand = demand_prediction['daily_demand']
+        days_of_stock = current_stock / daily_demand if daily_demand > 0 else 0
+        
+        if days_of_stock < 7:
+            st.warning(f"⚠️ Only {days_of_stock:.1f} days of stock remaining! Restock soon.")
+            st.progress(days_of_stock / 30)
+        elif days_of_stock < 14:
+            st.info(f"ℹ️ {days_of_stock:.1f} days of stock remaining. Plan restocking.")
+            st.progress(days_of_stock / 30)
+        else:
+            st.success(f"✅ {days_of_stock:.1f} days of stock remaining. Healthy stock level.")
+            st.progress(min(days_of_stock / 30, 1.0))
+    
+    # Price Recommendation
+    st.markdown("#### 💡 AI Price Recommendation")
+    
+    price_rec = ai.get_price_recommendation(selected_product)
+    
+    if price_rec:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Current Price", f"{price_rec['current_price']:.2f} ETB")
+        with col2:
+            st.metric(
+                "Recommended Price", 
+                f"{price_rec['recommended_price']:.2f} ETB",
+                delta=f"{price_rec['price_difference']:+.2f} ETB"
+            )
+        
+        st.markdown(f"""
+        <div class="ai-insight-card">
+            <strong>💬 Recommendation:</strong> {price_rec['recommendation']}<br>
+            <strong>📊 Confidence Score:</strong> {price_rec['confidence_score']*100:.1f}%
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📋 Factors Considered in Recommendation"):
+            factors = price_rec.get('factors', {})
+            st.markdown(f"""
+            - **Market Price:** {factors.get('Market Price', 0):.2f} ETB
+            - **Seasonal Factor:** {factors.get('Seasonal Factor', 1.0):.2f}x
+            - **Market Trend:** {factors.get('Market Trend', 1.0):.2f}x
+            - **Demand Level:** {factors.get('Demand Level', 1.0):.2f}x
+            - **Region Premium:** {factors.get('Region Premium', 1.0):.2f}x
+            """)
+    
+    # Profit Analysis
+    st.markdown("#### 💰 Profit Analysis")
+    
+    profit_data = analysis.get('profit_potential', {})
+    if profit_data:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Current Profit/Unit", f"{profit_data.get('current_profit', 0):.2f} ETB")
+        with col2:
+            st.metric("Profit Margin", f"{profit_data.get('margin_percentage', 0):.1f}%")
+    
+    # Refresh Button
+    st.markdown("---")
+    if st.button("🔄 Refresh Ethiopian Market Data", use_container_width=True):
+        with st.spinner("Fetching latest Ethiopian market data..."):
+            product_name = selected_product['name']
+            fresh_data = ai.get_ethiopian_market_insights(product_name)
+            st.success("✅ Ethiopian market data refreshed!")
+            st.rerun()
+    
+    # Learning Progress
+    st.markdown("---")
+    st.markdown("#### 🧠 AI Learning Progress")
+    
+    learning_stats = ai.learning_data
+    knowledge_items = len(ai.knowledge_base.get('product_knowledge', {}))
+    iterations = learning_stats.get('learning_iterations', 0)
+    
+    progress_score = min(50 + (knowledge_items * 2) + (iterations * 0.5), 100)
+    st.progress(progress_score / 100)
+    st.caption(f"AI is {progress_score:.1f}% confident in its predictions")
+    
+    st.markdown(f"""
+    <div class="ai-insight-card">
+        <strong>📚 Knowledge Base:</strong> {knowledge_items} products<br>
+        <strong>🔄 Learning Iterations:</strong> {iterations}<br>
+        <strong>🌐 Ethiopian Market Data:</strong> Active
+    </div>
+    """, unsafe_allow_html=True)
