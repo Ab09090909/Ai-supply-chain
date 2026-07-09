@@ -355,3 +355,32 @@ def get_user_by_id(user_id: str):
     except Exception as e:
         st.error(f"Error fetching user: {e}")
         return None
+
+def update_product(product_id: str, **kwargs) -> bool:
+    """Update product information"""
+    supabase = get_supabase()
+    try:
+        allowed_fields = ['name', 'description', 'category', 'price', 'cost_price', 
+                          'quantity', 'min_stock', 'weight', 'image_base64', 'image_url']
+        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+        
+        if not updates:
+            return False
+            
+        updates['updated_at'] = datetime.now().isoformat()
+        
+        response = supabase.table('products').update(updates).eq('id', product_id).execute()
+        return response.data is not None
+    except Exception as e:
+        st.error(f"Error updating product: {e}")
+        return False
+
+def delete_product(product_id: str) -> bool:
+    """Delete a product"""
+    supabase = get_supabase()
+    try:
+        response = supabase.table('products').delete().eq('id', product_id).execute()
+        return response.data is not None
+    except Exception as e:
+        st.error(f"Error deleting product: {e}")
+        return False
