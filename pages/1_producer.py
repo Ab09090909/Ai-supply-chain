@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 from utils.auth import initialize_session_state, logout_user
 from utils.db_helpers import (
     get_products, create_product, get_orders, get_dashboard_stats, 
-    update_product_stock, get_low_stock_products, update_user
+    update_product_stock, get_low_stock_products, update_user,
+    update_product, delete_product  # Add these imports
 )
 
 # Initialize session state
@@ -49,6 +50,10 @@ price_model = load_ai_model("price_predictor.pkl")
 # --- Initialize Edit Profile State ---
 if 'show_edit_profile' not in st.session_state:
     st.session_state.show_edit_profile = False
+
+# --- Initialize Edit Product State ---
+if 'edit_product_id' not in st.session_state:
+    st.session_state.edit_product_id = None
 
 # ==========================================
 # RESPONSIVE BUSINESS CARD PROFILE (CSS)
@@ -154,6 +159,63 @@ st.markdown("""
 .edit-profile-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+.product-card {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #475569;
+    position: relative;
+}
+.product-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+.product-actions button {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-edit {
+    background: #3b82f6;
+    color: white;
+}
+.btn-edit:hover {
+    background: #2563eb;
+    transform: scale(1.05);
+}
+.btn-delete {
+    background: #ef4444;
+    color: white;
+}
+.btn-delete:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+.producer-info {
+    background: rgba(102, 126, 234, 0.1);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 8px 0;
+    border-left: 3px solid #667eea;
+    font-size: 12px;
+    color: #94a3b8;
+}
+.product-info-badge {
+    display: inline-block;
+    background: #475569;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #e2e8f0;
+    margin: 2px 4px 2px 0;
 }
 @media screen and (max-width: 768px) {
     .business-card {
@@ -375,33 +437,56 @@ with tab_dashboard:
         st.info("No products found. Go to the Inventory tab to add your first product!")
 
 # ==========================================
-# TAB 2: INVENTORY MANAGEMENT
+# TAB 2: INVENTORY MANAGEMENT (UPDATED)
 # ==========================================
 with tab_inventory:
     st.subheader("Manage Your Inventory")
     
-    # Add Product Form
-    with st.expander("➕ Add New Product", expanded=False):
+    # Check if editing a product
+    edit_mode = st.session_state.edit_product_id is not None
+    
+    # Add/Edit Product Form
+    with st.expander("➕ Add New Product" if not edit_mode else "✏️ Edit Product", expanded=edit_mode):
         with st.form("add_product_form"):
+            # If in edit mode, load product data
+            product_data = None
+            if edit_mode:
+                all_products = get_products(producer_id=user_info['id'])
+                product_data = next((p for p in all_products if p['id'] == st.session_state.edit_product_id), None)
+            
             col1, col2 = st.columns(2)
             
             with col1:
-                name_input = st.text_input("Product Name", placeholder="e.g., Teff, Coffee")
-                category = st.selectbox("Category", ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Other"])
-                price = st.number_input("Selling Price (ETB)", min_value=0.01, step=0.01)
-                cost_price = st.number_input("Cost Price (ETB)", min_value=0.01, step=0.01)
+                name_input = st.text_input("Product Name", placeholder="e.g., Teff, Coffee", 
+                                          value=product_data['name'] if product_data else "")
+                category = st.selectbox("Category", ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Other"],
+                                       index=["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Other"].index(product_data['category']) if product_data and product_data.get('category') in ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Other"] else 0)
+                price = st.number_input("Selling Price (ETB)", min_value=0.01, step=0.01,
+                                       value=float(product_data['price']) if product_data else 0.01)
+                cost_price = st.number_input("Cost Price (ETB)", min_value=0.01, step=0.01,
+                                            value=float(product_data['cost_price']) if product_data and product_data.get('cost_price') else 0.01)
             
             with col2:
-                stock = st.number_input("Initial Stock Quantity", min_value=0, step=1)
-                min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, value=10)
-                weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1)
-                description = st.text_area("Description", placeholder="Brief product description...", height=80)
+                stock = st.number_input("Stock Quantity", min_value=0, step=1,
+                                       value=int(product_data['quantity']) if product_data else 0)
+                min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, value=10,
+                                           value=int(product_data.get('min_stock', 10)) if product_data else 10)
+                weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1,
+                                        value=float(product_data.get('weight', 0)) if product_data else 0.0)
+                description = st.text_area("Description", placeholder="Brief product description...", height=80,
+                                          value=product_data.get('description', '') if product_data else "")
             
             # Image Upload Section
             st.markdown("---")
-            st.markdown("### 📷 Product Image (Optional)")
+            st.markdown("### 📷 Product Image")
+            current_image = product_data.get('image_url') if product_data else None
+            
+            if current_image and os.path.exists(current_image):
+                st.markdown("#### Current Image:")
+                st.image(current_image, width=200)
+            
             uploaded_file = st.file_uploader(
-                "Upload Product Image",
+                "Upload New Product Image" + (" (leave empty to keep current)" if edit_mode else ""),
                 type=['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'],
                 help="Supported formats: JPG, JPEG, PNG, GIF, WEBP, BMP, TIFF"
             )
@@ -415,15 +500,18 @@ with tab_inventory:
                 except Exception as e:
                     st.error(f"Error displaying image: {e}")
             
-            # SUBMIT BUTTON - MUST BE INSIDE FORM
-            submitted = st.form_submit_button("➕ Add Product to Inventory", use_container_width=True, type="primary")
+            # SUBMIT BUTTON
+            submitted = st.form_submit_button(
+                "💾 Update Product" if edit_mode else "➕ Add Product to Inventory", 
+                use_container_width=True, type="primary"
+            )
             
             if submitted:
                 if not name_input:
                     st.error("❌ Product name is required!")
                 else:
                     # Handle image upload
-                    image_path = None
+                    image_path = current_image  # Keep current image by default
                     if uploaded_file is not None:
                         try:
                             os.makedirs("uploads/products", exist_ok=True)
@@ -437,27 +525,49 @@ with tab_inventory:
                             st.success(f"✅ Image saved: {uploaded_file.name}")
                         except Exception as e:
                             st.error(f"Error saving image: {e}")
-                            image_path = None
+                            image_path = current_image  # Fallback to current image
                     
-                    # Create product
-                    success, msg, prod_id = create_product(
-                        name=name_input, 
-                        description=description, 
-                        category=category,
-                        price=price, 
-                        cost_price=cost_price, 
-                        stock_quantity=stock,
-                        producer_id=user_info['id'], 
-                        weight=weight,
-                        image_url=image_path
-                    )
-                    
-                    if success:
-                        st.success(f"✅ {msg}")
-                        st.balloons()
-                        st.rerun()
+                    if edit_mode:
+                        # Update existing product
+                        success, msg = update_product(
+                            product_id=st.session_state.edit_product_id,
+                            name=name_input,
+                            description=description,
+                            category=category,
+                            price=price,
+                            cost_price=cost_price,
+                            stock_quantity=stock,
+                            min_stock=min_stock,
+                            weight=weight,
+                            image_url=image_path
+                        )
+                        
+                        if success:
+                            st.success(f"✅ {msg}")
+                            st.session_state.edit_product_id = None
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
                     else:
-                        st.error(f"❌ {msg}")
+                        # Create new product
+                        success, msg, prod_id = create_product(
+                            name=name_input, 
+                            description=description, 
+                            category=category,
+                            price=price, 
+                            cost_price=cost_price, 
+                            stock_quantity=stock,
+                            producer_id=user_info['id'], 
+                            weight=weight,
+                            image_url=image_path
+                        )
+                        
+                        if success:
+                            st.success(f"✅ {msg}")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
 
     st.markdown("---")
     
@@ -469,7 +579,6 @@ with tab_inventory:
         st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
     
     # All Products Display
-        # All Products Display
     st.subheader("All Products")
     all_products = get_products(producer_id=user_info['id'])
     
@@ -484,10 +593,11 @@ with tab_inventory:
         
         for idx, product in enumerate(all_products):
             with cols[idx % 3]:
+                # Product Card
+                st.markdown('<div class="product-card">', unsafe_allow_html=True)
+                
                 # Display product image if exists
                 image_url = product.get('image_url')
-                
-                # Safe image display with error handling
                 image_displayed = False
                 if image_url:
                     try:
@@ -495,10 +605,9 @@ with tab_inventory:
                             st.image(image_url, use_container_width=True)
                             image_displayed = True
                     except Exception as e:
-                        # If image fails to load, show placeholder
                         pass
                 
-                # Show placeholder if no image or image failed
+                # Show placeholder if no image
                 if not image_displayed:
                     st.markdown("""
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -509,11 +618,20 @@ with tab_inventory:
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Product Info
+                # Product Info with Producer Details
                 st.markdown(f"""
                 <div style="text-align: left; padding: 10px;">
                     <h4 style="margin: 10px 0 5px 0; color: #fff; font-size: 16px;">{product['name']}</h4>
-                    <p style="margin: 0; color: #94a3b8; font-size: 13px;">📂 {product.get('category', 'N/A')}</p>
+                    
+                    <!-- Producer Information -->
+                    <div class="producer-info">
+                        <strong>👤 Producer:</strong> {user_info.get('name', 'Unknown')}<br>
+                        <strong>🏢 Company:</strong> {user_info.get('company_name', 'N/A')}<br>
+                        <strong>📞 Contact:</strong> {user_info.get('phone', 'N/A')}
+                    </div>
+                    
+                    <!-- Product Information -->
+                    <p style="margin: 5px 0; color: #94a3b8; font-size: 13px;">📂 {product.get('category', 'N/A')}</p>
                     <p style="margin: 5px 0; color: #10b981; font-weight: bold; font-size: 18px;">
                         {product.get('price', 0)} ETB
                     </p>
@@ -523,14 +641,60 @@ with tab_inventory:
                     <p style="margin: 5px 0; color: #64748b; font-size: 12px;">
                         SKU: {product.get('sku', 'N/A')}
                     </p>
+                    
+                    <!-- Product Info Badges -->
+                    <div style="margin-top: 8px;">
+                        <span class="product-info-badge">⚖️ {product.get('weight', 0)} kg</span>
+                        <span class="product-info-badge">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Edit and Delete Buttons
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✏️ Edit", key=f"edit_{product['id']}", use_container_width=True):
+                        st.session_state.edit_product_id = product['id']
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️ Delete", key=f"delete_{product['id']}", use_container_width=True):
+                        # Show confirmation dialog
+                        st.session_state.delete_product_id = product['id']
+                        st.rerun()
+                
+                # Close product card
+                st.markdown('</div>', unsafe_allow_html=True)
         
-        # Detailed Table View
+        # Delete Confirmation Dialog
+        if 'delete_product_id' in st.session_state and st.session_state.delete_product_id:
+            product_to_delete = next((p for p in all_products if p['id'] == st.session_state.delete_product_id), None)
+            if product_to_delete:
+                st.warning(f"⚠️ Are you sure you want to delete '{product_to_delete['name']}'?")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Delete", use_container_width=True):
+                        success, msg = delete_product(st.session_state.delete_product_id)
+                        if success:
+                            st.success(f"✅ {msg}")
+                            st.session_state.delete_product_id = None
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+                with col2:
+                    if st.button("❌ Cancel", use_container_width=True):
+                        st.session_state.delete_product_id = None
+                        st.rerun()
+        
+        # Detailed Table View with Producer Info
         st.markdown("---")
         st.markdown("### 📋 Detailed Product List")
         display_df = df_all[['name', 'category', 'price', 'quantity', 'sku', 'created_at']].copy()
         display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d')
+        
+        # Add producer info to the table
+        display_df['Producer'] = user_info.get('name', 'Unknown')
+        display_df['Company'] = user_info.get('company_name', 'N/A')
+        
         st.dataframe(display_df, use_container_width=True)
     else:
         st.info("📭 No products added yet. Click 'Add New Product' above to get started!")
