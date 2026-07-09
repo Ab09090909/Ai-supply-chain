@@ -33,6 +33,7 @@ try:
     from utils.db_helpers import supabase, cached_query, clear_data_cache, send_notification
     from utils.verification import check_verification_status, render_document_upload
     from utils.pdf_generator import generate_agreement_pdf, generate_agreement_preview_html
+    from utils.shared_ui import render_product_image, render_profile_editor_modal
     from src.demand_engine import forecast_demand
     from src.fraud_engine import check_fraud_risk
     from src.price_engine import recommend_price
@@ -42,37 +43,8 @@ except ImportError as e:
     st.stop()
 
 # ─────────────────────────────────────────────
-# HELPER FUNCTIONS (inline to avoid missing imports)
+# HELPER FUNCTIONS
 # ─────────────────────────────────────────────
-def render_hamburger_menu():
-    """Render a hamburger menu toggle for mobile navigation."""
-    st.markdown("""
-    <style>
-    .hamburger-menu {
-        display: none;
-        position: fixed;
-        top: 10px;
-        left: 10px;
-        z-index: 999999;
-        background: #1B4332;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-size: 20px;
-        cursor: pointer;
-    }
-    @media (max-width: 768px) {
-        .hamburger-menu {
-            display: block;
-        }
-    }
-    </style>
-    <div class="hamburger-menu" onclick="document.querySelector('[data-testid=\"stSidebar\"]').style.display='block'">
-        ☰
-    </div>
-    """, unsafe_allow_html=True)
-
 def get_notifications(user_id, limit=20):
     """Fetch notifications for a user."""
     try:
@@ -108,11 +80,11 @@ if "initialized_merchant" not in st.session_state:
     st.session_state.show_profile_editor = False
 
 # ─────────────────────────────────────────────
-# THEME + MENU
+# THEME
 # ─────────────────────────────────────────────
 inject_theme()
 
-# Merchant-specific accent overrides (blue)
+# Merchant-specific accent overrides (blue) - No mobile responsiveness
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -130,7 +102,6 @@ st.markdown("""
     display: flex;
     align-items: center;
     gap: 20px;
-    flex-wrap: wrap;
 }
 .dash-header h1 { margin: 0; font-size: 26px; font-weight: 700; color: #f1f5f9; }
 .dash-header p  { margin: 4px 0 0; font-size: 13px; color: #64748b; }
@@ -141,7 +112,7 @@ st.markdown("""
     color: #60a5fa;
     font-size: 11px; font-weight: 600;
     padding: 4px 12px; border-radius: 20px;
-    letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap;
+    letter-spacing: 0.5px; text-transform: uppercase;
 }
 
 .kpi-card {
@@ -171,7 +142,6 @@ st.markdown("""
 
 .confirm-box { background: #7f1d1d22; border: 1px solid #ef444455; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 8px; }
 
-/* Pills */
 .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.3px; }
 .pill-success { background: #14532d44; color: #4ade80; border: 1px solid #16a34a44; }
 .pill-warning { background: #78350f44; color: #fbbf24; border: 1px solid #d9770644; }
@@ -199,6 +169,7 @@ st.markdown("""
     font-size: 13px !important;
     font-weight: 500 !important;
     color: #64748b !important;
+    padding: 8px 20px !important;
 }
 [data-testid="stTabs"] > div > div > div > button[aria-selected="true"] {
     color: #60a5fa !important; border-bottom-color: #2563eb !important;
@@ -222,17 +193,24 @@ st.markdown("""
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 3px; }
 
-@media (max-width: 768px) {
-    .dash-header { flex-direction: column !important; padding: 16px !important; text-align: center; }
-    .kpi-card { padding: 12px !important; }
-    div.stButton > button { width: 100%; }
-    [data-testid="stTabs"] > div > div { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-    [data-testid="stTabs"] > div > div > div > button { font-size: 11px !important; padding: 6px 8px !important; white-space: nowrap; }
+/* Product image container */
+.product-img-container {
+    background: #1e2a3a;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    border: 1px solid #334155;
+}
+.product-img-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 </style>
 """, unsafe_allow_html=True)
-
-render_hamburger_menu()
 
 # ─────────────────────────────────────────────
 # AUTH GUARD
@@ -301,7 +279,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Quick action row (replaces hidden sidebar)
+# Quick action row
 qa1, qa2, qa3, qa4 = st.columns([1, 1, 1, 3])
 with qa1:
     if st.button("🔄 Refresh", use_container_width=True):
@@ -331,7 +309,11 @@ if not verif_status.get("is_verified", False):
         products = cached_query("products", filters={"is_available": True}, limit=20)
         for p in products:
             with st.container(border=True):
-                st.markdown(f"**{p.get('product_name')}** · {p.get('sector')} · {p.get('price_birr', 0):,.0f} Birr")
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    render_product_image(p, height=120)
+                with col2:
+                    st.markdown(f"**{p.get('product_name')}** · {p.get('sector')} · {p.get('price_birr', 0):,.0f} Birr")
     st.stop()
 
 # ─────────────────────────────────────────────
@@ -399,7 +381,7 @@ with tab_overview:
             </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
-# TAB — BROWSE & ORDER
+# TAB — BROWSE & ORDER (with images)
 # ══════════════════════════════════════════════
 with tab_browse_tab:
     try:
@@ -430,13 +412,15 @@ with tab_browse_tab:
             st.caption(f"**{len(products)} product(s)** found")
             for p in products:
                 with st.container(border=True):
-                    c1, c2, c3 = st.columns([4, 2, 2])
-                    with c1:
+                    # Image column + info columns
+                    img_col, info_col, action_col = st.columns([1, 3, 2])
+                    with img_col:
+                        render_product_image(p, height=120)
+                    with info_col:
                         st.markdown(f"**{p.get('product_name', 'Unknown')}**")
                         st.caption(f"{p.get('sector', '—')} · 📍 {p.get('region', '—')} · Stock: {p.get('quantity', 0)} {p.get('unit', '')}")
-                    with c2:
                         st.markdown(f'<div class="price-tag">{p.get("price_birr", 0):,.0f}</div><div style="font-size:11px;color:#64748b;">Birr / {p.get("unit", "")}</div>', unsafe_allow_html=True)
-                    with c3:
+                    with action_col:
                         qty = st.number_input("Qty", min_value=0.1, value=1.0, step=0.5, key=f"qty_{p['id']}")
                         if st.button("🛒 Order", key=f"order_{p['id']}", type="primary", use_container_width=True):
                             try:
@@ -1044,6 +1028,20 @@ with tab_notif:
 with tab_profile:
     try:
         st.markdown('<div class="section-title">👤 Your Profile</div>', unsafe_allow_html=True)
+        
+        # Display current profile info
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**Name:** {profile.get('full_name', 'N/A')}")
+            st.markdown(f"**Email:** {st.session_state.user.email if st.session_state.user else 'N/A'}")
+            st.markdown(f"**Role:** {profile.get('role', 'N/A').capitalize()}")
+        with col2:
+            st.markdown(f"**Region:** {profile.get('region', 'N/A')}")
+            st.markdown(f"**Phone:** {profile.get('phone', 'N/A')}")
+            st.markdown(f"**Company:** {profile.get('company', 'N/A')}")
+        
+        st.markdown("---")
+        
         with st.form("merchant_profile_form"):
             pf1, pf2 = st.columns(2)
             with pf1:
@@ -1052,16 +1050,22 @@ with tab_profile:
             with pf2:
                 new_region = st.selectbox("Region", REGIONS,
                     index=REGIONS.index(profile.get("region", REGIONS[0])) if profile.get("region") in REGIONS else 0)
+                new_company = st.text_input("Company", value=profile.get("company", "") or "")
+            
             if st.form_submit_button("💾 Save Profile", type="primary", use_container_width=True):
                 try:
-                    supabase.table("profiles").update({
+                    update_data = {
                         "full_name": new_name,
-                        "phone":     new_phone,
-                        "region":    new_region,
-                    }).eq("id", user_id).execute()
+                        "phone": new_phone,
+                        "region": new_region,
+                        "company": new_company or None,
+                    }
+                    supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+                    # Update session state
                     st.session_state.profile["full_name"] = new_name
-                    st.session_state.profile["phone"]     = new_phone
-                    st.session_state.profile["region"]    = new_region
+                    st.session_state.profile["phone"] = new_phone
+                    st.session_state.profile["region"] = new_region
+                    st.session_state.profile["company"] = new_company
                     clear_data_cache()
                     st.success("✅ Profile updated!")
                     st.rerun()
@@ -1075,7 +1079,6 @@ with tab_profile:
 # ─────────────────────────────────────────────
 if st.session_state.get("show_profile_editor"):
     try:
-        from utils.shared_ui import render_profile_editor_modal
         render_profile_editor_modal(profile, user_id, key_suffix="merchant_modal")
         st.session_state.show_profile_editor = False
     except Exception as e:
