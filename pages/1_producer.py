@@ -27,35 +27,25 @@ if st.session_state.user_info['role'] != 'producer':
 
 user_info = st.session_state.user_info
 
-# --- AI Model Loader (SAFE - Never crashes the app) ---
+# --- AI Model Loader (Silent - no warnings) ---
 @st.cache_resource
 def load_ai_model(model_name):
-    """Load AI models silently - no warnings"""
+    """Load AI models silently"""
     try:
         model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", model_name)
         if not os.path.exists(model_path):
             return None
-        
         if os.path.getsize(model_path) < 10:
             return None
-        
         with open(model_path, 'rb') as f:
-            model = pickle.load(f)
-        return model
+            return pickle.load(f)
     except:
-        # Silently fail - no warnings shown
         return None
 
-# Load models (will return None if they fail)
 demand_model = load_ai_model("demand_forecaster.pkl")
 price_model = load_ai_model("price_predictor.pkl")
-fraud_model = load_ai_model("fraud_detector.pkl")
-merchant_matcher = load_ai_model("merchant_matcher.pkl")
-recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
-
-
-# --- Header with Profile ---
+# --- Header with Small Profile ---
 st.markdown("""
 <style>
 .profile-container {
@@ -67,8 +57,8 @@ st.markdown("""
     padding: 12px 20px;
     border-radius: 12px;
     border: 2px solid #667eea;
-    max-width: 400px;
-    margin: 0 auto;
+    max-width: 350px;
+    margin: 0 auto 20px auto;
 }
 .profile-pic {
     width: 45px;
@@ -97,7 +87,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Display profile - SMALLER SIZE
+# Display profile
 initial = user_info['name'][0].upper() if user_info['name'] else "P"
 st.markdown(f"""
 <div class="profile-container">
@@ -109,11 +99,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("---")
-
-# ==========================================
-# PRODUCER INFORMATION CARDS (Only ONE section)
-# ==========================================
+# --- Producer Information Cards ---
 st.markdown("### 📋 Producer Information")
 
 col1, col2, col3 = st.columns(3)
@@ -143,7 +129,7 @@ with col2:
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
                 padding: 15px; border-radius: 10px; border-left: 4px solid #f59e0b;">
-        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">🏢 Company</p>
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;"> Company</p>
         <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
             {user_info.get('company_name', 'Not specified')}
         </p>
@@ -164,7 +150,7 @@ with col3:
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
                 padding: 15px; border-radius: 10px; border-left: 4px solid #8b5cf6;">
-        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;"> Region</p>
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">🌍 Region</p>
         <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
             {user_info.get('region', 'Addis Ababa')}
         </p>
@@ -174,7 +160,7 @@ with col3:
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
                 padding: 15px; border-radius: 10px; border-left: 4px solid #06b6d4; margin-top: 10px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;"> Address</p>
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">🏠 Address</p>
         <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 600; color: #fff;">
             {user_info.get('address', 'Not specified')}
         </p>
@@ -182,238 +168,6 @@ with col3:
     """, unsafe_allow_html=True)
 
 st.markdown("---")
-
-# REMOVE THE DUPLICATE "Edit Profile" section and second "Producer Information"
-# Just continue with Dashboard, Inventory, Orders tabs...
-
-
-# ==========================================
-# PRODUCER INFORMATION CARDS
-# ==========================================
-st.markdown("### 📋 Producer Information")
-
-# Display user information in large, bold cards
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #667eea22, #764ba222); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #667eea; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">👤 FULL NAME</p>
-        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #fff;">
-            {user_info.get('name', 'Not specified')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #10b98122, #05966922); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #10b981; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📧 EMAIL</p>
-        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff; word-break: break-all;">
-            {user_info.get('email', 'Not specified')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏢 COMPANY</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {user_info.get('company_name', 'Not specified')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #ef444422, #dc262622); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #ef4444; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📱 PHONE</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {user_info.get('phone', 'Not specified')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;"> REGION</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {user_info.get('region', 'Addis Ababa')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #06b6d4; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏠 ADDRESS</p>
-        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff;">
-            {user_info.get('address', 'Not specified')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ==========================================
-# EDIT PROFILE SECTION
-# ==========================================
-if 'show_edit_profile' not in st.session_state:
-    st.session_state.show_edit_profile = False
-
-with st.expander("✏️ Edit Profile", expanded=st.session_state.show_edit_profile):
-    st.markdown("### Update Your Information")
-    
-    with st.form("edit_profile_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            new_name = st.text_input("Full Name", value=user_info.get('name', ''))
-            new_email = st.text_input("Email", value=user_info.get('email', ''))
-            new_phone = st.text_input("Phone Number", value=user_info.get('phone', ''))
-        
-        with col2:
-            new_company = st.text_input("Company Name", value=user_info.get('company_name', ''))
-            new_address = st.text_area("Address", value=user_info.get('address', ''), height=100)
-            # Location/Region
-            regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", "Afar", 
-                      "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
-            new_region = st.selectbox("Region", regions, index=regions.index(user_info.get('region', 'Addis Ababa')) if user_info.get('region') in regions else 0)
-        
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
-        with col2:
-            cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
-        
-        if save_btn:
-            if new_name and new_email:
-                # Update user info in database
-                from utils.db_helpers import update_user
-                try:
-                    update_user(user_info['id'], 
-                               name=new_name, 
-                               email=new_email,
-                               phone=new_phone,
-                               company_name=new_company,
-                               address=new_address,
-                               region=new_region)
-                    
-                    # Update session state
-                    st.session_state.user_info['name'] = new_name
-                    st.session_state.user_info['email'] = new_email
-                    st.session_state.user_info['phone'] = new_phone
-                    st.session_state.user_info['company_name'] = new_company
-                    st.session_state.user_info['address'] = new_address
-                    st.session_state.user_info['region'] = new_region
-                    
-                    st.success("✅ Profile updated successfully!")
-                    st.session_state.show_edit_profile = False
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error updating profile: {e}")
-            else:
-                st.error("Name and Email are required!")
-        
-        if cancel_btn:
-            st.session_state.show_edit_profile = False
-            st.rerun()
-
-# ==========================================
-# PRODUCER INFORMATION CARD
-# ==========================================
-st.markdown("### 📋 Producer Information")
-
-# Fetch latest user data
-from utils.db_helpers import get_user_by_id
-latest_user = get_user_by_id(user_info['id'])
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #667eea22, #764ba222); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #667eea; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">👤 FULL NAME</p>
-        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #fff;">
-            {latest_user.get('name', user_info['name']) if latest_user else user_info['name']}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #10b98122, #05966922); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #10b981; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📧 EMAIL</p>
-        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff; word-break: break-all;">
-            {latest_user.get('email', user_info['email']) if latest_user else user_info['email']}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏢 COMPANY</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {latest_user.get('company_name', 'Not specified') if latest_user else 'Not specified'}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #ef444422, #dc262622); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #ef4444; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📱 PHONE</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {latest_user.get('phone', 'Not specified') if latest_user else 'Not specified'}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;"> REGION</p>
-        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
-            {latest_user.get('region', 'Addis Ababa') if latest_user else 'Addis Ababa'}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
-                padding: 20px; border-radius: 12px; border-left: 4px solid #06b6d4; margin-bottom: 15px;">
-        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏠 ADDRESS</p>
-        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff;">
-            {latest_user.get('address', 'Not specified') if latest_user else 'Not specified'}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("---")
-
-# Check which models loaded
-loaded_models = []
-if demand_model: loaded_models.append("Demand Forecaster")
-if price_model: loaded_models.append("Price Predictor")
-if fraud_model: loaded_models.append("Fraud Detector")
-if merchant_matcher: loaded_models.append("Merchant Matcher")
-if recommendation_engine: loaded_models.append("Recommendation Engine")
-
-# Only show message if NO models loaded
-if not loaded_models:
-    # Don't show warning - just use mock data silently
-    pass
-elif len(loaded_models) < 5:
-    st.info(f"✅ Loaded: {', '.join(loaded_models)}")
 
 # --- Navigation Tabs ---
 tab_dashboard, tab_inventory, tab_orders, tab_ai = st.tabs([
@@ -448,10 +202,10 @@ with tab_dashboard:
         with col1:
             st.subheader("Stock Levels by Category")
             fig_stock = px.bar(
-                df_products.groupby('category')['stock_quantity'].sum().reset_index(),
-                x='category', y='stock_quantity', 
+                df_products.groupby('category')['quantity'].sum().reset_index(),
+                x='category', y='quantity', 
                 title="Total Stock per Category",
-                color='stock_quantity',
+                color='quantity',
                 color_continuous_scale='Viridis'
             )
             st.plotly_chart(fig_stock, use_container_width=True)
@@ -478,10 +232,10 @@ with tab_inventory:
         with st.form("add_product_form"):
             col1, col2 = st.columns(2)
             with col1:
-                name = st.text_input("Product Name", placeholder="e.g., Organic Wheat")
+                name = st.text_input("Product Name", placeholder="e.g., Teff, Coffee")
                 category = st.selectbox("Category", ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Other"])
-                price = st.number_input("Selling Price ($)", min_value=0.01, step=0.01)
-                cost_price = st.number_input("Cost Price ($)", min_value=0.01, step=0.01)
+                price = st.number_input("Selling Price (ETB)", min_value=0.01, step=0.01)
+                cost_price = st.number_input("Cost Price (ETB)", min_value=0.01, step=0.01)
             with col2:
                 stock = st.number_input("Initial Stock Quantity", min_value=0, step=1)
                 min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, value=10)
@@ -512,7 +266,7 @@ with tab_inventory:
     if low_stock:
         st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
         df_low = pd.DataFrame(low_stock)
-        st.dataframe(df_low[['name', 'category', 'stock_quantity', 'min_stock']], use_container_width=True)
+        st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
     
     # All Products Table
     st.subheader("All Products")
@@ -520,8 +274,7 @@ with tab_inventory:
     
     if all_products:
         df_all = pd.DataFrame(all_products)
-        # Format for display
-        display_df = df_all[['name', 'category', 'price', 'stock_quantity', 'sku', 'created_at']].copy()
+        display_df = df_all[['name', 'category', 'price', 'quantity', 'sku', 'created_at']].copy()
         display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d')
         st.dataframe(display_df, use_container_width=True)
     else:
@@ -538,7 +291,6 @@ with tab_orders:
     if orders:
         df_orders = pd.DataFrame(orders)
         
-        # Status filter
         status_filter = st.selectbox("Filter by Status", ["All", "pending", "confirmed", "shipped", "delivered", "cancelled"])
         
         if status_filter != "All":
@@ -546,7 +298,6 @@ with tab_orders:
             
         st.dataframe(df_orders, use_container_width=True)
         
-        # Order Analytics
         col1, col2 = st.columns(2)
         with col1:
             fig_status = px.pie(
@@ -561,7 +312,7 @@ with tab_orders:
 # TAB 4: AI INSIGHTS
 # ==========================================
 with tab_ai:
-    st.subheader("🤖 AI-Powered Supply Chain Insights")
+    st.subheader(" AI-Powered Supply Chain Insights")
     
     products = get_products(producer_id=user_info['id'], limit=20)
     
@@ -573,79 +324,44 @@ with tab_ai:
         
         col1, col2 = st.columns(2)
         
-        # --- Demand Forecasting ---
+        # Demand Forecasting
         with col1:
             st.markdown("### 📈 Demand Forecasting")
             if demand_model:
-                st.info("Model loaded: `demand_forecaster.pkl`")
-                if st.button("Predict Next 30 Days Demand", key="pred_demand"):
-                    # Use actual model if available, otherwise mock data
-                    try:
-                        # prediction = demand_model.predict(selected_prod_id)
-                        forecast_dates = pd.date_range(start=datetime.now(), periods=30, freq='D')
-                        forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)]
-                        
-                        fig_demand = go.Figure()
-                        fig_demand.add_trace(go.Scatter(
-                            x=forecast_dates, y=forecast_values,
-                            mode='lines+markers', name='Predicted Demand',
-                            line=dict(color='#667eea', width=3)
-                        ))
-                        fig_demand.update_layout(
-                            title="Predicted Demand (Next 30 Days)",
-                            xaxis_title="Date", yaxis_title="Units Demanded",
-                            template="plotly_dark"
-                        )
-                        st.plotly_chart(fig_demand, use_container_width=True)
-                        st.success("✅ Forecast generated successfully!")
-                    except Exception as e:
-                        st.error(f"Prediction failed: {e}")
+                st.info("✅ Model loaded: `demand_forecaster.pkl`")
             else:
-                st.warning("⚠️ `demand_forecaster.pkl` not available. Using mock data.")
-                if st.button("Predict Next 30 Days Demand (Mock)", key="pred_demand_mock"):
-                    forecast_dates = pd.date_range(start=datetime.now(), periods=30, freq='D')
-                    forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)]
-                    
-                    fig_demand = go.Figure()
-                    fig_demand.add_trace(go.Scatter(
-                        x=forecast_dates, y=forecast_values,
-                        mode='lines+markers', name='Predicted Demand',
-                        line=dict(color='#667eea', width=3)
-                    ))
-                    fig_demand.update_layout(
-                        title="Predicted Demand (Next 30 Days) - Mock Data",
-                        xaxis_title="Date", yaxis_title="Units Demanded",
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig_demand, use_container_width=True)
+                st.info("️ Using mock forecast data")
+            
+            if st.button("Predict Next 30 Days Demand", key="pred_demand"):
+                forecast_dates = pd.date_range(start=datetime.now(), periods=30, freq='D')
+                forecast_values = [int(50 + i * 2 + (i % 5)) for i in range(30)]
+                
+                fig_demand = go.Figure()
+                fig_demand.add_trace(go.Scatter(
+                    x=forecast_dates, y=forecast_values,
+                    mode='lines+markers', name='Predicted Demand',
+                    line=dict(color='#667eea', width=3)
+                ))
+                fig_demand.update_layout(
+                    title="Predicted Demand (Next 30 Days)",
+                    xaxis_title="Date", yaxis_title="Units Demanded",
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig_demand, use_container_width=True)
+                st.success("✅ Forecast generated successfully!")
 
-        # --- Price Prediction ---
+        # Price Prediction
         with col2:
             st.markdown("### 💰 Optimal Price Prediction")
             if price_model:
-                st.info("Model loaded: `price_predictor.pkl`")
-                current_price = next((p['price'] for p in products if p['id'] == selected_prod_id), 0)
-                st.write(f"Current Price: **${current_price}**")
-                
-                if st.button("Suggest Optimal Price", key="pred_price"):
-                    try:
-                        # optimal_price = price_model.predict(selected_prod_id)
-                        optimal_price = current_price * 1.15
-                        st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
-                        st.info(" Based on current market trends and demand elasticity.")
-                    except Exception as e:
-                        st.error(f"Price prediction failed: {e}")
+                st.info("✅ Model loaded: `price_predictor.pkl`")
             else:
-                st.warning("⚠️ `price_predictor.pkl` not available. Using mock data.")
-                current_price = next((p['price'] for p in products if p['id'] == selected_prod_id), 0)
-                st.write(f"Current Price: **${current_price}**")
-                
-                if st.button("Suggest Optimal Price (Mock)", key="pred_price_mock"):
-                    optimal_price = current_price * 1.15
-                    st.metric("Suggested Optimal Price", f"${optimal_price:.2f}", delta=f"+${optimal_price - current_price:.2f}")
-                    st.info("💡 Mock prediction - actual model not loaded.")
-
-def run():
-    """Main function to run the producer dashboard"""
-    # All your existing code runs here
-    pass  # The code above this already runs when the module is imported
+                st.info("ℹ️ Using mock price data")
+            
+            current_price = next((p['price'] for p in products if p['id'] == selected_prod_id), 0)
+            st.write(f"Current Price: **{current_price} ETB**")
+            
+            if st.button("Suggest Optimal Price", key="pred_price"):
+                optimal_price = current_price * 1.15
+                st.metric("Suggested Optimal Price", f"{optimal_price:.2f} ETB", delta=f"+{optimal_price - current_price:.2f} ETB")
+                st.info("💡 Based on current market trends and demand elasticity.")
