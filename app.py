@@ -9,7 +9,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
+# app.py - Add this near the top
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "Dashboard"
 # Initialize session state
 initialize_session_state()
 
