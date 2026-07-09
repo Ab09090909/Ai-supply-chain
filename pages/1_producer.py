@@ -55,67 +55,118 @@ recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
 
 # --- Header with Profile ---
-# --- Header with Profile ---
-col1, col2 = st.columns([2, 1])
+st.markdown("""
+<style>
+.profile-box {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    padding: 20px;
+    border-radius: 15px;
+    border: 2px solid #667eea;
+    margin-bottom: 20px;
+}
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+.profile-pic {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    color: white;
+    border: 3px solid #fff;
+    flex-shrink: 0;
+}
+.profile-title h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+    color: #fff;
+}
+.profile-title p {
+    margin: 2px 0 0 0;
+    font-size: 14px;
+    color: #94a3b8;
+}
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #475569;
+}
+.info-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+.info-label {
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.info-value {
+    font-size: 13px;
+    color: #fff;
+    margin: 3px 0 0 0;
+    font-weight: 600;
+    word-break: break-all;
+}
+</style>
+""", unsafe_allow_html=True)
 
-with col1:
-    st.title("🏭 Producer Dashboard")
-    
-with col2:
-    # Profile Section - NO EDIT BUTTON
-    st.markdown("""
-    <style>
-    .profile-container {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 15px;
-        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-        padding: 15px 20px;
-        border-radius: 15px;
-        border: 2px solid #667eea;
-    }
-    .profile-pic {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 28px;
-        font-weight: bold;
-        color: white;
-        border: 3px solid #fff;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
-    .profile-info h3 {
-        margin: 0;
-        font-size: 20px;
-        font-weight: bold;
-        color: #fff;
-    }
-    .profile-info p {
-        margin: 2px 0 0 0;
-        font-size: 14px;
-        color: #94a3b8;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Display profile WITHOUT edit button
-    initial = user_info['name'][0].upper() if user_info['name'] else "P"
-    st.markdown(f"""
-    <div class="profile-container">
+# Profile Box with Information
+initial = user_info['name'][0].upper() if user_info['name'] else "P"
+
+st.markdown(f"""
+<div class="profile-box">
+    <div class="profile-header">
         <div class="profile-pic">{initial}</div>
-        <div class="profile-info">
-            <h3>{user_info['name']}</h3>
+        <div class="profile-title">
+            <h2>{user_info['name']}</h2>
             <p>Producer</p>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    
+    <div class="info-grid">
+        <div class="info-item">
+            <p class="info-label"> Email</p>
+            <p class="info-value">{user_info.get('email', 'Not specified')}</p>
+        </div>
+        <div class="info-item">
+            <p class="info-label">🏢 Company</p>
+            <p class="info-value">{user_info.get('company_name', 'Not specified')}</p>
+        </div>
+        <div class="info-item">
+            <p class="info-label"> Phone</p>
+            <p class="info-value">{user_info.get('phone', 'Not specified')}</p>
+        </div>
+        <div class="info-item">
+            <p class="info-label">📍 Region</p>
+            <p class="info-value">{user_info.get('region', 'Addis Ababa')}</p>
+        </div>
+        <div class="info-item" style="grid-column: span 2;">
+            <p class="info-label">🏠 Address</p>
+            <p class="info-value">{user_info.get('address', 'Not specified')}</p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
+
+# Remove all the duplicate "Producer Information" sections below
+# Just continue with the rest of your dashboard...
 
 # ==========================================
 # PRODUCER INFORMATION CARDS
