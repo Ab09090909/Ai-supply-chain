@@ -1,108 +1,84 @@
+# app.py - Main entry point
 import streamlit as st
+from utils.auth import initialize_session_state
 
-# Set page config
+# Configure page
 st.set_page_config(
-    page_title="PlyChain - Login",
-    page_icon="🚀",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    page_title="Ethiopian AgriTech Supply Chain",
+    page_icon="🌾",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Initialize session state
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-    st.session_state.user_info = None
+initialize_session_state()
 
-# Custom CSS
-st.markdown("""
-<style>
-.stApp {
-    background-color: #0f172a;
-    color: #e2e8f0;
-}
-</style>
-""", unsafe_allow_html=True)
+# Import page modules
+from pages.producer.main import render_producer_page
 
-# ==========================================
-# MAIN APP
-# ==========================================
-if not st.session_state.authenticated:
-    st.title(" SupplyChain")
-    st.markdown("### Intelligent Supply Chain Management for Ethiopia")
+def main():
+    """Main application entry point"""
     
-    tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
+    # Sidebar navigation
+    st.sidebar.title("🌾 Ethiopian AgriTech")
+    st.sidebar.markdown("---")
     
-    with tab1:
-        with st.form("login_form", clear_on_submit=False):
-            email = st.text_input("Email", placeholder="your@email.com")
-            password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Login", use_container_width=True, type="primary")
+    # Role-based navigation
+    if st.session_state.get('authenticated', False):
+        user_role = st.session_state.user_info.get('role', '')
+        
+        st.sidebar.write(f"👤 Logged in as: **{st.session_state.user_info.get('name', 'User')}**")
+        st.sidebar.write(f"🔑 Role: **{user_role.capitalize()}**")
+        st.sidebar.markdown("---")
+        
+        # Navigation based on role
+        if user_role == 'producer':
+            page = st.sidebar.radio(
+                "Navigate",
+                ["Producer Dashboard"]
+            )
             
-            if submit:
-                if not email or not password:
-                    st.error("❌ Please fill in all fields")
-                else:
-                    # Import from utils.auth
-                    from utils.db_helpers import login_user
-                    success, msg, user = login_user(email, password)
-                    if success:
-                        st.success(msg)
-                        st.session_state.authenticated = True
-                        st.session_state.user_info = user
-                        st.rerun()
-                    else:
-                        st.error(msg)
+            if page == "Producer Dashboard":
+                render_producer_page()
+        
+        elif user_role == 'merchant':
+            from pages.merchant import render_merchant_page
+            page = st.sidebar.radio(
+                "Navigate",
+                ["Merchant Dashboard"]
+            )
+            if page == "Merchant Dashboard":
+                render_merchant_page()
+        
+        elif user_role == 'customer':
+            from pages.customer import render_customer_page
+            page = st.sidebar.radio(
+                "Navigate",
+                ["Customer Dashboard"]
+            )
+            if page == "Customer Dashboard":
+                render_customer_page()
+        
+        elif user_role == 'admin':
+            from pages.admin import render_admin_page
+            page = st.sidebar.radio(
+                "Navigate",
+                ["Admin Dashboard"]
+            )
+            if page == "Admin Dashboard":
+                render_admin_page()
+        
+        # Logout button
+        if st.sidebar.button("🚪 Logout", use_container_width=True):
+            from utils.auth import logout_user
+            logout_user()
+            st.rerun()
     
-    with tab2:
-        with st.form("signup_form", clear_on_submit=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                name = st.text_input("Full Name")
-                email = st.text_input("Email")
-            with col2:
-                password = st.text_input("Password", type="password")
-                role = st.selectbox("I am a:", ["producer", "merchant", "customer", "admin"])
-            
-            phone = st.text_input("Phone Number (Optional)")
-            company = st.text_input("Company Name (Optional)")
-            
-            submit = st.form_submit_button("Create Account", use_container_width=True, type="primary")
-            
-            if submit:
-                if not name or not email or not password:
-                    st.error("❌ Please fill in all required fields")
-                else:
-                    # Import from utils.auth
-                    from utils.db_helpers import register_user
-                    success, msg = register_user(
-                        name=name, email=email, password=password, 
-                        role=role, phone=phone, company_name=company
-                    )
-                    if success:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
-else:
-    # User is logged in
-    user_info = st.session_state.user_info
-    
-    st.title(f"Welcome back, {user_info['name']}! 👋")
-    st.write(f"Role: **{user_info['role'].title()}**")
-    
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.authenticated = False
-        st.session_state.user_info = None
-        st.rerun()
-    
-    st.markdown("---")
-    st.subheader("Quick Navigation")
-    
-    role = user_info['role']
-    if role == 'producer':
-        st.page_link("pages/1_producer.py", label=" Producer Dashboard", icon="🏭")
-    elif role == 'merchant':
-        st.page_link("pages/2_merchant.py", label=" Merchant Dashboard", icon="🛒")
-    elif role == 'customer':
-        st.page_link("pages/3_customer.py", label="🛍️ Customer Portal", icon="🛍️")
-    elif role == 'admin':
-        st.page_link("pages/4_Admin.py", label="👑 Admin Panel", icon="👑")
+    else:
+        # Login page
+        st.sidebar.info("🔐 Please log in to access the platform")
+        from utils.auth import render_login
+        render_login()
+
+if __name__ == "__main__":
+    main()
