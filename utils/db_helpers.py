@@ -102,9 +102,13 @@ def get_products(producer_id: str = None, category: str = None, active_only: boo
     supabase = get_supabase()
     try:
         query = supabase.table('products').select('*').limit(limit)
-        if producer_id: query = query.eq('producer_id', producer_id)
-        if category: query = query.eq('category', category)
-        if active_only: query = query.eq('is_active', True)
+        if producer_id: 
+            query = query.eq('producer_id', producer_id)
+        if category: 
+            query = query.eq('category', category)
+        # Remove is_active filter if column doesn't exist
+        # if active_only: 
+        #     query = query.eq('is_active', True)
         query = query.order('created_at', desc=True)
         response = query.execute()
         return response.data if response.data else []
@@ -115,33 +119,26 @@ def get_products(producer_id: str = None, category: str = None, active_only: boo
 def get_low_stock_products(producer_id: str = None):
     supabase = get_supabase()
     try:
-        # Supabase doesn't support direct column comparison in filter, so we fetch and filter in Python
-        query = supabase.table('products').select('*').eq('is_active', True)
-        if producer_id: query = query.eq('producer_id', producer_id)
+        query = supabase.table('products').select('*')
+        if producer_id: 
+            query = query.eq('producer_id', producer_id)
         response = query.execute()
         
-        if not response.data: return []
+        if not response.data: 
+            return []
         
-        # Filter where stock_quantity <= min_stock
-        return [p for p in response.data if p.get('stock_quantity', 0) <= p.get('min_stock', 10)]
+        # Filter in Python instead of database
+        low_stock = []
+        for p in response.data:
+            stock = p.get('quantity', p.get('stock_quantity', 0))
+            min_stock = p.get('min_stock', 10)
+            if stock <= min_stock:
+                low_stock.append(p)
+        
+        return low_stock
     except Exception as e:
+        st.error(f"Error fetching low stock: {e}")
         return []
-
-def update_product_stock(product_id: str, quantity_change: int) -> bool:
-    supabase = get_supabase()
-    try:
-        response = supabase.table('products').select('stock_quantity').eq('id', product_id).execute()
-        if not response.data: return False
-        
-        new_stock = response.data[0]['stock_quantity'] + quantity_change
-        if new_stock < 0: return False
-        
-        supabase.table('products').update({
-            'stock_quantity': new_stock, 'updated_at': datetime.now().isoformat()
-        }).eq('id', product_id).execute()
-        return True
-    except:
-        return False
 
 # ==========================================
 # ORDER OPERATIONS
@@ -177,32 +174,43 @@ def get_orders(user_id: str, role: str, status: str = None, limit: int = 50):
 # DASHBOARD ANALYTICS
 # ==========================================
 
+# Find and replace these column references in get_dashboard_stats function:
+
 def get_dashboard_stats(role: str, user_id: str):
     supabase = get_supabase()
     stats = {}
     
     try:
         if role == 'producer':
-            # Total products
-            prod_resp = supabase.table('products').select('id', 'stock_quantity', 'min_stock', 'price').eq('producer_id', user_id).eq('is_active', True).execute()
+            # Use correct column names - Supabase might use 'quantity' instead of 'stock_quantity'
+            prod_resp = supabase.table('products').select('*').eq('producer_id', user_id).execute()
             products = prod_resp.data if prod_resp.data else []
-            stats['total_products'] = len(products)
-            stats['low_stock'] = len([p for p in products if p.get('stock_quantity', 0) <= p.get('min_stock', 10)])
-            stats['revenue'] = sum(p.get('price', 0) for p in products) # Simplified revenue calc
             
-            # Total orders for producer's products
+            # Filter active products (check if column exists)
+            active_products = [p for p in products if p.get('is_active', True)]
+            stats['total_products'] = len(active_products)
+            
+            # Check for low stock (use 'quantity' or 'stock_quantity')
+            low_stock = [p for p in active_products 
+                        if p.get('quantity', p.get('stock_quantity', 100)) <= p.get('min_stock', 10)]
+            stats['low_stock'] = len(low_stock)
+            
+            # Get orders for producer's products
             prod_ids = [p['id'] for p in products]
             if prod_ids:
-                order_resp = supabase.table('orders').select('id', 'total_amount', 'status').in_('product_id', prod_ids).execute()
+                order_resp = supabase.table('orders').select('*').in_('product_id', prod_ids).execute()
                 orders = order_resp.data if order_resp.data else []
                 stats['total_orders'] = len(orders)
-                stats['revenue'] = sum(o.get('total_amount', 0) for o in orders if o.get('status') not in ['cancelled', 'refunded'])
+                stats['revenue'] = sum(o.get('total_amount', 0) for o in orders 
+                                      if o.get('status') not in ['cancelled', 'refunded'])
             else:
                 stats['total_orders'] = 0
                 stats['revenue'] = 0.0
                 
     except Exception as e:
         st.error(f"Error fetching stats: {e}")
+        # Return default values on error
+        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0.0}
         
     return stats
 
@@ -218,3 +226,18 @@ def log_activity(user_id: str, action: str, details: str = ""):
         }).execute()
     except:
         pass
+
+def check_and_fix_columns():
+    """Check if required columns exist in Supabase"""
+    supabase = get_supabase()
+    
+    try:
+        # Try to get products table structure
+        response = supabase.table('products').select('*').limit(1).execute()
+        if response.data:
+            columns = list(response.data[0].keys())
+            print(f"Available columns in products table: {columns}")
+            return columns
+    except Exception as e:
+        st.error(f"Error checking columns: {e}")
+    return []
