@@ -1,128 +1,171 @@
+# utils/db_helpers.py
 import streamlit as st
-from datetime import datetime
-import uuid
-import hashlib
+from supabase import create_client, Client
+import os
+import json
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-# Import the database client
-from src.db import get_supabase_client
+load_dotenv()
 
-def get_db():
-    """Get database client"""
-    return get_supabase_client()
-
-# ==========================================
-# USER AUTHENTICATION FUNCTIONS
-# ==========================================
-
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def verify_password(password: str, stored_hash: str) -> bool:
-    """Verify password against stored hash"""
-    return hash_password(password) == stored_hash
-
-def register_user(name: str, email: str, password: str, role: str, 
-                  phone: str = "", company_name: str = "", region: str = "Addis Ababa") -> tuple:
-    """Register a new user"""
-    db = get_db()
-    if not db:
-        return False, "Database connection failed", None
-    
+# Initialize Supabase client with error handling
+@st.cache_resource
+def get_supabase_client():
+    """Get Supabase client instance with proper error handling"""
     try:
-        # Check if email exists
-        response = db.table('users').select('id').eq('email', email).execute()
-        if response.data and len(response.data) > 0:
-            return False, "Email already registered", None
+        supabase_url = os.getenv('SUPABASE_URL')
+        supabase_key = os.getenv('SUPABASE_KEY')
         
-        # Create user
-        user_data = {
-            'name': name,
-            'email': email,
-            'password_hash': hash_password(password),
-            'role': role,
-            'phone': phone,
-            'company_name': company_name,
-            'region': region,
-            'is_verified': True,
-            'is_active': True,
-            'created_at': datetime.now().isoformat()
-        }
+        if not supabase_url or not supabase_key:
+            st.error("❌ Supabase credentials not found in environment variables")
+            return None
         
-        result = db.table('users').insert(user_data).execute()
-        
-        if not result.data:
-            return False, "Failed to create user", None
-        
-        user_id = result.data[0]['id']
-        
-        # Create wallet for user
-        try:
-            db.table('wallets').insert({'user_id': user_id, 'balance': 0.0}).execute()
-        except:
-            pass
-        
-        return True, "Account created successfully!", user_id
-        
-    except Exception as e:
-        return False, f"Error: {str(e)}", None
-
-def login_user(email: str, password: str) -> tuple:
-    """Authenticate user and return user info"""
-    db = get_db()
-    if not db:
-        return False, "Database connection failed", None
+        # Create client WITHOUT proxy argument
+        client = create_client(supabase_url, supabase_key)
+        return client
     
-    try:
-        # Find user by email
-        response = db.table('users').select('*').eq('email', email).eq('is_active', True).execute()
-        
-        if not response.data or len(response.data) == 0:
-            return False, "Invalid email or password", None
-        
-        user = response.data[0]
-        
-        # Verify password
-        if not verify_password(password, user['password_hash']):
-            return False, "Invalid email or password", None
-        
-        # Update last login
-        try:
-            db.table('users').update({'last_login': datetime.now().isoformat()}).eq('id', user['id']).execute()
-        except:
-            pass
-        
-        # Prepare user info for session
-        user_info = {
-            'id': user['id'],
-            'name': user['name'],
-            'email': user['email'],
-            'role': user['role'],
-            'phone': user.get('phone', ''),
-            'company_name': user.get('company_name', ''),
-            'region': user.get('region', 'Addis Ababa'),
-            'session_token': str(uuid.uuid4())
-        }
-        
-        return True, f"Welcome back, {user['name']}!", user_info
-        
+    except TypeError as e:
+        if 'proxy' in str(e):
+            st.error("❌ Supabase client version incompatible. Please update supabase-py")
+            st.info("Run: pip install --upgrade supabase")
+            return None
+        else:
+            st.error(f"❌ Error connecting to Supabase: {e}")
+            return None
     except Exception as e:
-        return False, f"Login error: {str(e)}", None
+        st.error(f"❌ Failed to connect to Supabase: {e}")
+        return None
 
-# ==========================================
-# PRODUCT FUNCTIONS
-# ==========================================
+# Global client
+supabase = get_supabase_client()
 
-def create_product(name: str, description: str, category: str, price: float,
-                   cost_price: float, stock_quantity: int, producer_id: str,
-                   weight: float = 0, image_url: str = None, image_base64: str = None,
-                   min_stock: int = 10) -> tuple:
+# --- User Functions ---
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.user_info = {}
+        st.session_state.user_id = None
+
+def authenticate_user(email, password):
+    """Authenticate a user"""
+    try:
+        if supabase is None:
+            return None, "Database connection failed"
+        
+        # Try to authenticate
+        response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        
+        if response.user:
+            # Get user profile from users table
+            user_data = supabase.table('users')\
+                .select('*')\
+                .eq('email', email)\
+                .execute()
+            
+            if user_data.data:
+                user_info = user_data.data[0]
+                return user_info, "success"
+            else:
+                return None, "User profile not found"
+        else:
+            return None, "Invalid credentials"
+    
+    except Exception as e:
+        error_msg = str(e)
+        if "Invalid login credentials" in error_msg:
+            return None, "Invalid email or password"
+        elif "Network" in error_msg or "connect" in error_msg.lower():
+            return None, "Network error. Please check your connection."
+        else:
+            return None, f"Login failed: {error_msg}"
+
+def logout_user():
+    """Logout the current user"""
+    try:
+        if supabase:
+            supabase.auth.sign_out()
+    except:
+        pass
+    
+    st.session_state.authenticated = False
+    st.session_state.user_info = {}
+    st.session_state.user_id = None
+
+def get_user_by_id(user_id):
+    """Get user by ID"""
+    try:
+        if supabase is None:
+            return None
+        
+        response = supabase.table('users')\
+            .select('*')\
+            .eq('id', user_id)\
+            .execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error fetching user: {e}")
+        return None
+
+def update_user(user_id, **kwargs):
+    """Update user information"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        # Remove None values
+        update_data = {k: v for k, v in kwargs.items() if v is not None}
+        
+        response = supabase.table('users')\
+            .update(update_data)\
+            .eq('id', user_id)\
+            .execute()
+        
+        if response.data:
+            return True, "User updated successfully"
+        return False, "User update failed"
+    
+    except Exception as e:
+        return False, f"Error updating user: {e}"
+
+# --- Product Functions ---
+def get_products(producer_id=None, limit=100):
+    """Get products, optionally filtered by producer"""
+    try:
+        if supabase is None:
+            return []
+        
+        query = supabase.table('products')\
+            .select('*')\
+            .limit(limit)
+        
+        if producer_id:
+            query = query.eq('producer_id', producer_id)
+        
+        response = query.execute()
+        
+        if response.data:
+            return response.data
+        return []
+    
+    except Exception as e:
+        st.error(f"Error fetching products: {e}")
+        return []
+
+def create_product(name, description, category, price, cost_price, stock_quantity, producer_id, weight=0.0, image_url=None):
     """Create a new product"""
-    db = get_db()
-    if not db:
-        return False, "Database connection failed", None
-    
     try:
+        if supabase is None:
+            return False, "Database connection failed", None
+        
+        # Generate SKU
+        import uuid
         sku = f"SKU-{uuid.uuid4().hex[:8].upper()}"
         
         product_data = {
@@ -132,160 +175,178 @@ def create_product(name: str, description: str, category: str, price: float,
             'price': price,
             'cost_price': cost_price,
             'quantity': stock_quantity,
-            'min_stock': min_stock,
             'producer_id': producer_id,
-            'sku': sku,
             'weight': weight,
-            'is_active': True,
+            'sku': sku,
+            'image_url': image_url,
             'created_at': datetime.now().isoformat()
         }
         
-        if image_url:
-            product_data['image_url'] = image_url
-        if image_base64:
-            product_data['image_base64'] = image_base64
+        response = supabase.table('products')\
+            .insert(product_data)\
+            .execute()
         
-        result = db.table('products').insert(product_data).execute()
-        
-        if not result.data:
-            return False, "Failed to create product", None
-        
-        return True, "Product created successfully!", result.data[0]['id']
-        
-    except Exception as e:
-        return False, f"Error: {str(e)}", None
-
-def get_products(producer_id: str = None, category: str = None, 
-                 active_only: bool = True, limit: int = 100):
-    """Get products with optional filters"""
-    db = get_db()
-    if not db:
-        return []
+        if response.data:
+            return True, "Product created successfully", response.data[0]['id']
+        return False, "Product creation failed", None
     
+    except Exception as e:
+        return False, f"Error creating product: {e}", None
+
+def update_product(product_id, **kwargs):
+    """Update product information"""
     try:
-        query = db.table('products').select('*').limit(limit)
+        if supabase is None:
+            return False, "Database connection failed"
         
-        if producer_id:
-            query = query.eq('producer_id', producer_id)
-        if category:
-            query = query.eq('category', category)
-        if active_only:
-            query = query.eq('is_active', True)
+        update_data = {k: v for k, v in kwargs.items() if v is not None}
         
-        query = query.order('created_at', desc=True)
-        result = query.execute()
+        response = supabase.table('products')\
+            .update(update_data)\
+            .eq('id', product_id)\
+            .execute()
         
-        return result.data if result.data else []
-    except Exception as e:
-        st.error(f"Error fetching products: {e}")
-        return []
-
-def update_user(user_id: str, **kwargs) -> bool:
-    """Update user information"""
-    db = get_db()
-    if not db:
-        return False
+        if response.data:
+            return True, "Product updated successfully"
+        return False, "Product update failed"
     
+    except Exception as e:
+        return False, f"Error updating product: {e}"
+
+def delete_product(product_id):
+    """Delete a product"""
     try:
-        allowed_fields = ['name', 'email', 'phone', 'company_name', 'region', 'address']
-        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+        if supabase is None:
+            return False, "Database connection failed"
         
-        if not updates:
-            return False
+        response = supabase.table('products')\
+            .delete()\
+            .eq('id', product_id)\
+            .execute()
         
-        updates['updated_at'] = datetime.now().isoformat()
-        
-        result = db.table('users').update(updates).eq('id', user_id).execute()
-        return result.data is not None
+        if response.data:
+            return True, "Product deleted successfully"
+        return False, "Product deletion failed"
+    
     except Exception as e:
-        st.error(f"Error updating user: {e}")
-        return False
+        return False, f"Error deleting product: {e}"
 
-def get_dashboard_stats(role: str, user_id: str):
-    """Get dashboard statistics"""
-    db = get_db()
-    if not db:
-        return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0.0}
-    
-    stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0.0}
-    
+def update_product_stock(product_id, new_quantity):
+    """Update product stock quantity"""
     try:
-        if role == 'producer':
-            # Get products
-            prod_response = db.table('products').select('*').eq('producer_id', user_id).execute()
-            products = prod_response.data if prod_response.data else []
-            
-            stats['total_products'] = len(products)
-            stats['low_stock'] = len([p for p in products if p.get('quantity', 0) <= p.get('min_stock', 10)])
-            
-            # Get orders for producer's products
-            prod_ids = [p['id'] for p in products]
-            if prod_ids:
-                order_response = db.table('orders').select('*').in_('product_id', prod_ids).execute()
-                orders = order_response.data if order_response.data else []
-                
-                stats['total_orders'] = len(orders)
-                stats['revenue'] = sum(
-                    o.get('total_amount', 0) for o in orders 
-                    if o.get('status') not in ['cancelled', 'refunded']
-                )
+        if supabase is None:
+            return False, "Database connection failed"
         
-        return stats
+        response = supabase.table('products')\
+            .update({'quantity': new_quantity})\
+            .eq('id', product_id)\
+            .execute()
         
+        if response.data:
+            return True, "Stock updated successfully"
+        return False, "Stock update failed"
+    
     except Exception as e:
-        st.error(f"Error fetching stats: {e}")
-        return stats
+        return False, f"Error updating stock: {e}"
 
-def get_low_stock_products(producer_id: str = None):
+def get_low_stock_products(producer_id=None):
     """Get products with low stock"""
-    db = get_db()
-    if not db:
-        return []
-    
     try:
-        query = db.table('products').select('*')
+        if supabase is None:
+            return []
+        
+        query = supabase.table('products')\
+            .select('*')\
+            .lt('quantity', 'min_stock')
         
         if producer_id:
             query = query.eq('producer_id', producer_id)
         
-        result = query.execute()
-        products = result.data if result.data else []
+        response = query.execute()
         
-        # Filter products where quantity <= min_stock
-        low_stock = [p for p in products if p.get('quantity', 0) <= p.get('min_stock', 10)]
-        
-        return low_stock
+        if response.data:
+            return response.data
+        return []
+    
     except Exception as e:
         st.error(f"Error fetching low stock products: {e}")
         return []
 
-def get_orders(user_id: str, role: str, status: str = None, limit: int = 50):
+# --- Order Functions ---
+def get_orders(user_id, role, limit=100):
     """Get orders based on user role"""
-    db = get_db()
-    if not db:
+    try:
+        if supabase is None:
+            return []
+        
+        if role == 'producer':
+            field = 'producer_id'
+        elif role == 'merchant':
+            field = 'merchant_id'
+        elif role == 'customer':
+            field = 'customer_id'
+        else:
+            return []
+        
+        response = supabase.table('orders')\
+            .select('*')\
+            .eq(field, user_id)\
+            .limit(limit)\
+            .order('created_at', desc=True)\
+            .execute()
+        
+        if response.data:
+            return response.data
         return []
     
-    try:
-        query = db.table('orders').select('*').limit(limit).order('created_at', desc=True)
-        
-        if role == 'customer':
-            query = query.eq('customer_id', user_id)
-        elif role == 'merchant':
-            query = query.eq('merchant_id', user_id)
-        elif role == 'producer':
-            # Get producer's products first
-            prod_response = db.table('products').select('id').eq('producer_id', user_id).execute()
-            prod_ids = [p['id'] for p in prod_response.data] if prod_response.data else []
-            if not prod_ids:
-                return []
-            query = query.in_('product_id', prod_ids)
-        
-        if status:
-            query = query.eq('status', status)
-        
-        result = query.execute()
-        return result.data if result.data else []
-        
     except Exception as e:
         st.error(f"Error fetching orders: {e}")
         return []
+
+# --- Dashboard Stats ---
+def get_dashboard_stats(role, user_id):
+    """Get dashboard statistics"""
+    try:
+        if supabase is None:
+            return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        
+        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        
+        if role == 'producer':
+            # Get total products
+            products = supabase.table('products')\
+                .select('id')\
+                .eq('producer_id', user_id)\
+                .execute()
+            stats['total_products'] = len(products.data) if products.data else 0
+            
+            # Get low stock
+            low_stock = supabase.table('products')\
+                .select('id')\
+                .eq('producer_id', user_id)\
+                .lt('quantity', 'min_stock')\
+                .execute()
+            stats['low_stock'] = len(low_stock.data) if low_stock.data else 0
+            
+            # Get total orders
+            orders = supabase.table('orders')\
+                .select('id')\
+                .eq('producer_id', user_id)\
+                .execute()
+            stats['total_orders'] = len(orders.data) if orders.data else 0
+            
+            # Get revenue (sum of order totals)
+            revenue = supabase.table('orders')\
+                .select('total_amount')\
+                .eq('producer_id', user_id)\
+                .eq('status', 'delivered')\
+                .execute()
+            
+            if revenue.data:
+                stats['revenue'] = sum(o.get('total_amount', 0) for o in revenue.data)
+        
+        return stats
+    
+    except Exception as e:
+        st.error(f"Error fetching dashboard stats: {e}")
+        return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
