@@ -54,119 +54,138 @@ merchant_matcher = load_ai_model("merchant_matcher.pkl")
 recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
 
+
 # --- Header with Profile ---
 st.markdown("""
 <style>
-.profile-box {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    padding: 20px;
-    border-radius: 15px;
-    border: 2px solid #667eea;
-    margin-bottom: 20px;
-}
-.profile-header {
+.profile-container {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-bottom: 15px;
+    justify-content: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 2px solid #667eea;
+    max-width: 400px;
+    margin: 0 auto;
 }
 .profile-pic {
-    width: 60px;
-    height: 60px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
+    font-size: 20px;
     font-weight: bold;
     color: white;
-    border: 3px solid #fff;
-    flex-shrink: 0;
+    border: 2px solid #fff;
 }
-.profile-title h2 {
+.profile-info h3 {
     margin: 0;
-    font-size: 24px;
-    font-weight: bold;
+    font-size: 14px;
+    font-weight: 600;
     color: #fff;
 }
-.profile-title p {
+.profile-info p {
     margin: 2px 0 0 0;
-    font-size: 14px;
-    color: #94a3b8;
-}
-.info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #475569;
-}
-.info-item {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 8px 12px;
-    border-radius: 8px;
-}
-.info-label {
     font-size: 11px;
     color: #94a3b8;
-    margin: 0;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-.info-value {
-    font-size: 13px;
-    color: #fff;
-    margin: 3px 0 0 0;
-    font-weight: 600;
-    word-break: break-all;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Profile Box with Information
+# Display profile - SMALLER SIZE
 initial = user_info['name'][0].upper() if user_info['name'] else "P"
-
 st.markdown(f"""
-<div class="profile-box">
-    <div class="profile-header">
-        <div class="profile-pic">{initial}</div>
-        <div class="profile-title">
-            <h2>{user_info['name']}</h2>
-            <p>Producer</p>
-        </div>
-    </div>
-    
-    <div class="info-grid">
-        <div class="info-item">
-            <p class="info-label"> Email</p>
-            <p class="info-value">{user_info.get('email', 'Not specified')}</p>
-        </div>
-        <div class="info-item">
-            <p class="info-label">🏢 Company</p>
-            <p class="info-value">{user_info.get('company_name', 'Not specified')}</p>
-        </div>
-        <div class="info-item">
-            <p class="info-label"> Phone</p>
-            <p class="info-value">{user_info.get('phone', 'Not specified')}</p>
-        </div>
-        <div class="info-item">
-            <p class="info-label">📍 Region</p>
-            <p class="info-value">{user_info.get('region', 'Addis Ababa')}</p>
-        </div>
-        <div class="info-item" style="grid-column: span 2;">
-            <p class="info-label">🏠 Address</p>
-            <p class="info-value">{user_info.get('address', 'Not specified')}</p>
-        </div>
+<div class="profile-container">
+    <div class="profile-pic">{initial}</div>
+    <div class="profile-info">
+        <h3>{user_info['name']}</h3>
+        <p>Producer</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# Remove all the duplicate "Producer Information" sections below
-# Just continue with the rest of your dashboard...
+# ==========================================
+# PRODUCER INFORMATION CARDS (Only ONE section)
+# ==========================================
+st.markdown("### 📋 Producer Information")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #667eea22, #764ba222); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #667eea;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">👤 Full Name</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
+            {user_info.get('name', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #10b98122, #05966922); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #10b981; margin-top: 10px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">📧 Email</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 600; color: #fff; word-break: break-all;">
+            {user_info.get('email', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #f59e0b;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">🏢 Company</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
+            {user_info.get('company_name', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #ef444422, #dc262622); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #ef4444; margin-top: 10px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;">📱 Phone</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
+            {user_info.get('phone', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #8b5cf6;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;"> Region</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #fff;">
+            {user_info.get('region', 'Addis Ababa')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
+                padding: 15px; border-radius: 10px; border-left: 4px solid #06b6d4; margin-top: 10px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase;"> Address</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 600; color: #fff;">
+            {user_info.get('address', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# REMOVE THE DUPLICATE "Edit Profile" section and second "Producer Information"
+# Just continue with Dashboard, Inventory, Orders tabs...
+
 
 # ==========================================
 # PRODUCER INFORMATION CARDS
