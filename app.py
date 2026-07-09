@@ -4,10 +4,6 @@ app.py — Ethiopian AI Supply Chain Platform (Main Entry)
 import sys
 import os
 import streamlit as st
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -338,16 +334,12 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────
 def render_hamburger_button():
     """Render the hamburger menu button using Streamlit."""
-    
-    # Create a container at the top-left corner
     col1, col2, col3 = st.columns([1, 10, 1])
     with col1:
-        # Use st.button with a custom key
         menu_label = "☰" if not st.session_state.menu_open else "✕"
         if st.button(menu_label, key="hamburger_btn", help="Toggle Menu"):
             st.session_state.menu_open = not st.session_state.menu_open
             st.rerun()
-    
     return st.session_state.menu_open
 
 # ─────────────────────────────────────────────────────────────
@@ -355,20 +347,18 @@ def render_hamburger_button():
 # ─────────────────────────────────────────────────────────────
 def render_custom_sidebar(profile=None):
     """Render custom sidebar with hamburger menu."""
-    
-    # Get profile if not provided
+
     if profile is None:
         profile = st.session_state.get("profile")
-    
+
     is_open = st.session_state.get("menu_open", False)
     open_class = "open" if is_open else ""
     overlay_class = "active" if is_open else ""
-    
+
     if not profile or st.session_state.user is None:
         sidebar_html = f'''
         <div class="mobile-sidebar {open_class}" id="mobileSidebar">
             <button class="close-sidebar-btn" onclick="
-                fetch(window.location.href + '?menu=close');
                 document.getElementById('mobileSidebar').classList.remove('open');
                 document.getElementById('mobileOverlay').classList.remove('active');
             ">✕</button>
@@ -378,7 +368,6 @@ def render_custom_sidebar(profile=None):
                 <div class="sidebar-role">Please sign in</div>
             </div>
             <hr class="sidebar-divider">
-            <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
         </div>
         <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
             document.getElementById('mobileSidebar').classList.remove('open');
@@ -387,43 +376,12 @@ def render_custom_sidebar(profile=None):
         '''
         st.markdown(sidebar_html, unsafe_allow_html=True)
         return
-    
+
     name = profile.get("full_name", "User")
     role = profile.get("role", "customer")
     region = profile.get("region", "N/A")
     role_icon = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}.get(role, "👤")
-    
-    sidebar_html = f'''
-    <div class="mobile-sidebar {open_class}" id="mobileSidebar">
-        <button class="close-sidebar-btn" onclick="
-            document.getElementById('mobileSidebar').classList.remove('open');
-            document.getElementById('mobileOverlay').classList.remove('active');
-        ">✕</button>
-        
-        <div class="sidebar-profile">
-            <div class="sidebar-avatar">{name[0].upper()}</div>
-            <div class="sidebar-name">{name}</div>
-            <div class="sidebar-role">{role_icon} {role.capitalize()} · {region}</div>
-        </div>
-        
-        <hr class="sidebar-divider">
-        
-        <div class="sidebar-section-title">📊 Navigation</div>
-        <button class="sidebar-nav-btn" onclick="window.location.href='app.py'">🏠 Home</button>
-    '''
-    
-    # Role-specific pages
-    nav_pages = {
-        "producer": ("🚜 Producer", "pages/1_producer.py"),
-        "merchant": ("🏬 Merchant", "pages/2_merchant.py"),
-        "customer": ("🛒 Customer", "pages/3_customer.py"),
-        "admin": ("🛡️ Admin", "pages/4_Admin.py")
-    }
-    
-    if role in nav_pages:
-        label, page = nav_pages[role]
-        sidebar_html += f'<button class="sidebar-nav-btn" onclick="window.location.href=\'{page}\'">{label}</button>'
-    
+
     # Verification status
     try:
         verif_status = check_verification_status(st.session_state.user.id)
@@ -435,46 +393,69 @@ def render_custom_sidebar(profile=None):
             status_html = '<span class="pill pill-info">📄 Verify</span>'
     except Exception:
         status_html = '<span class="pill pill-neutral">⚠️ Unknown</span>'
-    
-    sidebar_html += f'''
+
+    sidebar_html = f'''
+    <div class="mobile-sidebar {open_class}" id="mobileSidebar">
+        <button class="close-sidebar-btn" onclick="
+            document.getElementById('mobileSidebar').classList.remove('open');
+            document.getElementById('mobileOverlay').classList.remove('active');
+        ">✕</button>
+
+        <div class="sidebar-profile">
+            <div class="sidebar-avatar">{name[0].upper()}</div>
+            <div class="sidebar-name">{name}</div>
+            <div class="sidebar-role">{role_icon} {role.capitalize()} · {region}</div>
+        </div>
+
         <hr class="sidebar-divider">
+
         <div class="sidebar-section-title">📌 Status</div>
         <div style="margin-bottom: 8px;">{status_html}</div>
+
         <hr class="sidebar-divider">
-        <button class="sidebar-nav-btn-logout" onclick="window.location.href = window.location.pathname + '?logout=true';">🚪 Log Out</button>
+        <div class="sidebar-section-title">📊 Navigation</div>
     </div>
     <div class="mobile-overlay {overlay_class}" id="mobileOverlay" onclick="
         document.getElementById('mobileSidebar').classList.remove('open');
         this.classList.remove('active');
     "></div>
     '''
-    
     st.markdown(sidebar_html, unsafe_allow_html=True)
-    
-    # Handle logout
-    if st.query_params.get("logout") == "true":
-        try:
-            sign_out()
+
+    # ── Streamlit nav buttons (must be outside raw HTML) ──
+    if is_open:
+        role_pages = {
+            "producer": ("🚜 Producer Dashboard", "pages/1_producer.py"),
+            "merchant": ("🏬 Merchant Dashboard", "pages/2_merchant.py"),
+            "customer": ("🛒 Customer Dashboard", "pages/3_customer.py"),
+            "admin":    ("🛡️ Admin Panel",         "pages/4_Admin.py"),
+        }
+        if role in role_pages:
+            label, page = role_pages[role]
+            if st.button(label, key="nav_role_btn", use_container_width=True):
+                st.switch_page(page)
+
+        if st.button("🚪 Log Out", key="nav_logout_btn", use_container_width=True):
+            try:
+                sign_out()
+            except Exception:
+                pass
             st.session_state.user = None
             st.session_state.profile = None
             st.session_state.authenticated = False
             st.session_state.user_role = None
             st.session_state.menu_open = False
             clear_data_cache()
-            st.query_params.clear()
             st.rerun()
-        except Exception:
-            pass
 
 # ─────────────────────────────────────────────────────────────
 # LANDING PAGE
 # ─────────────────────────────────────────────────────────────
 def show_landing():
     """Show login/register page."""
-    
-    # Hero
+
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%); 
+    <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
                 border-radius: 16px; padding: 30px 20px; text-align: center; color: white; margin-bottom: 20px;">
         <h1 style="font-size: 28px; margin: 0; color: white;">🌾 Ethiopian AI Supply Chain</h1>
         <p style="font-size: 14px; opacity: 0.9; margin-top: 8px;">
@@ -482,14 +463,13 @@ def show_landing():
         </p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Login/Register tabs
+
     tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Register"])
-    
+
     with tab1:
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
-        
+
         if st.button("Sign In", type="primary", use_container_width=True):
             if not email or not password:
                 st.warning("Please enter email and password.")
@@ -502,7 +482,7 @@ def show_landing():
                     st.rerun()
                 else:
                     st.error(msg)
-        
+
         with st.expander("🔑 Forgot Password?"):
             reset_email = st.text_input("Enter your email", key="reset_email")
             if st.button("📧 Send Reset Link", key="reset_btn", use_container_width=True):
@@ -515,20 +495,20 @@ def show_landing():
                         st.success(msg)
                     else:
                         st.error(msg)
-    
+
     with tab2:
         name = st.text_input("Full Name", key="reg_name")
         email = st.text_input("Email", key="reg_email")
         password = st.text_input("Password", type="password", key="reg_password")
-        
+
         col1, col2 = st.columns(2)
         with col1:
             role = st.selectbox("I am a...", ["producer", "merchant", "customer"])
         with col2:
             region = st.selectbox("Region", REGIONS)
-        
+
         phone = st.text_input("Phone (optional)", key="reg_phone")
-        
+
         if st.button("Create Account", type="primary", use_container_width=True):
             if not all([name, email, password]):
                 st.warning("Name, email, and password are required.")
@@ -546,19 +526,18 @@ def show_landing():
 # ─────────────────────────────────────────────────────────────
 def main():
     """Main application."""
-    
+
     # Render hamburger button
-    is_open = render_hamburger_button()
-    
+    render_hamburger_button()
+
     # Render sidebar
     profile = st.session_state.get("profile")
     render_custom_sidebar(profile)
-    
+
     # Auto-redirect after login
     if st.session_state.get("authenticated") and st.session_state.get("auth_redirect"):
         st.session_state.auth_redirect = False
-        
-        # Get profile
+
         profile = st.session_state.profile
         if profile is None and st.session_state.user:
             try:
@@ -568,21 +547,21 @@ def main():
                     st.session_state.user_role = profile.get("role", "customer")
             except Exception:
                 pass
-        
+
         if profile:
             role = profile.get("role")
             pages = {
                 "producer": "pages/1_producer.py",
                 "merchant": "pages/2_merchant.py",
                 "customer": "pages/3_customer.py",
-                "admin": "pages/4_Admin.py"
+                "admin":    "pages/4_Admin.py",
             }
             if role in pages:
                 try:
                     st.switch_page(pages[role])
                 except Exception:
                     pass
-    
+
     # Show content
     if st.session_state.user is None:
         show_landing()
@@ -595,11 +574,11 @@ def main():
                     st.session_state.profile = profile
             except Exception:
                 pass
-        
+
         if profile:
             role = profile.get("role", "customer")
             emojis = {"producer": "🚜", "merchant": "🏬", "customer": "🛒", "admin": "🛡️"}
-            
+
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%);
                         border-radius: 16px; padding: 30px 20px; text-align: center; color: white;">
@@ -613,7 +592,7 @@ def main():
                 </p>
             </div>
             """, unsafe_allow_html=True)
-            
+
             st.info("📱 Tap the **☰** (hamburger) icon in the top-left corner to open the navigation menu.")
         else:
             st.warning("⚠️ Could not load profile. Please sign out and try again.")
