@@ -1,4 +1,4 @@
 #!/bin/bash
-echo "Running setup script..."
+echo "🚀 Running AI Supply Chain setup..."
 python generate_models.py
-echo "Setup complete!"
+echo "✅ Setup complete! Models ready."
