@@ -350,3 +350,34 @@ def get_dashboard_stats(role, user_id):
     except Exception as e:
         st.error(f"Error fetching dashboard stats: {e}")
         return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+
+# Add this function to utils/db_helpers.py if not already present
+
+def create_user_profile(user_id, email, name, phone, company_name, address, region, role):
+    """Create a user profile in the database"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        user_data = {
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'phone': phone,
+            'company_name': company_name,
+            'address': address,
+            'region': region,
+            'role': role,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        response = supabase.table('users')\
+            .insert(user_data)\
+            .execute()
+        
+        if response.data:
+            return True, "User profile created successfully"
+        return False, "Failed to create user profile"
+    
+    except Exception as e:
+        return False, f"Error creating user profile: {e}"
