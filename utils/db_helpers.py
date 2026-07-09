@@ -331,3 +331,13 @@ def update_user(user_id: str, **kwargs):
     except Exception as e:
         st.error(f"Error updating user: {e}")
         return False
+
+def get_user_by_id(user_id: str):
+    """Get user by ID from database"""
+    supabase = get_supabase()
+    try:
+        response = supabase.table('users').select('*').eq('id', user_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        st.error(f"Error fetching user: {e}")
+        return None
