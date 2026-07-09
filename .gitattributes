@@ -1,5 +1,8 @@
-*.pkl filter=lfs diff=lfs merge=lfs -text
-*.h5 filter=lfs diff=lfs merge=lfs -text
-*.joblib filter=lfs diff=lfs merge=lfs -text
-*.bin filter=lfs diff=lfs merge=lfs -text
-*.model filter=lfs diff=lfs merge=lfs -text
+*.pkl -text
+*.pkl binary
+*.h5 -text
+*.h5 binary
+*.joblib -text
+*.joblib binary
+*.bin -text
+*.bin binary
