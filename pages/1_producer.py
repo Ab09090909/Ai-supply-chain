@@ -62,9 +62,9 @@ col1, col2 = st.columns([3, 1])
 with col1:
     st.title(f" Producer Dashboard")
     st.markdown(f"Welcome back, **{user_info['name']}**!")
-with col2:
-    if st.button("🚪 Logout", use_container_width=True):
-        logout_user()
+#with col2:
+   # if st.button("🚪 Logout", use_container_width=True):
+        #logout_user()
 
 st.markdown("---")
 
