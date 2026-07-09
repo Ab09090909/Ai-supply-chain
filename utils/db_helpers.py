@@ -289,62 +289,121 @@ def get_low_stock_products(producer_id=None):
         st.error(f"Error fetching low stock products: {e}")
         return []
 
+# utils/db_helpers.py - Complete dashboard functions
+
 def get_dashboard_stats(role, user_id):
-    """Get dashboard statistics"""
+    """Get comprehensive dashboard statistics"""
     try:
         if supabase is None:
-            return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+            return get_default_stats()
         
-        stats = {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        stats = get_default_stats()
         
         if role == 'producer':
-            # Get total products
+            # Get products stats
             products = supabase.table('products')\
-                .select('id, quantity, min_stock')\
+                .select('id, quantity, min_stock, price, cost_price')\
                 .eq('producer_id', user_id)\
                 .execute()
             
             if products.data:
                 stats['total_products'] = len(products.data)
                 
-                # Count low stock products
+                # Calculate low stock
                 low_stock_count = 0
+                total_stock_value = 0
+                total_investment = 0
+                
                 for product in products.data:
                     try:
                         quantity = int(product.get('quantity', 0))
                         min_stock = int(product.get('min_stock', 0))
+                        price = float(product.get('price', 0))
+                        cost_price = float(product.get('cost_price', 0))
+                        
                         if min_stock > 0 and quantity < min_stock:
                             low_stock_count += 1
+                        
+                        total_stock_value += quantity * price
+                        total_investment += quantity * cost_price
                     except (ValueError, TypeError):
                         continue
+                
                 stats['low_stock'] = low_stock_count
+                stats['total_stock_value'] = round(total_stock_value, 2)
+                stats['total_investment'] = round(total_investment, 2)
+                stats['potential_profit'] = round(total_stock_value - total_investment, 2)
             
-            # Get total orders
+            # Get orders stats
             orders = supabase.table('orders')\
-                .select('id')\
+                .select('id, total_amount, status, created_at')\
                 .eq('producer_id', user_id)\
                 .execute()
-            stats['total_orders'] = len(orders.data) if orders.data else 0
             
-            # Get revenue (sum of order totals)
-            revenue = supabase.table('orders')\
-                .select('total_amount')\
-                .eq('producer_id', user_id)\
-                .eq('status', 'delivered')\
-                .execute()
+            if orders.data:
+                stats['total_orders'] = len(orders.data)
+                
+                # Status breakdown
+                status_counts = {}
+                total_revenue = 0
+                pending_revenue = 0
+                
+                for order in orders.data:
+                    status = order.get('status', 'unknown')
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                    
+                    amount = float(order.get('total_amount', 0))
+                    if status == 'delivered':
+                        total_revenue += amount
+                    elif status in ['pending', 'confirmed']:
+                        pending_revenue += amount
+                
+                stats['revenue'] = round(total_revenue, 2)
+                stats['pending_revenue'] = round(pending_revenue, 2)
+                stats['order_status'] = status_counts
+                
+                # Calculate recent orders (last 30 days)
+                thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+                recent_orders = [o for o in orders.data if o.get('created_at', '') > thirty_days_ago]
+                stats['recent_orders_count'] = len(recent_orders)
+                
+                # Calculate average order value
+                if stats['total_orders'] > 0:
+                    stats['avg_order_value'] = round(total_revenue / stats['total_orders'], 2)
+                else:
+                    stats['avg_order_value'] = 0
             
-            if revenue.data:
-                stats['revenue'] = sum(float(o.get('total_amount', 0)) for o in revenue.data)
+            # Get top products (if there are orders)
+            if orders.data and products.data:
+                # This would require a more complex query with joins
+                # For now, we'll use a placeholder
+                stats['top_products'] = []
         
         return stats
     
     except Exception as e:
         st.error(f"Error fetching dashboard stats: {e}")
-        return {'total_products': 0, 'low_stock': 0, 'total_orders': 0, 'revenue': 0}
+        return get_default_stats()
 
-# --- Order Functions ---
-def get_orders(user_id, role, limit=100):
-    """Get orders based on user role"""
+def get_default_stats():
+    """Return default stats values"""
+    return {
+        'total_products': 0,
+        'low_stock': 0,
+        'total_orders': 0,
+        'revenue': 0,
+        'total_stock_value': 0,
+        'total_investment': 0,
+        'potential_profit': 0,
+        'pending_revenue': 0,
+        'avg_order_value': 0,
+        'recent_orders_count': 0,
+        'order_status': {},
+        'top_products': []
+    }
+
+def get_recent_orders(user_id, role, limit=10):
+    """Get recent orders with error handling"""
     try:
         if supabase is None:
             return []
@@ -361,46 +420,31 @@ def get_orders(user_id, role, limit=100):
         response = supabase.table('orders')\
             .select('*')\
             .eq(field, user_id)\
-            .limit(limit)\
             .order('created_at', desc=True)\
+            .limit(limit)\
             .execute()
         
-        if response.data:
-            return response.data
-        return []
+        return response.data if response.data else []
     
     except Exception as e:
-        st.error(f"Error fetching orders: {e}")
+        st.error(f"Error fetching recent orders: {e}")
         return []
 
-
-# Add this function to utils/db_helpers.py if not already present
-
-def create_user_profile(user_id, email, name, phone, company_name, address, region, role):
-    """Create a user profile in the database"""
+def get_recent_products(producer_id, limit=5):
+    """Get recent products added by producer"""
     try:
         if supabase is None:
-            return False, "Database connection failed"
+            return []
         
-        user_data = {
-            'id': user_id,
-            'email': email,
-            'name': name,
-            'phone': phone,
-            'company_name': company_name,
-            'address': address,
-            'region': region,
-            'role': role,
-            'created_at': datetime.now().isoformat()
-        }
-        
-        response = supabase.table('users')\
-            .insert(user_data)\
+        response = supabase.table('products')\
+            .select('*')\
+            .eq('producer_id', producer_id)\
+            .order('created_at', desc=True)\
+            .limit(limit)\
             .execute()
         
-        if response.data:
-            return True, "User profile created successfully"
-        return False, "Failed to create user profile"
+        return response.data if response.data else []
     
     except Exception as e:
-        return False, f"Error creating user profile: {e}"
+        st.error(f"Error fetching recent products: {e}")
+        return []
