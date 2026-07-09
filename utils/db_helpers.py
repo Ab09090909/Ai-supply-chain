@@ -179,6 +179,7 @@ def create_product(name, description, category, price, cost_price, stock_quantit
             'weight': weight,
             'sku': sku,
             'image_url': image_url,
+            'min_stock': 10,
             'created_at': datetime.now().isoformat()
         }
         
@@ -249,39 +250,30 @@ def update_product_stock(product_id, new_quantity):
     except Exception as e:
         return False, f"Error updating stock: {e}"
 
-# utils/db_helpers.py - Fix the get_low_stock_products function
-
 def get_low_stock_products(producer_id=None):
     """Get products with low stock"""
     try:
         if supabase is None:
             return []
         
-        # Use the correct column name and ensure proper type handling
         query = supabase.table('products')\
             .select('*')
         
         if producer_id:
             query = query.eq('producer_id', producer_id)
         
-        # Get all products first, then filter in Python
         response = query.execute()
         
         if response.data:
             low_stock_products = []
             for product in response.data:
-                # Convert to int safely
                 try:
                     quantity = int(product.get('quantity', 0))
                     min_stock = int(product.get('min_stock', 0))
-                    
-                    # Check if quantity is less than min_stock (treat None as 0)
                     if min_stock > 0 and quantity < min_stock:
                         low_stock_products.append(product)
                 except (ValueError, TypeError):
-                    # If conversion fails, skip this product
                     continue
-            
             return low_stock_products
         return []
     
@@ -289,7 +281,101 @@ def get_low_stock_products(producer_id=None):
         st.error(f"Error fetching low stock products: {e}")
         return []
 
-# utils/db_helpers.py - Complete dashboard functions
+def get_recent_products(producer_id, limit=5):
+    """Get recent products added by producer"""
+    try:
+        if supabase is None:
+            return []
+        
+        response = supabase.table('products')\
+            .select('*')\
+            .eq('producer_id', producer_id)\
+            .order('created_at', desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        return response.data if response.data else []
+    
+    except Exception as e:
+        st.error(f"Error fetching recent products: {e}")
+        return []
+
+# --- Order Functions ---
+def get_orders(user_id, role, limit=100):
+    """Get orders based on user role"""
+    try:
+        if supabase is None:
+            return []
+        
+        if role == 'producer':
+            field = 'producer_id'
+        elif role == 'merchant':
+            field = 'merchant_id'
+        elif role == 'customer':
+            field = 'customer_id'
+        else:
+            return []
+        
+        response = supabase.table('orders')\
+            .select('*')\
+            .eq(field, user_id)\
+            .limit(limit)\
+            .order('created_at', desc=True)\
+            .execute()
+        
+        if response.data:
+            return response.data
+        return []
+    
+    except Exception as e:
+        st.error(f"Error fetching orders: {e}")
+        return []
+
+def get_recent_orders(user_id, role, limit=10):
+    """Get recent orders with error handling"""
+    try:
+        if supabase is None:
+            return []
+        
+        if role == 'producer':
+            field = 'producer_id'
+        elif role == 'merchant':
+            field = 'merchant_id'
+        elif role == 'customer':
+            field = 'customer_id'
+        else:
+            return []
+        
+        response = supabase.table('orders')\
+            .select('*')\
+            .eq(field, user_id)\
+            .order('created_at', desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        return response.data if response.data else []
+    
+    except Exception as e:
+        st.error(f"Error fetching recent orders: {e}")
+        return []
+
+# --- Dashboard Stats ---
+def get_default_stats():
+    """Return default stats values"""
+    return {
+        'total_products': 0,
+        'low_stock': 0,
+        'total_orders': 0,
+        'revenue': 0,
+        'total_stock_value': 0,
+        'total_investment': 0,
+        'potential_profit': 0,
+        'pending_revenue': 0,
+        'avg_order_value': 0,
+        'recent_orders_count': 0,
+        'order_status': {},
+        'top_products': []
+    }
 
 def get_dashboard_stats(role, user_id):
     """Get comprehensive dashboard statistics"""
@@ -368,83 +454,13 @@ def get_dashboard_stats(role, user_id):
                 stats['recent_orders_count'] = len(recent_orders)
                 
                 # Calculate average order value
-                if stats['total_orders'] > 0:
+                if stats['total_orders'] > 0 and total_revenue > 0:
                     stats['avg_order_value'] = round(total_revenue / stats['total_orders'], 2)
                 else:
                     stats['avg_order_value'] = 0
-            
-            # Get top products (if there are orders)
-            if orders.data and products.data:
-                # This would require a more complex query with joins
-                # For now, we'll use a placeholder
-                stats['top_products'] = []
         
         return stats
     
     except Exception as e:
         st.error(f"Error fetching dashboard stats: {e}")
         return get_default_stats()
-
-def get_default_stats():
-    """Return default stats values"""
-    return {
-        'total_products': 0,
-        'low_stock': 0,
-        'total_orders': 0,
-        'revenue': 0,
-        'total_stock_value': 0,
-        'total_investment': 0,
-        'potential_profit': 0,
-        'pending_revenue': 0,
-        'avg_order_value': 0,
-        'recent_orders_count': 0,
-        'order_status': {},
-        'top_products': []
-    }
-
-def get_recent_orders(user_id, role, limit=10):
-    """Get recent orders with error handling"""
-    try:
-        if supabase is None:
-            return []
-        
-        if role == 'producer':
-            field = 'producer_id'
-        elif role == 'merchant':
-            field = 'merchant_id'
-        elif role == 'customer':
-            field = 'customer_id'
-        else:
-            return []
-        
-        response = supabase.table('orders')\
-            .select('*')\
-            .eq(field, user_id)\
-            .order('created_at', desc=True)\
-            .limit(limit)\
-            .execute()
-        
-        return response.data if response.data else []
-    
-    except Exception as e:
-        st.error(f"Error fetching recent orders: {e}")
-        return []
-
-def get_recent_products(producer_id, limit=5):
-    """Get recent products added by producer"""
-    try:
-        if supabase is None:
-            return []
-        
-        response = supabase.table('products')\
-            .select('*')\
-            .eq('producer_id', producer_id)\
-            .order('created_at', desc=True)\
-            .limit(limit)\
-            .execute()
-        
-        return response.data if response.data else []
-    
-    except Exception as e:
-        st.error(f"Error fetching recent products: {e}")
-        return []
