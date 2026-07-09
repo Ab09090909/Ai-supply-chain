@@ -1,18 +1,18 @@
 import streamlit as st
 
-# Set page config FIRST
+# THIS MUST BE FIRST - before any other st. commands
 st.set_page_config(
     page_title="AI Supply Chain",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state
+# Now initialize session state
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_info = None
-    st.session_state.current_page = 'login'
+    st.session_state.current_page = 'dashboard'
 
 # Custom CSS
 st.markdown("""
