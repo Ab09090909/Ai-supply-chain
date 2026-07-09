@@ -216,4 +216,45 @@ def render_edit_profile(user_info):
             
             with col2:
                 new_company = st.text_input("Company Name", value=user_info.get('company_name', ''))
-                new_address = st.text_input("Address", value=user_info.get
+                new_address = st.text_input("Address", value=user_info.get('address', ''))
+                regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
+                          "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
+                current_region = user_info.get('region', 'Addis Ababa')
+                region_idx = regions.index(current_region) if current_region in regions else 0
+                new_region = st.selectbox("Region", regions, index=region_idx)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
+            with col2:
+                cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+            
+            if save_btn:
+                if new_name and new_email:
+                    try:
+                        update_user(user_info['id'], 
+                                   name=new_name, 
+                                   email=new_email,
+                                   phone=new_phone,
+                                   company_name=new_company,
+                                   address=new_address,
+                                   region=new_region)
+                        
+                        st.session_state.user_info['name'] = new_name
+                        st.session_state.user_info['email'] = new_email
+                        st.session_state.user_info['phone'] = new_phone
+                        st.session_state.user_info['company_name'] = new_company
+                        st.session_state.user_info['address'] = new_address
+                        st.session_state.user_info['region'] = new_region
+                        
+                        st.success("✅ Profile updated successfully!")
+                        st.session_state.show_edit_profile = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error updating profile: {e}")
+                else:
+                    st.error("Name and Email are required!")
+            
+            if cancel_btn:
+                st.session_state.show_edit_profile = False
+                st.rerun()
