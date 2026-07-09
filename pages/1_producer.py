@@ -55,13 +55,14 @@ recommendation_engine = load_ai_model("recommendation_engine.pkl")
 
 
 # --- Header with Profile ---
+# --- Header with Profile ---
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.title("🏭 Producer Dashboard")
     
 with col2:
-    # Profile Section
+    # Profile Section - NO EDIT BUTTON
     st.markdown("""
     <style>
     .profile-container {
@@ -90,33 +91,19 @@ with col2:
     }
     .profile-info h3 {
         margin: 0;
-        font-size: 18px;
+        font-size: 20px;
         font-weight: bold;
         color: #fff;
     }
     .profile-info p {
         margin: 2px 0 0 0;
-        font-size: 13px;
+        font-size: 14px;
         color: #94a3b8;
-    }
-    .edit-btn {
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    .edit-btn:hover {
-        background: #764ba2;
-        transform: translateY(-2px);
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Display profile
+    # Display profile WITHOUT edit button
     initial = user_info['name'][0].upper() if user_info['name'] else "P"
     st.markdown(f"""
     <div class="profile-container">
@@ -125,7 +112,79 @@ with col2:
             <h3>{user_info['name']}</h3>
             <p>Producer</p>
         </div>
-        <button class="edit-btn" onclick="document.getElementById('edit-profile').scrollIntoView({{behavior: 'smooth'}})">✏️ Edit</button>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ==========================================
+# PRODUCER INFORMATION CARDS
+# ==========================================
+st.markdown("### 📋 Producer Information")
+
+# Display user information in large, bold cards
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #667eea22, #764ba222); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #667eea; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">👤 FULL NAME</p>
+        <p style="margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #fff;">
+            {user_info.get('name', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #10b98122, #05966922); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #10b981; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📧 EMAIL</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff; word-break: break-all;">
+            {user_info.get('email', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #f59e0b22, #d9770622); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏢 COMPANY</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {user_info.get('company_name', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #ef444422, #dc262622); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #ef4444; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">📱 PHONE</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {user_info.get('phone', 'Not specified')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #8b5cf622, #7c3aed22); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #8b5cf6; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;"> REGION</p>
+        <p style="margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #fff;">
+            {user_info.get('region', 'Addis Ababa')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #06b6d422, #0891b222); 
+                padding: 20px; border-radius: 12px; border-left: 4px solid #06b6d4; margin-bottom: 15px;">
+        <p style="margin: 0; color: #94a3b8; font-size: 13px; font-weight: 600;">🏠 ADDRESS</p>
+        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: 600; color: #fff;">
+            {user_info.get('address', 'Not specified')}
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
