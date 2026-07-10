@@ -35,7 +35,12 @@ def main():
     if st.session_state.get('authenticated', False):
         user_role = st.session_state.user_info.get('role', '')
         
-        st.sidebar.write(f"👤 Logged in as: **{st.session_state.user_info.get('name', 'User')}**")
+        # Show user info with profile image indicator
+        user_name = st.session_state.user_info.get('name', 'User')
+        has_image = st.session_state.user_info.get('profile_image') and os.path.exists(st.session_state.user_info.get('profile_image', ''))
+        image_indicator = "📷" if has_image else "👤"
+        
+        st.sidebar.write(f"{image_indicator} Logged in as: **{user_name}**")
         st.sidebar.write(f"🔑 Role: **{user_role.capitalize()}**")
         st.sidebar.markdown("---")
         
