@@ -36,7 +36,7 @@ def validate_product(product_name):
     return True, "OK"
 
 def query_groq_market_data(product_name, region="Addis Ababa"):
-    """Query Groq API for any product - with better error handling and response parsing"""
+    """Query Groq API for any product with detailed description"""
     try:
         is_valid, msg = validate_product(product_name)
         if not is_valid:
@@ -50,7 +50,7 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
         if not api_key:
             return {
                 "success": False,
-                "error": "Groq API key not configured. Please add GROQ_API_KEY to secrets.",
+                "error": "Groq API key not configured.",
                 "fallback_used": True
             }
 
@@ -61,27 +61,28 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Clear prompt asking for specific format
-        prompt = f"""Analyze the market price for {product_name} in {region}, Ethiopia.
+        # Prompt asking for detailed analysis
+        prompt = f"""Analyze the market for {product_name} in {region}, Ethiopia.
 
-Provide your analysis in this exact format:
+Provide a detailed market analysis in this exact format:
 
-Unit: [the correct unit for this product - kg, liter, piece, unit, pair, meter, dozen, etc.]
+Unit: [correct unit - kg, liter, piece, unit, pair, etc.]
 Price: [number] ETB per [unit]
 Range: [min] - [max] ETB per [unit]
 Trend: [increasing/stable/decreasing]
 Demand: [high/medium/low]
 Confidence: [HIGH/MEDIUM/LOW]
+Description: [2-3 sentences explaining the market situation, factors affecting price, and outlook]
 
 Be realistic and specific for the Ethiopian market."""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian markets. Provide realistic price estimates in the exact format requested."},
+                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian markets. Provide realistic price estimates with clear explanations."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 300,
+            "max_tokens": 400,
             "temperature": 0.1
         }
         
@@ -100,28 +101,31 @@ Be realistic and specific for the Ethiopian market."""
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Parse response with multiple patterns
+            # Parse response
             unit_match = re.search(r'Unit:\s*(\w+)', content, re.IGNORECASE)
             price_match = re.search(r'Price:\s*([\d.]+)', content, re.IGNORECASE)
             range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content, re.IGNORECASE)
             trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
             demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
             confidence_match = re.search(r'Confidence:\s*(\w+)', content, re.IGNORECASE)
+            description_match = re.search(r'Description:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
             
-            # Get unit from Groq or default
+            # Get values
             unit = unit_match.group(1).lower() if unit_match else "unit"
+            description = description_match.group(1).strip() if description_match else "Market analysis based on available data."
             
             result = {
                 "success": True,
                 "raw_response": content,
                 "source": "Groq API",
-                "unit": unit
+                "unit": unit,
+                "description": description
             }
             
             if price_match:
                 result["price"] = float(price_match.group(1))
             else:
-                # Try to find any number if Price: format not found
+                # Try to find any number
                 numbers = re.findall(r'([\d.]+)', content)
                 if numbers:
                     result["price"] = float(numbers[0])
@@ -150,7 +154,6 @@ Be realistic and specific for the Ethiopian market."""
             return {
                 "success": False,
                 "error": "Unexpected API response format",
-                "raw_data": data,
                 "fallback_used": True
             }
             
@@ -160,7 +163,7 @@ Be realistic and specific for the Ethiopian market."""
         return {"success": False, "error": str(e), "fallback_used": True}
 
 # ==========================================
-# FALLBACK DATA FOR ANY PRODUCT
+# FALLBACK DATA
 # ==========================================
 
 def get_fallback_data(product_name, region="Addis Ababa"):
@@ -178,7 +181,7 @@ def get_fallback_data(product_name, region="Addis Ababa"):
         'source': 'Estimated',
         'is_fallback': True,
         'confidence': 'LOW',
-        'unit_display': 'ETB/unit'
+        'description': 'Limited data available for this product. Please verify with local sources.'
     }
 
 # ==========================================
@@ -378,6 +381,7 @@ class SelfLearningAIInsights:
                 'trend': groq_result.get('trend', 'stable'),
                 'demand': groq_result.get('demand', 'medium'),
                 'confidence': groq_result.get('confidence', 'MEDIUM'),
+                'description': groq_result.get('description', 'Market analysis based on available data.'),
                 'data_source': 'Groq AI Analysis',
                 'source': 'Groq API',
                 'is_valid': True,
@@ -396,6 +400,7 @@ class SelfLearningAIInsights:
                 'trend': 'stable',
                 'demand': 'medium',
                 'confidence': 'LOW',
+                'description': fallback_data.get('description', 'Limited data available. Please verify with local sources.'),
                 'data_source': 'Estimate - Groq API unavailable',
                 'source': 'Estimated',
                 'is_valid': True,
@@ -409,7 +414,7 @@ class SelfLearningAIInsights:
 # ==========================================
 
 def render_ai_insights(user_info, ai=None):
-    """Render AI Insights tab with Groq unit detection"""
+    """Render AI Insights tab"""
     
     # Initialize AI
     ai_insights = SelfLearningAIInsights(user_info['id'])
@@ -509,6 +514,16 @@ def render_ai_insights(user_info, ai=None):
         text-transform: uppercase;
         letter-spacing: 1px;
     }
+    .description-box {
+        background: #1a1a2e;
+        border-radius: 12px;
+        padding: 16px 20px;
+        border: 1px solid #2d3748;
+        margin: 12px 0;
+        color: #e2e8f0;
+        font-size: 15px;
+        line-height: 1.7;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -585,21 +600,6 @@ def render_ai_insights(user_info, ai=None):
         
         st.caption("💡 Examples: Coffee, Teff, Car, Phone, Laptop, Onion, Tomato, Beef, Milk, Egg, Banana, Shoes, TV")
     
-    # Quick search buttons
-    st.markdown("#### Quick Search")
-    quick_products = ["Coffee", "Teff", "Car", "Phone", "Onion", "Tomato", "Beef", "Milk"]
-    quick_cols = st.columns(4)
-    for i, product in enumerate(quick_products):
-        with quick_cols[i % 4]:
-            if st.button(f"🔍 {product}", use_container_width=True):
-                st.session_state.quick_product = product
-                st.rerun()
-    
-    # Check for quick product
-    if 'quick_product' in st.session_state and st.session_state.quick_product:
-        selected_product_name = st.session_state.quick_product
-        st.session_state.quick_product = None
-    
     st.markdown('</div>', unsafe_allow_html=True)
     
     if not selected_product_name:
@@ -622,7 +622,7 @@ def render_ai_insights(user_info, ai=None):
     st.markdown("### 📊 Market Analysis Results")
     st.caption(f"📍 {product_name} in {selected_region}")
     
-    # Display results prominently
+    # Display results
     if market_data.get('source') == 'Groq API':
         st.markdown('<span class="groq-badge">🤖 Powered by Groq AI</span>', unsafe_allow_html=True)
         
@@ -633,6 +633,7 @@ def render_ai_insights(user_info, ai=None):
         trend = market_data.get('trend', 'stable')
         demand = market_data.get('demand', 'medium')
         confidence = market_data.get('confidence', 'MEDIUM')
+        description = market_data.get('description', 'Market analysis based on available data.')
         
         # Display price prominently
         if price:
@@ -656,10 +657,20 @@ def render_ai_insights(user_info, ai=None):
             demand_emoji = "🔥" if demand == 'high' else "📊" if demand == 'medium' else "❄️"
             st.metric("📊 Demand", f"{demand_emoji} {demand.capitalize()}")
         with col3:
+            # Fixed: Use st.metric without HTML in label
             confidence_color = "confidence-high" if confidence == "HIGH" else "confidence-medium" if confidence == "MEDIUM" else "confidence-low"
-            st.metric("🎯 Confidence", f"<span class='{confidence_color}'>{confidence}</span>", unsafe_allow_html=True)
+            st.metric("🎯 Confidence", confidence)
+            st.caption(f"<span style='color:{'#10b981' if confidence=='HIGH' else '#f59e0b' if confidence=='MEDIUM' else '#ef4444'}'>{confidence}</span>", unsafe_allow_html=True)
         with col4:
             st.metric("📏 Unit", unit.capitalize())
+        
+        # Description
+        st.markdown("#### 📝 Market Description")
+        st.markdown(f"""
+        <div class="description-box">
+            {description}
+        </div>
+        """, unsafe_allow_html=True)
         
         # AI Analysis
         if market_data.get('raw_response'):
@@ -675,6 +686,7 @@ def render_ai_insights(user_info, ai=None):
         - **Trend**: Whether prices are going up, down, or stable
         - **Demand**: Current market demand level
         - **Confidence**: How reliable the estimate is
+        - **Description**: Detailed market insight and outlook
         """)
         
         if confidence == "LOW":
@@ -682,7 +694,7 @@ def render_ai_insights(user_info, ai=None):
         elif confidence == "MEDIUM":
             st.info("📊 Medium confidence - Based on available market data.")
         else:
-            st.success("✅ High confidence - Based on reliable market data.")
+            st.success("✅ High confidence - Based on reliable market analysis.")
             
     else:
         # Fallback - show error message
@@ -691,6 +703,15 @@ def render_ai_insights(user_info, ai=None):
         
         error_msg = market_data.get('error', 'No data available')
         st.info(f"💡 {error_msg}")
+        
+        # Show description if available
+        if market_data.get('description'):
+            st.markdown("#### 📝 Market Note")
+            st.markdown(f"""
+            <div class="description-box">
+                {market_data.get('description')}
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("""
         #### 💡 Tips:
