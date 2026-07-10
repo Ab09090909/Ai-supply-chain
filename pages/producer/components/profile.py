@@ -4,15 +4,7 @@ import os
 import uuid
 import base64
 from PIL import Image
-from utils.db_helpers import update_user, update_user_profile_image
-
-def get_image_base64(image_path):
-    """Convert image to base64 for embedding in HTML"""
-    try:
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
-    except:
-        return None
+from utils.db_helpers import update_user, update_user_profile_image, get_user_by_id
 
 def render_profile(user_info):
     """Render the business card profile with image in circle"""
@@ -241,7 +233,16 @@ def render_profile(user_info):
     </style>
     """, unsafe_allow_html=True)
     
-    # Get user data
+    # Get user data - ensure profile_image is loaded
+    profile_image = user_info.get('profile_image', None)
+    
+    # If no profile_image in session, try to load from database
+    if not profile_image and st.session_state.authenticated:
+        user_data = get_user_by_id(user_info.get('id'))
+        if user_data and user_data.get('profile_image'):
+            profile_image = user_data.get('profile_image')
+            st.session_state.user_info['profile_image'] = profile_image
+    
     name = user_info.get('name', 'Not specified')
     initial = name[0].upper() if name else "P"
     email = user_info.get('email', 'Not specified')
@@ -249,7 +250,6 @@ def render_profile(user_info):
     company = user_info.get('company_name', 'Not specified')
     address = user_info.get('address', 'Not specified')
     region = user_info.get('region', 'Addis Ababa')
-    profile_image = user_info.get('profile_image', None)
     
     # Get role and format
     role = user_info.get('role', 'producer').capitalize()
@@ -432,41 +432,3 @@ def render_edit_profile(user_info):
             if cancel_btn:
                 st.session_state.show_edit_profile = False
                 st.rerun()
-
-# Add to any page
-def render_floating_theme_toggle():
-    """Render floating theme toggle button"""
-    import streamlit as st
-    from utils.theme import toggle_theme
-    
-    st.markdown("""
-    <style>
-    .floating-theme-btn {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 999;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        font-size: 24px;
-        cursor: pointer;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .floating-theme-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    icon = "☀️" if st.session_state.theme_mode == 'dark' else "🌙"
-    if st.button(icon, key="floating_theme"):
-        toggle_theme()
