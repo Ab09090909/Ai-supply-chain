@@ -205,6 +205,21 @@ def get_fallback_price(product_name, region="Addis Ababa"):
             'price': 40, 'min': 30, 'max': 55, 'grade': 'Grade 2',
             'trend': 'stable', 'demand': 'medium',
             'source': 'Ethiopian Commodity Exchange (ECX), July 2026'
+        },
+        'sorghum': {
+            'price': 42, 'min': 32, 'max': 55, 'grade': 'Grade 2',
+            'trend': 'increasing', 'demand': 'medium',
+            'source': 'Ethiopian Commodity Exchange (ECX), July 2026'
+        },
+        'sesame': {
+            'price': 160, 'min': 120, 'max': 200, 'grade': 'Grade 1',
+            'trend': 'increasing', 'demand': 'medium',
+            'source': 'Ethiopian Commodity Exchange (ECX), July 2026'
+        },
+        'honey': {
+            'price': 350, 'min': 250, 'max': 450, 'grade': 'Grade 1',
+            'trend': 'increasing', 'demand': 'high',
+            'source': 'Ethiopian Beekeepers Association, July 2026'
         }
     }
     
@@ -434,15 +449,34 @@ class SelfLearningAIInsights:
         else:
             # Use fallback database
             fallback_data = get_fallback_price(product_name, region)
-            return fallback_data
+            return {
+                'product': product_name,
+                'price': fallback_data.get('price'),
+                'min_price': fallback_data.get('min_price'),
+                'max_price': fallback_data.get('max_price'),
+                'avg_price': fallback_data.get('avg_price'),
+                'grade': fallback_data.get('grade', 'Standard'),
+                'trend': fallback_data.get('trend', 'stable'),
+                'demand': fallback_data.get('demand', 'medium'),
+                'data_source': fallback_data.get('data_source', 'Ethiopian Market Database'),
+                'unit': fallback_data.get('unit', 'kg'),
+                'source': 'Fallback Database',
+                'is_fallback': True,
+                'raw_response': ''
+            }
 
 
 # ==========================================
 # RENDER AI INSIGHTS TAB
 # ==========================================
 
-def render_ai_insights(user_info):
-    """Render AI Insights tab"""
+def render_ai_insights(user_info, ai=None):
+    """Render AI Insights tab
+    
+    Args:
+        user_info: User information from session
+        ai: Optional AI instance (not used, kept for compatibility)
+    """
     
     # Initialize AI
     ai_insights = SelfLearningAIInsights(user_info['id'])
