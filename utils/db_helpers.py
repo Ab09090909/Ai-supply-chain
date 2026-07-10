@@ -464,3 +464,23 @@ def get_dashboard_stats(role, user_id):
     except Exception as e:
         st.error(f"Error fetching dashboard stats: {e}")
         return get_default_stats()
+
+# Add this function to utils/db_helpers.py
+
+def update_user_profile_image(user_id, image_path):
+    """Update user profile image"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        response = supabase.table('users')\
+            .update({'profile_image': image_path})\
+            .eq('id', user_id)\
+            .execute()
+        
+        if response.data:
+            return True, "Profile image updated successfully"
+        return False, "Profile image update failed"
+    
+    except Exception as e:
+        return False, f"Error updating profile image: {e}"
