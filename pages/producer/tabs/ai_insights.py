@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROQ API INTEGRATION - IMPROVED
+# GROQ API INTEGRATION
 # ==========================================
 
 def get_groq_api_key():
@@ -29,16 +29,15 @@ def get_groq_api_key():
         return None
 
 def query_groq_api(product_name, region="Addis Ababa"):
-    """Query the Groq API for current product price in Ethiopia."""
+    """Query the Groq API for current product price in Ethiopia with detailed response."""
     try:
         api_key = get_groq_api_key()
         if not api_key:
             return {
                 "success": False,
-                "error": "Groq API key not configured."
+                "error": "Groq API key not configured. Please add GROQ_API_KEY to secrets."
             }
 
-        # Groq API endpoint
         url = "https://api.groq.com/openai/v1/chat/completions"
         
         headers = {
@@ -46,20 +45,31 @@ def query_groq_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Better prompt - clearer instructions
-        prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia?
-Please respond with ONLY a number in Ethiopian Birr (ETB) per kilogram.
-For example: 120
-Do not include any other text or explanation."""
+        # Better prompt for detailed response
+        prompt = f"""Provide the current market price information for {product_name} in {region}, Ethiopia.
+
+Please provide:
+1. Current price in ETB per kilogram
+2. Price range (lowest to highest)
+3. Market trend (increasing, stable, or decreasing)
+4. Demand level (high, medium, or low)
+5. Brief market insight
+
+Format your response as:
+Price: [number] ETB/kg
+Range: [min] - [max] ETB/kg
+Trend: [trend]
+Demand: [level]
+Insight: [brief market insight]"""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a helpful assistant that provides ONLY numerical prices."},
+                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products. Provide accurate, current market prices with insights."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 20,
-            "temperature": 0.0
+            "max_tokens": 200,
+            "temperature": 0.3
         }
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -84,51 +94,47 @@ Do not include any other text or explanation."""
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Try multiple patterns to extract price
-            patterns = [
-                r'(\d+\.?\d*)',  # Any number
-                r'(\d+)\s*ETB',   # Number followed by ETB
-                r'ETB\s*(\d+)',   # ETB followed by number
-                r'(\d+)\s*Birr',  # Number followed by Birr
-                r'(\d+)\s*per\s*kg',  # Number per kg
-            ]
+            # Parse the detailed response
+            price_match = re.search(r'Price:\s*([\d.]+)', content)
+            range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
+            trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
+            demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
+            insight_match = re.search(r'Insight:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
             
-            price = None
-            for pattern in patterns:
-                match = re.search(pattern, content)
-                if match:
-                    price = float(match.group(1))
-                    break
+            result = {
+                "success": True,
+                "raw_response": content,
+                "source": "Groq API"
+            }
             
-            if price and 1 <= price <= 10000:
-                return {
-                    "success": True,
-                    "price": price,
-                    "unit": "kg",
-                    "raw_response": content,
-                    "source": "Groq API"
-                }
+            if price_match:
+                result["price"] = float(price_match.group(1))
             else:
-                # Try to find any number in the content
+                # Try to find any number
                 all_numbers = re.findall(r'(\d+\.?\d*)', content)
                 if all_numbers:
-                    # Take the first number that seems reasonable
                     for num in all_numbers:
                         num_float = float(num)
                         if 1 <= num_float <= 10000:
-                            return {
-                                "success": True,
-                                "price": num_float,
-                                "unit": "kg",
-                                "raw_response": content,
-                                "source": "Groq API"
-                            }
-                
-                return {
-                    "success": False,
-                    "error": "Could not find a valid price in the response",
-                    "raw_response": content[:200] if content else "Empty response"
-                }
+                            result["price"] = num_float
+                            break
+            
+            if range_match:
+                result["min_price"] = float(range_match.group(1))
+                result["max_price"] = float(range_match.group(2))
+            
+            if trend_match:
+                result["trend"] = trend_match.group(1).lower()
+            
+            if demand_match:
+                result["demand"] = demand_match.group(1).lower()
+            
+            if insight_match:
+                result["insight"] = insight_match.group(1).strip()
+            
+            result["unit"] = "kg"
+            
+            return result
         else:
             return {
                 "success": False,
@@ -137,9 +143,9 @@ Do not include any other text or explanation."""
             }
             
     except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out"}
+        return {"success": False, "error": "Request timed out. Please try again."}
     except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "Connection error"}
+        return {"success": False, "error": "Connection error. Please check your internet."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -399,6 +405,9 @@ class SelfLearningAIInsights:
                 'region': region,
                 'price': result.get('price'),
                 'unit': result.get('unit', 'kg'),
+                'trend': result.get('trend', 'N/A'),
+                'demand': result.get('demand', 'N/A'),
+                'insight': result.get('insight', 'N/A'),
                 'timestamp': datetime.now().isoformat(),
                 'raw_response': result.get('raw_response')
             })
@@ -501,10 +510,11 @@ class SelfLearningAIInsights:
                 'product': product_name,
                 'current_price': market_price,
                 'avg_price': market_price * 0.95,
-                'min_price': market_price * 0.8,
-                'max_price': market_price * 1.2,
-                'trend': 'stable',
-                'demand': 'medium',
+                'min_price': groq_result.get('min_price', market_price * 0.8),
+                'max_price': groq_result.get('max_price', market_price * 1.2),
+                'trend': groq_result.get('trend', 'stable'),
+                'demand': groq_result.get('demand', 'medium'),
+                'insight': groq_result.get('insight', 'Market data from Groq AI'),
                 'unit': groq_result.get('unit', 'kg'),
                 'source': 'Groq API'
             }
@@ -512,6 +522,7 @@ class SelfLearningAIInsights:
             # Fallback to local data
             scraper = EthiopianMarketScraper()
             market_data = scraper.get_current_price(product_name)
+            market_data['insight'] = 'Estimated market data (Groq API unavailable)'
         
         predicted_price = self.predict_price({**market_data, 'region': region})
         demand_forecast = self.forecast_demand(product_name, region)
@@ -523,7 +534,8 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'groq_source': groq_result.get('success', False)
+            'groq_source': groq_result.get('success', False),
+            'groq_insight': market_data.get('insight', '')
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -725,6 +737,19 @@ def render_ai_insights(user_info, ai):
         border-radius: 12px;
         font-weight: 600;
     }
+    .insight-text {
+        background: #1a1a2e;
+        border-radius: 12px;
+        padding: 16px 20px;
+        border: 1px solid #2d3748;
+        margin: 8px 0;
+        color: #94a3b8;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .insight-text strong {
+        color: #f8fafc;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -782,7 +807,7 @@ def render_ai_insights(user_info, ai):
             with st.spinner("Querying Groq AI..."):
                 result = ai_insights.query_groq_for_price(product_name, selected_region)
                 if result.get('success'):
-                    st.success(f"✅ Price: {result.get('price')} ETB per {result.get('unit', 'kg')}")
+                    st.success(f"✅ Price fetched from Groq AI!")
                     st.rerun()
                 else:
                     st.error(f"❌ {result.get('error', 'Unknown error')}")
@@ -797,6 +822,14 @@ def render_ai_insights(user_info, ai):
     
     if insights.get('groq_source'):
         st.markdown('<span class="groq-badge">🤖 Groq AI</span>', unsafe_allow_html=True)
+        
+        # Show AI Insight
+        if insights.get('groq_insight'):
+            st.markdown(f"""
+            <div class="insight-text">
+                💡 <strong>AI Insight:</strong> {insights.get('groq_insight')}
+            </div>
+            """, unsafe_allow_html=True)
     
     current_price = selected_product.get('price', 0)
     market_avg = market_data.get('avg_price', 0)
@@ -810,6 +843,18 @@ def render_ai_insights(user_info, ai):
         diff = current_price - market_avg
         pct = (diff / market_avg * 100) if market_avg > 0 else 0
         st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
+    
+    # Market Details
+    if market_data.get('min_price') and market_data.get('max_price'):
+        st.caption(f"📊 Price Range: {market_data.get('min_price', 0):.0f} - {market_data.get('max_price', 0):.0f} ETB/kg")
+    
+    if market_data.get('trend'):
+        trend_emoji = "📈" if market_data.get('trend') == 'increasing' else "📉" if market_data.get('trend') == 'decreasing' else "➡️"
+        st.caption(f"{trend_emoji} Trend: {market_data.get('trend', 'N/A').capitalize()}")
+    
+    if market_data.get('demand'):
+        demand_emoji = "🔥" if market_data.get('demand') == 'high' else "📊" if market_data.get('demand') == 'medium' else "❄️"
+        st.caption(f"{demand_emoji} Demand: {market_data.get('demand', 'N/A').capitalize()}")
     
     st.markdown("---")
     
