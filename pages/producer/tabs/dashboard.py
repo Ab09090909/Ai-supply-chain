@@ -11,131 +11,126 @@ from utils.db_helpers import (
 )
 
 def render_dashboard(user_info, ai):
-    """Render Clean Producer Dashboard"""
+    """Render Detailed Producer Dashboard with Charts"""
     
     # Get all stats
     stats = get_dashboard_stats('producer', user_info['id'])
     
-    # Clean CSS
+    # Compact CSS
     st.markdown("""
     <style>
-    /* Main container */
+    /* Compact container */
     .dash-container {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0 4px;
+        padding: 0 2px;
     }
     
-    /* Metric Cards */
-    .metric-card {
+    /* Small metric cards */
+    .metric-sm {
         background: #1a1a2e;
-        border-radius: 10px;
-        padding: 14px 18px;
+        border-radius: 8px;
+        padding: 10px 12px;
         border: 1px solid #2d3748;
-        margin-bottom: 10px;
-    }
-    .metric-card .label {
-        color: #94a3b8;
-        font-size: 11px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .metric-card .value {
-        color: #f8fafc;
-        font-size: 26px;
-        font-weight: 700;
-        line-height: 1.3;
-    }
-    .metric-card .sub {
-        color: #64748b;
-        font-size: 12px;
-        margin-top: 2px;
-    }
-    .metric-card .change-up { color: #10b981; }
-    .metric-card .change-down { color: #ef4444; }
-    .metric-card .change-neutral { color: #f59e0b; }
-    
-    /* Chart Cards */
-    .chart-card {
-        background: #1a1a2e;
-        border-radius: 10px;
-        padding: 14px 16px 10px 16px;
-        border: 1px solid #2d3748;
-        margin-bottom: 10px;
-    }
-    .chart-card .title {
-        color: #94a3b8;
-        font-size: 11px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
         margin-bottom: 6px;
     }
+    .metric-sm .label {
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .metric-sm .value {
+        color: #f8fafc;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .metric-sm .sub {
+        color: #64748b;
+        font-size: 10px;
+    }
+    .metric-sm .up { color: #10b981; }
+    .metric-sm .down { color: #ef4444; }
     
-    /* Activity Row */
-    .activity-row {
+    /* Chart cards */
+    .chart-sm {
+        background: #1a1a2e;
+        border-radius: 8px;
+        padding: 10px 12px 8px 12px;
+        border: 1px solid #2d3748;
+        margin-bottom: 6px;
+    }
+    .chart-sm .title {
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 4px;
+    }
+    
+    /* Activity row compact */
+    .row-sm {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 0;
+        padding: 4px 0;
         border-bottom: 1px solid #1e293b;
+        font-size: 12px;
     }
-    .activity-row:last-child {
-        border-bottom: none;
-    }
-    .activity-row .name {
-        color: #e2e8f0;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    .activity-row .meta {
-        color: #94a3b8;
-        font-size: 11px;
-    }
-    .activity-row .amount {
-        color: #10b981;
-        font-weight: 600;
-        font-size: 14px;
-    }
+    .row-sm:last-child { border-bottom: none; }
+    .row-sm .name { color: #e2e8f0; font-weight: 500; }
+    .row-sm .meta { color: #94a3b8; font-size: 10px; }
+    .row-sm .val { color: #10b981; font-weight: 600; }
     
-    /* Status Badges */
-    .badge {
+    /* Badge */
+    .badge-sm {
         display: inline-block;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 10px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 9px;
         font-weight: 600;
     }
-    .badge.delivered { background: rgba(16,185,129,0.15); color: #10b981; }
-    .badge.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .badge.shipped { background: rgba(59,130,246,0.15); color: #3b82f6; }
-    .badge.cancelled { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .badge-sm.delivered { background: rgba(16,185,129,0.15); color: #10b981; }
+    .badge-sm.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-sm.shipped { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-sm.cancelled { background: rgba(239,68,68,0.15); color: #ef4444; }
     
-    /* Header */
+    /* Header compact */
     .dash-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 14px;
-        padding-bottom: 10px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
         border-bottom: 1px solid #2d3748;
     }
     .dash-header h1 {
         color: #f8fafc;
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 700;
         margin: 0;
     }
     .dash-header .date {
         color: #94a3b8;
-        font-size: 13px;
+        font-size: 11px;
+    }
+    
+    .section-title {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 6px 0 4px 0;
     }
     
     /* Responsive */
     @media (max-width: 768px) {
-        .dash-header { flex-direction: column; align-items: flex-start; gap: 6px; }
-        .metric-card .value { font-size: 20px; }
+        .metric-sm .value { font-size: 16px; }
+        .dash-header h1 { font-size: 16px; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -145,7 +140,7 @@ def render_dashboard(user_info, ai):
     # ==========================================
     # HEADER
     # ==========================================
-    today = datetime.now().strftime("%B %d, %Y")
+    today = datetime.now().strftime("%b %d, %Y")
     st.markdown(f"""
     <div class="dash-header">
         <h1>📊 Dashboard</h1>
@@ -154,25 +149,25 @@ def render_dashboard(user_info, ai):
     """, unsafe_allow_html=True)
     
     # ==========================================
-    # ROW 1 - 4 Key Metrics
+    # ROW 1 - 8 Compact Metrics
     # ==========================================
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">📦 Products</div>
             <div class="value">{stats.get('total_products', 0)}</div>
-            <div class="sub">Active inventory</div>
+            <div class="sub">Active</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         low = stats.get('low_stock', 0)
-        cls = 'change-up' if low == 0 else 'change-down'
-        txt = '✅ All stocked' if low == 0 else f'⚠️ {low} need restock'
+        cls = 'up' if low == 0 else 'down'
+        txt = '✅ OK' if low == 0 else f'⚠️ {low}'
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">⚠️ Low Stock</div>
             <div class="value">{low}</div>
             <div class="sub {cls}">{txt}</div>
@@ -181,79 +176,74 @@ def render_dashboard(user_info, ai):
     
     with col3:
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">📋 Orders</div>
             <div class="value">{stats.get('total_orders', 0)}</div>
-            <div class="sub">Total received</div>
+            <div class="sub">Total</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
         rev = stats.get('revenue', 0)
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">💰 Revenue</div>
-            <div class="value">{rev:,.0f} ETB</div>
-            <div class="sub change-up">↑ Delivered orders</div>
+            <div class="value">{rev:,.0f}</div>
+            <div class="sub up">↑ Delivered</div>
         </div>
         """, unsafe_allow_html=True)
     
-    # ==========================================
-    # ROW 2 - 4 Financial Metrics
-    # ==========================================
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
+    with col5:
         val = stats.get('total_stock_value', 0)
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">📊 Stock Value</div>
-            <div class="value">{val:,.0f} ETB</div>
-            <div class="sub">Current inventory</div>
+            <div class="value">{val:,.0f}</div>
+            <div class="sub">ETB</div>
         </div>
         """, unsafe_allow_html=True)
     
-    with col2:
+    with col6:
         inv = stats.get('total_investment', 0)
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">💼 Investment</div>
-            <div class="value">{inv:,.0f} ETB</div>
-            <div class="sub">Total cost</div>
+            <div class="value">{inv:,.0f}</div>
+            <div class="sub">ETB</div>
         </div>
         """, unsafe_allow_html=True)
     
-    with col3:
+    with col7:
         prof = stats.get('potential_profit', 0)
-        cls = 'change-up' if prof > 0 else 'change-down'
+        cls = 'up' if prof > 0 else 'down'
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">📈 Profit</div>
-            <div class="value">{prof:,.0f} ETB</div>
-            <div class="sub {cls}">Potential margin</div>
+            <div class="value">{prof:,.0f}</div>
+            <div class="sub {cls}">ETB</div>
         </div>
         """, unsafe_allow_html=True)
     
-    with col4:
+    with col8:
         avg = stats.get('avg_order_value', 0)
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="metric-sm">
             <div class="label">🛒 Avg Order</div>
-            <div class="value">{avg:,.0f} ETB</div>
-            <div class="sub">Per transaction</div>
+            <div class="value">{avg:,.0f}</div>
+            <div class="sub">ETB</div>
         </div>
         """, unsafe_allow_html=True)
     
-    # ==========================================
-    # CHARTS ROW
-    # ==========================================
     st.markdown("---")
     
-    col1, col2 = st.columns([2, 1])
+    # ==========================================
+    # ROW 2 - 2 Charts Side by Side
+    # ==========================================
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.markdown('<div class="title">📈 Revenue Trend</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
+        st.markdown('<div class="title">📈 Revenue Trend (30 days)</div>', unsafe_allow_html=True)
         
         dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
         values = [random.randint(2000, 8000) for _ in range(30)]
@@ -262,24 +252,31 @@ def render_dashboard(user_info, ai):
         fig.add_trace(go.Scatter(
             x=dates, y=values,
             mode='lines',
-            line=dict(color='#667eea', width=2.5),
+            line=dict(color='#667eea', width=2),
             fill='tozeroy',
             fillcolor='rgba(102,126,234,0.1)'
         ))
+        fig.add_trace(go.Scatter(
+            x=dates, y=[sum(values)/len(values)]*len(dates),
+            mode='lines',
+            line=dict(color='#f59e0b', width=1, dash='dash'),
+            name='Average'
+        ))
         fig.update_layout(
-            height=160,
+            height=150,
             margin=dict(l=0, r=0, t=0, b=0),
             xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
             yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
             paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor='rgba(0,0,0,0)',
+            showlegend=False
         )
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.markdown('<div class="title">📊 Order Status</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
+        st.markdown('<div class="title">📊 Order Status Distribution</div>', unsafe_allow_html=True)
         
         status_counts = stats.get('order_status', {})
         if status_counts:
@@ -287,59 +284,110 @@ def render_dashboard(user_info, ai):
                 'Status': list(status_counts.keys()),
                 'Count': list(status_counts.values())
             })
-            colors = {
-                'delivered': '#10b981',
-                'pending': '#f59e0b',
-                'shipped': '#3b82f6',
-                'cancelled': '#ef4444'
-            }
-            fig = px.pie(
-                df, values='Count', names='Status',
-                hole=0.5,
-                color='Status',
-                color_discrete_map=colors
-            )
+            colors = {'delivered':'#10b981','pending':'#f59e0b','shipped':'#3b82f6','cancelled':'#ef4444'}
+            fig = px.pie(df, values='Count', names='Status', hole=0.5, color='Status', color_discrete_map=colors)
             fig.update_layout(
-                height=160,
+                height=150,
                 margin=dict(l=0, r=0, t=0, b=0),
-                showlegend=False,
+                showlegend=True,
+                legend=dict(orientation='h', yanchor='bottom', y=-0.15, xanchor='center', x=0.5, font=dict(color='#94a3b8', size=9)),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
-            fig.update_traces(textposition='inside', textinfo='percent', textfont_size=10)
+            fig.update_traces(textposition='inside', textinfo='percent', textfont_size=9)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.caption("No orders")
+            st.caption("No orders yet")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # ==========================================
-    # RECENT ACTIVITY ROW
+    # ROW 3 - More Charts (Category & Monthly)
+    # ==========================================
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
+        st.markdown('<div class="title">📦 Stock by Category</div>', unsafe_allow_html=True)
+        
+        products = get_products(producer_id=user_info['id'])
+        if products:
+            df = pd.DataFrame(products)
+            cat_stock = df.groupby('category')['quantity'].sum().reset_index()
+            fig = px.bar(
+                cat_stock,
+                x='category',
+                y='quantity',
+                color='quantity',
+                color_continuous_scale='Viridis'
+            )
+            fig.update_layout(
+                height=150,
+                margin=dict(l=0, r=0, t=0, b=0),
+                xaxis=dict(showgrid=False, tickfont=dict(color='#94a3b8', size=9)),
+                yaxis=dict(showgrid=False, showticklabels=False),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.caption("No products")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
+        st.markdown('<div class="title">💰 Monthly Revenue</div>', unsafe_allow_html=True)
+        
+        # Generate monthly data
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+        monthly_rev = [random.randint(3000, 10000) for _ in range(6)]
+        
+        fig = px.bar(
+            x=months,
+            y=monthly_rev,
+            color=monthly_rev,
+            color_continuous_scale='Blues'
+        )
+        fig.update_layout(
+            height=150,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis=dict(showgrid=False, tickfont=dict(color='#94a3b8', size=9)),
+            yaxis=dict(showgrid=False, showticklabels=False),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ==========================================
+    # ROW 4 - Recent Activity
     # ==========================================
     st.markdown("---")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
         st.markdown('<div class="title">🕐 Recent Orders</div>', unsafe_allow_html=True)
         
-        recent_orders = get_recent_orders(user_info['id'], 'producer', limit=4)
+        recent_orders = get_recent_orders(user_info['id'], 'producer', limit=5)
         if recent_orders:
-            for order in recent_orders[:4]:
+            for order in recent_orders[:5]:
                 status = order.get('status', 'pending')
                 amount = order.get('total_amount', 0)
                 oid = order.get('id', '')[:8]
                 st.markdown(f"""
-                <div class="activity-row">
+                <div class="row-sm">
                     <div>
                         <span class="name">#{oid}</span>
-                        <span class="meta" style="margin-left:8px;">
+                        <span class="meta" style="margin-left:6px;">
                             {pd.to_datetime(order.get('created_at')).strftime('%m/%d %H:%M') if order.get('created_at') else ''}
                         </span>
                     </div>
                     <div>
-                        <span class="amount">{amount:,.0f}</span>
-                        <span class="badge {status}" style="margin-left:8px;">{status[:3]}</span>
+                        <span class="val">{amount:,.0f}</span>
+                        <span class="badge-sm {status}" style="margin-left:6px;">{status[:3]}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -348,24 +396,24 @@ def render_dashboard(user_info, ai):
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-sm">', unsafe_allow_html=True)
         st.markdown('<div class="title">🆕 Recent Products</div>', unsafe_allow_html=True)
         
-        recent_products = get_recent_products(user_info['id'], limit=4)
+        recent_products = get_recent_products(user_info['id'], limit=5)
         if recent_products:
-            for product in recent_products[:4]:
-                name = product.get('name', 'Unknown')[:20]
+            for product in recent_products[:5]:
+                name = product.get('name', 'Unknown')[:18]
                 price = product.get('price', 0)
                 stock = product.get('quantity', 0)
                 st.markdown(f"""
-                <div class="activity-row">
+                <div class="row-sm">
                     <div>
                         <span class="name">{name}</span>
-                        <span class="meta" style="margin-left:8px;">{product.get('category', '')[:8]}</span>
+                        <span class="meta" style="margin-left:6px;">{product.get('category', '')[:6]}</span>
                     </div>
                     <div>
-                        <span class="amount">{price:,.0f}</span>
-                        <span class="meta" style="margin-left:8px;">📦{stock}</span>
+                        <span class="val">{price:,.0f}</span>
+                        <span class="meta" style="margin-left:6px;">📦{stock}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
