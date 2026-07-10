@@ -17,13 +17,12 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROQ API INTEGRATION - CORRECT
+# GROQ API INTEGRATION - IMPROVED
 # ==========================================
 
 def get_groq_api_key():
     """Get Groq API key from secrets"""
     try:
-        # Try different possible key names
         api_key = st.secrets.get("GROQ_API_KEY") or st.secrets.get("groq_api_key") or st.secrets.get("GROQ_KEY")
         return api_key
     except Exception as e:
@@ -36,7 +35,7 @@ def query_groq_api(product_name, region="Addis Ababa"):
         if not api_key:
             return {
                 "success": False,
-                "error": "Groq API key not configured. Please add GROQ_API_KEY to secrets."
+                "error": "Groq API key not configured."
             }
 
         # Groq API endpoint
@@ -47,27 +46,24 @@ def query_groq_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Clean prompt
-        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in Ethiopian Birr (ETB)? Reply with just a number."
+        # Better prompt - clearer instructions
+        prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia?
+Please respond with ONLY a number in Ethiopian Birr (ETB) per kilogram.
+For example: 120
+Do not include any other text or explanation."""
         
         payload = {
-            "model": "llama-3.3-70b-versatile",  # Correct Groq model
+            "model": "llama-3.3-70b-versatile",
             "messages": [
+                {"role": "system", "content": "You are a helpful assistant that provides ONLY numerical prices."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 10,
+            "max_tokens": 20,
             "temperature": 0.0
         }
         
-        # Make the request with timeout
-        response = requests.post(
-            url, 
-            headers=headers, 
-            json=payload, 
-            timeout=30
-        )
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        # Debug info
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
             try:
@@ -80,8 +76,7 @@ def query_groq_api(product_name, region="Addis Ababa"):
             return {
                 "success": False,
                 "error": error_msg,
-                "status_code": response.status_code,
-                "response_text": response.text[:500] if response.text else "No response"
+                "status_code": response.status_code
             }
         
         data = response.json()
@@ -89,31 +84,50 @@ def query_groq_api(product_name, region="Addis Ababa"):
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Extract price - look for any number
-            price_match = re.search(r'(\d+\.?\d*)', content)
+            # Try multiple patterns to extract price
+            patterns = [
+                r'(\d+\.?\d*)',  # Any number
+                r'(\d+)\s*ETB',   # Number followed by ETB
+                r'ETB\s*(\d+)',   # ETB followed by number
+                r'(\d+)\s*Birr',  # Number followed by Birr
+                r'(\d+)\s*per\s*kg',  # Number per kg
+            ]
             
-            if price_match:
-                price = float(price_match.group(1))
-                # Ensure price is reasonable (between 1 and 10000 ETB)
-                if 1 <= price <= 10000:
-                    return {
-                        "success": True,
-                        "price": price,
-                        "unit": "kg",
-                        "raw_response": content,
-                        "source": "Groq API"
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Price {price} seems unreasonable",
-                        "raw_response": content
-                    }
+            price = None
+            for pattern in patterns:
+                match = re.search(pattern, content)
+                if match:
+                    price = float(match.group(1))
+                    break
+            
+            if price and 1 <= price <= 10000:
+                return {
+                    "success": True,
+                    "price": price,
+                    "unit": "kg",
+                    "raw_response": content,
+                    "source": "Groq API"
+                }
             else:
+                # Try to find any number in the content
+                all_numbers = re.findall(r'(\d+\.?\d*)', content)
+                if all_numbers:
+                    # Take the first number that seems reasonable
+                    for num in all_numbers:
+                        num_float = float(num)
+                        if 1 <= num_float <= 10000:
+                            return {
+                                "success": True,
+                                "price": num_float,
+                                "unit": "kg",
+                                "raw_response": content,
+                                "source": "Groq API"
+                            }
+                
                 return {
                     "success": False,
-                    "error": "Could not find a number in the response",
-                    "raw_response": content
+                    "error": "Could not find a valid price in the response",
+                    "raw_response": content[:200] if content else "Empty response"
                 }
         else:
             return {
@@ -123,9 +137,9 @@ def query_groq_api(product_name, region="Addis Ababa"):
             }
             
     except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out. Please try again."}
+        return {"success": False, "error": "Request timed out"}
     except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "Connection error. Please check your internet."}
+        return {"success": False, "error": "Connection error"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -616,15 +630,12 @@ class EthiopianMarketScraper:
         self.product_prices = {
             'Teff': {'min': 80, 'max': 160, 'avg': 120, 'trend': 'increasing', 'demand': 'high'},
             'Wheat': {'min': 45, 'max': 80, 'avg': 60, 'trend': 'stable', 'demand': 'high'},
-            'Barley': {'min': 35, 'max': 55, 'avg': 45, 'trend': 'decreasing', 'demand': 'medium'},
-            'Maize': {'min': 30, 'max': 55, 'avg': 40, 'trend': 'stable', 'demand': 'medium'},
             'Coffee': {'min': 200, 'max': 450, 'avg': 320, 'trend': 'increasing', 'demand': 'high'},
             'Milk': {'min': 60, 'max': 100, 'avg': 75, 'trend': 'increasing', 'demand': 'high'},
             'Beef': {'min': 400, 'max': 650, 'avg': 520, 'trend': 'increasing', 'demand': 'high'},
             'Onion': {'min': 25, 'max': 50, 'avg': 35, 'trend': 'volatile', 'demand': 'high'},
             'Tomato': {'min': 30, 'max': 60, 'avg': 42, 'trend': 'volatile', 'demand': 'high'},
             'Potato': {'min': 35, 'max': 70, 'avg': 50, 'trend': 'increasing', 'demand': 'high'},
-            'Avocado': {'min': 10, 'max': 22, 'avg': 16, 'trend': 'increasing', 'demand': 'high'}
         }
     
     def get_current_price(self, product_name):
@@ -748,7 +759,7 @@ def render_ai_insights(user_info, ai):
     
     # Selection
     product_names = {p['id']: p['name'] for p in all_products}
-    selected_prod_id = st.selectbox("Product", list(product_names.keys()), format_func=lambda x: product_names[x])
+    selected_prod_id = st.selectbox("Select Product", list(product_names.keys()), format_func=lambda x: product_names[x])
     selected_product = next((p for p in all_products if p['id'] == selected_prod_id), None)
     if not selected_product:
         return
@@ -767,7 +778,7 @@ def render_ai_insights(user_info, ai):
         st.markdown(f"### 🔍 Get Price for {product_name}")
         st.caption(f"Query Groq AI for current {product_name} prices in {selected_region}")
     with col2:
-        if st.button("🚀 Query", use_container_width=True, type="primary"):
+        if st.button("🚀 Query Groq", use_container_width=True, type="primary"):
             with st.spinner("Querying Groq AI..."):
                 result = ai_insights.query_groq_for_price(product_name, selected_region)
                 if result.get('success'):
@@ -775,8 +786,8 @@ def render_ai_insights(user_info, ai):
                     st.rerun()
                 else:
                     st.error(f"❌ {result.get('error', 'Unknown error')}")
-                    if result.get('status_code'):
-                        st.caption(f"Status: {result.get('status_code')}")
+                    if result.get('raw_response'):
+                        st.caption(f"Response: {result.get('raw_response')}")
     
     # Get insights (always shows local data if Groq fails)
     insights = ai_insights.get_market_insights(product_name, selected_region)
@@ -798,7 +809,6 @@ def render_ai_insights(user_info, ai):
     with col3:
         diff = current_price - market_avg
         pct = (diff / market_avg * 100) if market_avg > 0 else 0
-        color = "green" if diff < 0 else "red"
         st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
     
     st.markdown("---")
@@ -886,25 +896,26 @@ def render_ai_insights(user_info, ai):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔄 Train", use_container_width=True):
+        if st.button("🔄 Train Model", use_container_width=True):
             training_data = get_training_data_supabase(user_info['id'])
             if training_data:
                 success = ai_insights.train_model(training_data)
             else:
                 success = ai_insights.train_with_supabase_data()
             if success:
-                st.success("✅ Trained!")
+                st.success("✅ Model trained!")
                 st.rerun()
     
     with col2:
         if st.button("📊 Performance", use_container_width=True):
             acc = ai_insights.knowledge_base.get('accuracy_score', 0)
             samples = len(ai_insights.knowledge_base.get('training_data', []))
-            st.info(f"Accuracy: {acc*100:.1f}%\nSamples: {samples}")
+            st.info(f"Accuracy: {acc*100:.1f}%")
+            st.info(f"Samples: {samples}")
     
     with col3:
-        if st.button("💾 Save", use_container_width=True):
+        if st.button("💾 Save Model", use_container_width=True):
             if ai_insights.save_model():
-                st.success("✅ Saved to Models/")
+                st.success("✅ Saved to Models/ folder!")
     
     st.caption("📁 Models saved to `Models/` folder")
