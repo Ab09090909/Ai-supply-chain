@@ -107,6 +107,9 @@ def render_product_detail(product, user_info):
     
     with col2:
         # Product Info
+        stock = product.get('quantity', 0)
+        stock_color = "#f59e0b" if stock > 0 else "#ef4444"
+        
         st.markdown(f"""
         <div style="background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155;">
             <h3 style="color: #f8fafc; margin-top: 0;">{product.get('name', 'Unknown')}</h3>
@@ -123,7 +126,7 @@ def render_product_detail(product, user_info):
                 </div>
                 <div>
                     <span style="color: #94a3b8; font-size: 12px;">Stock</span>
-                    <p style="color: #f59e0b; font-weight: 600; margin: 2px 0;">{product.get('quantity', 0)} units</p>
+                    <p style="color: {stock_color}; font-weight: 600; margin: 2px 0;">{stock} units</p>
                 </div>
                 <div>
                     <span style="color: #94a3b8; font-size: 12px;">Weight</span>
@@ -137,6 +140,12 @@ def render_product_detail(product, user_info):
                     <span style="color: #94a3b8; font-size: 12px;">Added</span>
                     <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</p>
                 </div>
+            </div>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155;">
+                <span style="color: #94a3b8; font-size: 12px;">Status</span>
+                <p style="color: {'#10b981' if stock > 0 else '#ef4444'}; font-weight: 600; margin: 2px 0;">
+                    {'✅ In Stock' if stock > 0 else '❌ Out of Stock'}
+                </p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -174,30 +183,46 @@ def render_product_detail(product, user_info):
     st.markdown("### 🛒 Order This Product")
     st.markdown("---")
     
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Check if product is in stock
+    stock_available = product.get('quantity', 0)
     
-    with col1:
-        quantity = st.number_input("Quantity", min_value=1, max_value=product.get('quantity', 100), value=1, step=1)
-    
-    with col2:
-        total_price = quantity * product.get('price', 0)
-        st.markdown(f"""
-        <div style="background: #1e293b; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; margin-top: 20px;">
-            <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
-            <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown('<div style="margin-top: 16px;">', unsafe_allow_html=True)
-        if st.button("🛒 Place Order", use_container_width=True, type="primary"):
-            if product.get('quantity', 0) >= quantity:
-                st.success(f"✅ Order placed successfully for {quantity} units of {product.get('name')}!")
-                st.info("📋 Order details have been sent to the producer.")
-                st.balloons()
-            else:
-                st.error(f"❌ Insufficient stock! Available: {product.get('quantity', 0)} units")
-        st.markdown('</div>', unsafe_allow_html=True)
+    if stock_available <= 0:
+        st.error("❌ This product is currently out of stock. Please check back later.")
+    else:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            # Fix: Set max_value to at least 1 and not more than stock
+            max_quantity = max(1, stock_available)
+            quantity = st.number_input(
+                "Quantity", 
+                min_value=1, 
+                max_value=max_quantity, 
+                value=1, 
+                step=1,
+                help=f"Available stock: {stock_available} units"
+            )
+        
+        with col2:
+            total_price = quantity * product.get('price', 0)
+            st.markdown(f"""
+            <div style="background: #1e293b; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; margin-top: 20px;">
+                <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
+                <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
+                <span style="color: #94a3b8; font-size: 11px;">{quantity} x {product.get('price', 0)} ETB</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown('<div style="margin-top: 16px;">', unsafe_allow_html=True)
+            if st.button("🛒 Place Order", use_container_width=True, type="primary"):
+                if product.get('quantity', 0) >= quantity:
+                    st.success(f"✅ Order placed successfully for {quantity} units of {product.get('name')}!")
+                    st.info("📋 Order details have been sent to the producer.")
+                    st.balloons()
+                else:
+                    st.error(f"❌ Insufficient stock! Available: {product.get('quantity', 0)} units")
+            st.markdown('</div>', unsafe_allow_html=True)
     
     # Terms and Conditions
     with st.expander("📋 Terms & Conditions", expanded=False):
