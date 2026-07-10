@@ -339,3 +339,41 @@ def get_dashboard_stats(role: str, user_id: str):
     except Exception as e:
         st.error(f"Error fetching stats: {e}")
         return stats
+
+# ==========================================
+# AI CONTEXT OPERATIONS
+# ==========================================
+def get_ai_context(user_id: str, role: str) -> str:
+    """Generate a real-time context string for the AI assistant based on user data."""
+    try:
+        if role == 'producer':
+            stats = get_dashboard_stats(role, user_id)
+            context_parts = [
+                f"Total Products: {stats['total_products']}",
+                f"Low Stock Items: {stats['low_stock']}",
+                f"Total Orders: {stats['total_orders']}",
+                f"Total Revenue: ${stats['revenue']:.2f}"
+            ]
+            
+            # Fetch specific low stock items to warn the AI
+            low_stock_items = get_low_stock_products(user_id)
+            if low_stock_items:
+                names = [f"{item['name']} (Qty: {item['quantity']})" for item in low_stock_items[:3]]
+                context_parts.append(f"Critical Low Stock Alerts: {', '.join(names)}")
+                
+            return " | ".join(context_parts)
+            
+        elif role == 'merchant':
+            orders = get_orders(user_id, role, limit=5)
+            return f"Recent Orders Count: {len(orders)} | Role: Merchant"
+            
+        elif role == 'customer':
+            orders = get_orders(user_id, role, limit=5)
+            return f"Recent Orders Count: {len(orders)} | Role: Customer"
+            
+        elif role == 'admin':
+            return "Role: Admin | Has access to system-wide insights."
+            
+        return "No specific data available."
+    except Exception as e:
+        return f"Error fetching context: {str(e)}"
