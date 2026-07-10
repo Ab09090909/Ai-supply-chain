@@ -1,7 +1,7 @@
 # utils/auth.py
 import streamlit as st
 from datetime import datetime
-from .db_helpers import authenticate_user, initialize_session_state, logout_user as db_logout, get_supabase_client
+from .db_helpers import authenticate_user, initialize_session_state, logout_user as db_logout, get_supabase_client, get_user_by_id
 
 def initialize_session_state():
     """Initialize session state"""
@@ -17,11 +17,17 @@ def login_user(email, password):
     user_info, message = authenticate_user(email, password)
     
     if user_info:
+        # Get complete user profile including profile_image
+        full_user_info = get_user_by_id(user_info.get('id'))
+        if full_user_info:
+            user_info = full_user_info
+        
         st.session_state.authenticated = True
         st.session_state.user_info = user_info
         st.session_state.user_id = user_info.get('id')
         st.session_state.show_signup = False
         st.session_state.show_forgot_password = False
+        
         st.success(f"✅ Welcome back, {user_info.get('name', 'User')}!")
         return True, "Login successful"
     else:
@@ -29,13 +35,20 @@ def login_user(email, password):
         return False, message
 
 def logout_user():
-    """Logout user"""
+    """Logout user - preserve theme preference"""
+    # Save theme preference before logout
+    theme_mode = st.session_state.get('theme_mode', 'dark')
+    
     db_logout()
     st.session_state.authenticated = False
     st.session_state.user_info = {}
     st.session_state.user_id = None
     st.session_state.show_signup = False
     st.session_state.show_forgot_password = False
+    
+    # Restore theme preference
+    st.session_state.theme_mode = theme_mode
+    
     st.success("✅ Logged out successfully")
 
 def signup_user(email, password, name, phone, company_name, address, region, role):
@@ -159,6 +172,10 @@ def render_login():
         render_forgot_password()
         return
     
+    # Apply theme CSS for login page
+    from utils.theme import get_theme_css
+    st.markdown(f'<style>{get_theme_css()}</style>', unsafe_allow_html=True)
+    
     st.title("🌾 Ethiopian AgriTech")
     st.subheader("🔐 Login to Your Account")
     
@@ -251,7 +268,6 @@ def render_signup():
                     
                     if success:
                         st.success(f"✅ {message}")
-                        # Auto-redirect to login after 2 seconds
                         st.balloons()
                         st.session_state.show_signup = False
                         st.rerun()
