@@ -27,6 +27,17 @@ def render_browse_product_detail(product, user_info):
     st.markdown("---")
     st.markdown(f"## 📦 {product.get('name', 'Product Details')}")
     
+    # Get producer info from database
+    producer_id = product.get('producer_id')
+    producer_data = None
+    
+    if producer_id:
+        producer_data = get_user_by_id(producer_id)
+    
+    # If producer not found, use current user info as fallback
+    if not producer_data:
+        producer_data = user_info
+    
     # Product Image
     col1, col2 = st.columns([1, 2])
     
@@ -48,7 +59,7 @@ def render_browse_product_detail(product, user_info):
         stock_color = "#f59e0b" if stock > 0 else "#ef4444"
         
         st.markdown(f"""
-        <div style="background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155;">
+        <div style="background: #1a1a2e; padding: 20px; border-radius: 12px; border: 1px solid #2d3748;">
             <h3 style="color: #f8fafc; margin-top: 0;">{product.get('name', 'Unknown')}</h3>
             <p style="color: #94a3b8; font-size: 14px;">{product.get('description', 'No description available')}</p>
             
@@ -78,7 +89,7 @@ def render_browse_product_detail(product, user_info):
                     <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</p>
                 </div>
             </div>
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155;">
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
                 <span style="color: #94a3b8; font-size: 12px;">Status</span>
                 <p style="color: {'#10b981' if stock > 0 else '#ef4444'}; font-weight: 600; margin: 2px 0;">
                     {'✅ In Stock' if stock > 0 else '❌ Out of Stock'}
@@ -87,27 +98,17 @@ def render_browse_product_detail(product, user_info):
         </div>
         """, unsafe_allow_html=True)
     
-    # Get producer info for browsed product
-    producer_id = product.get('producer_id')
-    producer_name = "Unknown Producer"
-    producer_company = "N/A"
-    producer_phone = "N/A"
-    producer_region = "N/A"
-    producer_address = "N/A"
-    
-    if producer_id:
-        producer = get_user_by_id(producer_id)
-        if producer:
-            producer_name = producer.get('name', 'Unknown')
-            producer_company = producer.get('company_name', 'N/A')
-            producer_phone = producer.get('phone', 'N/A')
-            producer_region = producer.get('region', 'N/A')
-            producer_address = producer.get('address', 'N/A')
-    
     # Producer Information
     st.markdown("### 👤 Producer Information")
+    
+    producer_name = producer_data.get('name', 'Unknown')
+    producer_company = producer_data.get('company_name', 'N/A')
+    producer_phone = producer_data.get('phone', 'N/A')
+    producer_region = producer_data.get('region', 'N/A')
+    producer_address = producer_data.get('address', 'N/A')
+    
     st.markdown(f"""
-    <div style="background: #1e293b; padding: 16px 20px; border-radius: 12px; border: 1px solid #334155; margin: 8px 0;">
+    <div style="background: #1a1a2e; padding: 16px 20px; border-radius: 12px; border: 1px solid #2d3748; margin: 8px 0;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div>
                 <span style="color: #94a3b8; font-size: 12px;">Name</span>
@@ -159,7 +160,7 @@ def render_browse_product_detail(product, user_info):
         with col2:
             total_price = quantity * product.get('price', 0)
             st.markdown(f"""
-            <div style="background: #1e293b; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; margin-top: 20px;">
+            <div style="background: #1a1a2e; padding: 12px 16px; border-radius: 8px; border: 1px solid #2d3748; margin-top: 20px;">
                 <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
                 <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
                 <span style="color: #94a3b8; font-size: 11px;">{quantity} x {product.get('price', 0)} ETB</span>
@@ -219,10 +220,10 @@ def render_inventory(user_info, ai):
         grid-template-columns: repeat(4, 1fr);
         gap: 8px;
         margin-bottom: 12px;
-        background: #1e293b;
+        background: #1a1a2e;
         padding: 8px 12px;
         border-radius: 10px;
-        border: 1px solid #334155;
+        border: 1px solid #2d3748;
     }
     .stat-item {
         text-align: center;
@@ -271,16 +272,16 @@ def render_inventory(user_info, ai):
         margin-bottom: 10px;
         align-items: center;
         flex-wrap: wrap;
-        background: #1e293b;
+        background: #1a1a2e;
         padding: 8px 12px;
         border-radius: 10px;
-        border: 1px solid #334155;
+        border: 1px solid #2d3748;
     }
     .search-container input {
         flex: 1;
         padding: 8px 14px;
         border-radius: 8px;
-        border: 1px solid #334155;
+        border: 1px solid #2d3748;
         background: #0f172a;
         color: #f8fafc;
         font-size: 13px;
@@ -297,7 +298,7 @@ def render_inventory(user_info, ai):
     .search-container select {
         padding: 8px 14px;
         border-radius: 8px;
-        border: 1px solid #334155;
+        border: 1px solid #2d3748;
         background: #0f172a;
         color: #f8fafc;
         font-size: 13px;
@@ -332,10 +333,10 @@ def render_inventory(user_info, ai):
     
     /* Browse Cards */
     .browse-card {
-        background: #1e293b;
+        background: #1a1a2e;
         border-radius: 10px;
         padding: 14px 16px;
-        border: 1px solid #334155;
+        border: 1px solid #2d3748;
         margin-bottom: 10px;
         transition: all 0.3s ease;
     }
@@ -833,8 +834,8 @@ def render_browse_products(user_info):
                         👤 <strong style="color: #e2e8f0;">{producer_name}</strong> • 🏢 {producer_company}
                     </div>
                     <div style="display:flex;gap:6px;margin-top:6px; flex-wrap: wrap;">
-                        <span style="display:inline-block; background: #334155; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">⚖️ {product.get('weight', 0)} kg</span>
-                        <span style="display:inline-block; background: #334155; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
+                        <span style="display:inline-block; background: #2d3748; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">⚖️ {product.get('weight', 0)} kg</span>
+                        <span style="display:inline-block; background: #2d3748; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
