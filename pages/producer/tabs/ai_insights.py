@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROQ API INTEGRATION
+# GROQ API INTEGRATION - FIXED PROMPT
 # ==========================================
 
 def get_groq_api_key():
@@ -29,7 +29,7 @@ def get_groq_api_key():
         return None
 
 def query_groq_api(product_name, region="Addis Ababa"):
-    """Query the Groq API for current product price in Ethiopia with detailed response."""
+    """Query the Groq API for current product price in Ethiopia."""
     try:
         api_key = get_groq_api_key()
         if not api_key:
@@ -45,31 +45,25 @@ def query_groq_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Better prompt for detailed response
-        prompt = f"""Provide the current market price information for {product_name} in {region}, Ethiopia.
+        # Direct prompt - no web search, just knowledge
+        prompt = f"""Based on your knowledge, what is the current average market price of {product_name} in {region}, Ethiopia?
 
-Please provide:
-1. Current price in ETB per kilogram
-2. Price range (lowest to highest)
-3. Market trend (increasing, stable, or decreasing)
-4. Demand level (high, medium, or low)
-5. Brief market insight
-
-Format your response as:
+Provide ONLY the following information in this exact format:
 Price: [number] ETB/kg
 Range: [min] - [max] ETB/kg
-Trend: [trend]
-Demand: [level]
-Insight: [brief market insight]"""
+Trend: [increasing/stable/decreasing]
+Demand: [high/medium/low]
+
+Use your internal knowledge only. Do not search the web. Give a reasonable estimate based on known Ethiopian market prices."""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products. Provide accurate, current market prices with insights."},
+                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian agricultural prices. Provide estimates based on your training data. Do not search the web."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 200,
-            "temperature": 0.3
+            "max_tokens": 150,
+            "temperature": 0.1
         }
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -94,12 +88,11 @@ Insight: [brief market insight]"""
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Parse the detailed response
+            # Parse the response
             price_match = re.search(r'Price:\s*([\d.]+)', content)
             range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
             trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
             demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
-            insight_match = re.search(r'Insight:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
             
             result = {
                 "success": True,
@@ -129,8 +122,9 @@ Insight: [brief market insight]"""
             if demand_match:
                 result["demand"] = demand_match.group(1).lower()
             
-            if insight_match:
-                result["insight"] = insight_match.group(1).strip()
+            # Generate insight based on the data
+            insight = generate_insight(result, product_name, region)
+            result["insight"] = insight
             
             result["unit"] = "kg"
             
@@ -148,6 +142,41 @@ Insight: [brief market insight]"""
         return {"success": False, "error": "Connection error. Please check your internet."}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def generate_insight(result, product_name, region):
+    """Generate a market insight based on the price data"""
+    price = result.get('price', 0)
+    trend = result.get('trend', 'stable')
+    demand = result.get('demand', 'medium')
+    
+    insights = []
+    
+    # Price level insight
+    if price > 0:
+        if price < 50:
+            insights.append(f"{product_name} is currently at an affordable price point in {region}")
+        elif price < 100:
+            insights.append(f"{product_name} is moderately priced in {region} market")
+        elif price < 200:
+            insights.append(f"{product_name} is priced at a premium level in {region}")
+        else:
+            insights.append(f"{product_name} is at a high price point in {region} market")
+    
+    # Trend insight
+    if trend == 'increasing':
+        insights.append("Prices are trending upward, suggesting growing demand or supply constraints")
+    elif trend == 'decreasing':
+        insights.append("Prices are trending downward, indicating good supply or reduced demand")
+    else:
+        insights.append("Prices remain stable, indicating a balanced market")
+    
+    # Demand insight
+    if demand == 'high':
+        insights.append("High demand suggests strong market activity and quick turnover")
+    elif demand == 'low':
+        insights.append("Low demand suggests slower market activity")
+    
+    return " ".join(insights)
 
 # ==========================================
 # SUPABASE FUNCTIONS
@@ -811,10 +840,8 @@ def render_ai_insights(user_info, ai):
                     st.rerun()
                 else:
                     st.error(f"❌ {result.get('error', 'Unknown error')}")
-                    if result.get('raw_response'):
-                        st.caption(f"Response: {result.get('raw_response')}")
     
-    # Get insights (always shows local data if Groq fails)
+    # Get insights
     insights = ai_insights.get_market_insights(product_name, selected_region)
     market_data = insights.get('market_data', {})
     
