@@ -81,8 +81,7 @@ def main():
             logout_user()
             st.rerun()
             
-        # --- RENDER CHATBOT (AT THE END) ---
-        # This ensures it renders on top of all content
+        # --- RENDER CHATBOT (MUST BE AT THE END) ---
         render_floating_chatbot(user_context=user_context, show=True)
         
     else:
