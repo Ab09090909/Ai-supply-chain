@@ -11,13 +11,9 @@ from utils.db_helpers import (
     get_low_stock_products, update_product, delete_product, get_product_by_id, get_user_by_id
 )
 
-# Import from components
 from ..components.product_card import render_product_card, render_product_detail
 
 
-# ==========================================
-# RENDER BROWSE PRODUCT DETAIL
-# ==========================================
 def render_browse_product_detail(product, user_info):
     """Render detailed view for browsed products with order functionality"""
     
@@ -34,7 +30,6 @@ def render_browse_product_detail(product, user_info):
     if producer_id:
         producer_data = get_user_by_id(producer_id)
     
-    # If producer not found, use current user info as fallback
     if not producer_data:
         producer_data = user_info
     
@@ -59,46 +54,32 @@ def render_browse_product_detail(product, user_info):
         stock_color = "#f59e0b" if stock > 0 else "#ef4444"
         stock_status = "✅ In Stock" if stock > 0 else "❌ Out of Stock"
         
-        detail_html = f"""
+        st.markdown(f"""
         <div style="background: #1a1a2e; padding: 20px; border-radius: 12px; border: 1px solid #2d3748;">
             <h3 style="color: #f8fafc; margin-top: 0;">{product.get('name', 'Unknown')}</h3>
             <p style="color: #94a3b8; font-size: 14px;">{product.get('description', 'No description available')}</p>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;">
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Category</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('category', 'N/A')}</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Price</span>
-                    <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{product.get('price', 0)} ETB</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Stock</span>
-                    <p style="color: {stock_color}; font-weight: 600; margin: 2px 0;">{stock} units</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Weight</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('weight', 0)} kg</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">SKU</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('sku', 'N/A')}</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Added</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</p>
-                </div>
-            </div>
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
-                <span style="color: #94a3b8; font-size: 12px;">Status</span>
-                <p style="color: {'#10b981' if stock > 0 else '#ef4444'}; font-weight: 600; margin: 2px 0;">
-                    {stock_status}
-                </p>
-            </div>
+        """, unsafe_allow_html=True)
+        
+        # Use Streamlit columns for grid
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            st.markdown(f"**Category:** {product.get('category', 'N/A')}")
+            st.markdown(f"**Stock:** {stock} units")
+            st.markdown(f"**SKU:** {product.get('sku', 'N/A')}")
+        
+        with col_b:
+            st.markdown(f"**Price:** {product.get('price', 0)} ETB")
+            st.markdown(f"**Weight:** {product.get('weight', 0)} kg")
+            st.markdown(f"**Added:** {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}")
+        
+        st.markdown(f"""
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
+            <span style="color: #94a3b8; font-size: 12px;">Status</span>
+            <p style="color: {stock_color}; font-weight: 600; margin: 2px 0;">{stock_status}</p>
         </div>
-        """
-        st.markdown(detail_html, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
     
     # Producer Information
     st.markdown("### 👤 Producer Information")
@@ -109,7 +90,7 @@ def render_browse_product_detail(product, user_info):
     producer_region = producer_data.get('region', 'N/A')
     producer_address = producer_data.get('address', 'N/A')
     
-    producer_html = f"""
+    st.markdown(f"""
     <div style="background: #1a1a2e; padding: 16px 20px; border-radius: 12px; border: 1px solid #2d3748; margin: 8px 0;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div>
@@ -134,8 +115,7 @@ def render_browse_product_detail(product, user_info):
             </div>
         </div>
     </div>
-    """
-    st.markdown(producer_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
     # Order Section
     st.markdown("### 🛒 Order This Product")
@@ -162,14 +142,13 @@ def render_browse_product_detail(product, user_info):
         
         with col2:
             total_price = quantity * product.get('price', 0)
-            price_html = f"""
+            st.markdown(f"""
             <div style="background: #1a1a2e; padding: 12px 16px; border-radius: 8px; border: 1px solid #2d3748; margin-top: 20px;">
                 <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
                 <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
                 <span style="color: #94a3b8; font-size: 11px;">{quantity} x {product.get('price', 0)} ETB</span>
             </div>
-            """
-            st.markdown(price_html, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
         
         with col3:
             if st.button("🛒 Place Order", use_container_width=True, type="primary", key="browse_order"):
@@ -200,23 +179,18 @@ def render_browse_product_detail(product, user_info):
         st.rerun()
 
 
-# ==========================================
-# RENDER INVENTORY MAIN
-# ==========================================
 def render_inventory(user_info, ai):
     """Render Professional Inventory Management tab"""
     
-    # Custom CSS with improved dark mode colors
+    # Custom CSS
     st.markdown("""
     <style>
-    /* Inventory Container */
     .inventory-container {
         max-width: 1400px;
         margin: 0 auto;
         padding: 0 2px;
     }
     
-    /* Stats Row - Single Compact Row */
     .stats-row {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -255,7 +229,6 @@ def render_inventory(user_info, ai):
         margin-bottom: 2px;
     }
     
-    /* Light Mode Stats */
     .light-mode .stats-row {
         background: #f1f5f9 !important;
         border-color: #e2e8f0 !important;
@@ -267,7 +240,6 @@ def render_inventory(user_info, ai):
         color: #475569 !important;
     }
     
-    /* Search Bar - Improved */
     .search-container {
         display: flex;
         gap: 8px;
@@ -325,7 +297,6 @@ def render_inventory(user_info, ai):
         color: #94a3b8 !important;
     }
     
-    /* Product Grid */
     .product-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -333,7 +304,6 @@ def render_inventory(user_info, ai):
         margin-top: 10px;
     }
     
-    /* Browse Cards */
     .browse-card {
         background: #1a1a2e;
         border-radius: 10px;
@@ -359,7 +329,6 @@ def render_inventory(user_info, ai):
         color: #475569 !important;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
         .product-grid {
             grid-template-columns: 1fr;
@@ -382,18 +351,12 @@ def render_inventory(user_info, ai):
     </style>
     """, unsafe_allow_html=True)
     
-    # Check theme mode for light/dark styling
     theme_class = "light-mode" if st.session_state.get('theme_mode') == 'light' else ""
-    
     st.markdown(f'<div class="inventory-container {theme_class}">', unsafe_allow_html=True)
     
-    # ==========================================
-    # SUB-TABS
-    # ==========================================
     if 'inventory_subtab' not in st.session_state:
         st.session_state.inventory_subtab = "My Products"
     
-    # Custom sub-tab buttons
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📦 My Products", key="subtab-my", use_container_width=True, 
@@ -408,28 +371,17 @@ def render_inventory(user_info, ai):
     
     st.markdown("---")
     
-    # ==========================================
-    # SUB-TAB: MY PRODUCTS
-    # ==========================================
     if st.session_state.inventory_subtab == "My Products":
         render_my_products(user_info, ai)
-    
-    # ==========================================
-    # SUB-TAB: BROWSE PRODUCTS
-    # ==========================================
     else:
         render_browse_products(user_info)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ==========================================
-# RENDER MY PRODUCTS
-# ==========================================
 def render_my_products(user_info, ai):
     """Render the My Products sub-tab"""
     
-    # Check if showing product detail
     if st.session_state.get('show_product_detail', False) and st.session_state.get('selected_product_id'):
         all_products = get_products(producer_id=user_info['id'])
         selected_product = next((p for p in all_products if p['id'] == st.session_state.selected_product_id), None)
@@ -437,19 +389,14 @@ def render_my_products(user_info, ai):
             render_product_detail(selected_product, user_info)
             return
     
-    # Get all products
     all_products = get_products(producer_id=user_info['id'])
     low_stock = get_low_stock_products(producer_id=user_info['id'])
     
-    # Calculate stats
     total_products = len(all_products)
     low_stock_count = len(low_stock)
     total_value = sum(p.get('price', 0) * p.get('quantity', 0) for p in all_products) if all_products else 0
     categories_count = len(set(p.get('category', 'Other') for p in all_products)) if all_products else 0
     
-    # ==========================================
-    # COMPACT STATS ROW - All in One Row
-    # ==========================================
     st.markdown(f"""
     <div class="stats-row">
         <div class="stat-item">
@@ -475,13 +422,10 @@ def render_my_products(user_info, ai):
     </div>
     """, unsafe_allow_html=True)
     
-    # Check if editing a product
     edit_mode = st.session_state.get('edit_product_id') is not None
     
-    # Add/Edit Product Form
     with st.expander("➕ Add New Product" if not edit_mode else "✏️ Edit Product", expanded=edit_mode):
         with st.form("add_product_form"):
-            # If in edit mode, load product data
             product_data = None
             if edit_mode:
                 all_products = get_products(producer_id=user_info['id'])
@@ -509,7 +453,6 @@ def render_my_products(user_info, ai):
                 description = st.text_area("Description", placeholder="Brief product description...", height=80,
                                           value=product_data.get('description', '') if product_data else "")
             
-            # Image Upload Section
             st.markdown("---")
             st.markdown("### 📷 Product Image")
             current_image = product_data.get('image_url') if product_data else None
@@ -573,7 +516,6 @@ def render_my_products(user_info, ai):
                             )
                             
                             if success:
-                                # Update AI knowledge
                                 product_info = {
                                     'id': st.session_state.edit_product_id,
                                     'name': name_input,
@@ -606,7 +548,6 @@ def render_my_products(user_info, ai):
                         )
                         
                         if success:
-                            # Update AI knowledge
                             product_info = {
                                 'id': prod_id,
                                 'name': name_input,
@@ -626,19 +567,16 @@ def render_my_products(user_info, ai):
 
     st.markdown("---")
     
-    # Low Stock Alerts
     if low_stock:
         st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
         df_low = pd.DataFrame(low_stock)
         st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
     
-    # All Products Display
     st.subheader("📦 My Products")
     
     if all_products:
         df_all = pd.DataFrame(all_products)
         
-        # Search and Filter - Improved
         st.markdown('<div class="search-container">', unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([3, 2, 1.5])
@@ -652,7 +590,6 @@ def render_my_products(user_info, ai):
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Apply filters
         filtered_products = all_products.copy()
         
         if search_term:
@@ -661,7 +598,6 @@ def render_my_products(user_info, ai):
         if filter_category != "All":
             filtered_products = [p for p in filtered_products if p.get('category', 'Other') == filter_category]
         
-        # Apply sorting
         if sort_by == "Price: Low":
             filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0))
         elif sort_by == "Price: High":
@@ -678,7 +614,6 @@ def render_my_products(user_info, ai):
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Delete Confirmation Dialog
         if st.session_state.get('delete_product_id'):
             product_to_delete = next((p for p in all_products if p['id'] == st.session_state.delete_product_id), None)
             if product_to_delete:
@@ -701,7 +636,6 @@ def render_my_products(user_info, ai):
                         st.session_state.delete_product_id = None
                         st.rerun()
         
-        # Detailed Table View
         with st.expander("📋 Detailed List", expanded=False):
             display_df = df_all[['name', 'category', 'price', 'quantity', 'sku', 'created_at']].copy()
             display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d')
@@ -709,7 +643,6 @@ def render_my_products(user_info, ai):
             display_df['Company'] = user_info.get('company_name', 'N/A')
             st.dataframe(display_df, use_container_width=True)
             
-            # Export option
             csv = display_df.to_csv(index=False)
             st.download_button(
                 label="📥 Export CSV",
@@ -722,13 +655,9 @@ def render_my_products(user_info, ai):
         st.info("📭 No products added yet. Click 'Add New Product' above to get started!")
 
 
-# ==========================================
-# RENDER BROWSE PRODUCTS
-# ==========================================
 def render_browse_products(user_info):
     """Render the Browse Products sub-tab"""
     
-    # Check if showing browse product detail
     if st.session_state.get('show_browse_detail', False) and st.session_state.get('selected_browse_product_id'):
         selected_product = get_product_by_id(st.session_state.selected_browse_product_id)
         if selected_product:
@@ -738,16 +667,10 @@ def render_browse_products(user_info):
     st.subheader("🔍 Browse Products")
     st.caption("Discover products from other producers on the platform")
     
-    # Get all products from all producers (excluding current user's products)
     all_products = get_products()
-    
-    # Filter out current user's products
     other_products = [p for p in all_products if p.get('producer_id') != user_info['id']]
-    
-    # Producer cache
     producer_cache = {}
     
-    # Search and Filter - Improved
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([3, 2, 1.5])
@@ -761,7 +684,6 @@ def render_browse_products(user_info):
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Apply filters
     filtered_products = other_products.copy()
     
     if browse_search:
@@ -770,13 +692,11 @@ def render_browse_products(user_info):
     if browse_category != "All":
         filtered_products = [p for p in filtered_products if p.get('category', 'Other') == browse_category]
     
-    # Apply sorting
     if browse_sort == "Price: Low":
         filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0))
     elif browse_sort == "Price: High":
         filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0), reverse=True)
     
-    # Stats - Compact
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("🌾 Products", len(filtered_products))
@@ -800,7 +720,6 @@ def render_browse_products(user_info):
         
         for idx, product in enumerate(filtered_products):
             with cols[idx % 3]:
-                # Get producer info
                 producer_id = product.get('producer_id')
                 producer_name = "Unknown Producer"
                 producer_company = "N/A"
@@ -819,8 +738,7 @@ def render_browse_products(user_info):
                 stock_color = "#10b981" if stock > 0 else "#ef4444"
                 stock_status = "✅ In Stock" if stock > 0 else "❌ Out of Stock"
                 
-                # Product Card
-                browse_html = f"""
+                st.markdown(f"""
                 <div class="browse-card">
                     <div style="display:flex;justify-content:space-between;align-items:start;">
                         <div>
@@ -840,10 +758,8 @@ def render_browse_products(user_info):
                         <span style="display:inline-block; background: #2d3748; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
                     </div>
                 </div>
-                """
-                st.markdown(browse_html, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
                 
-                # View Details Button
                 if st.button("👁️ View Details", key=f"browse_view_{product.get('id', '')}", use_container_width=True):
                     st.session_state.selected_browse_product_id = product.get('id')
                     st.session_state.show_browse_detail = True
