@@ -1,6 +1,7 @@
 # app.py - Main entry point
 import streamlit as st
 from utils.auth import initialize_session_state, render_login
+from utils.theme import initialize_theme, get_theme_css, render_theme_toggle
 
 # Configure page
 st.set_page_config(
@@ -9,11 +10,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-# app.py - Add this near the top
-if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = "Dashboard"
+
 # Initialize session state
 initialize_session_state()
+initialize_theme()
+
+# Apply theme CSS
+st.markdown(f'<style>{get_theme_css()}</style>', unsafe_allow_html=True)
 
 # Import page modules
 from pages.producer.main import render_producer_page
@@ -24,6 +27,9 @@ def main():
     # Sidebar navigation
     st.sidebar.title("🌾 Ethiopian AgriTech")
     st.sidebar.markdown("---")
+    
+    # Theme toggle
+    render_theme_toggle()
     
     # Role-based navigation
     if st.session_state.get('authenticated', False):
