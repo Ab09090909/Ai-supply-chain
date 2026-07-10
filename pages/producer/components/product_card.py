@@ -92,9 +92,8 @@ def render_product_detail(product, user_info):
     
     # Get producer info from database if available
     producer_id = product.get('producer_id')
-    producer_data = user_info  # Default to current user
+    producer_data = user_info
     
-    # If product has a different producer, fetch their info
     if producer_id and producer_id != user_info.get('id'):
         fetched_producer = get_user_by_id(producer_id)
         if fetched_producer:
@@ -121,46 +120,33 @@ def render_product_detail(product, user_info):
         stock_color = "#f59e0b" if stock > 0 else "#ef4444"
         stock_status = "✅ In Stock" if stock > 0 else "❌ Out of Stock"
         
-        detail_html = f"""
+        # Use st.markdown for each section to ensure proper rendering
+        st.markdown(f"""
         <div style="background: #1a1a2e; padding: 20px; border-radius: 12px; border: 1px solid #2d3748;">
             <h3 style="color: #f8fafc; margin-top: 0;">{product.get('name', 'Unknown')}</h3>
             <p style="color: #94a3b8; font-size: 14px;">{product.get('description', 'No description available')}</p>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;">
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Category</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('category', 'N/A')}</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Price</span>
-                    <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{product.get('price', 0)} ETB</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Stock</span>
-                    <p style="color: {stock_color}; font-weight: 600; margin: 2px 0;">{stock} units</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Weight</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('weight', 0)} kg</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">SKU</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{product.get('sku', 'N/A')}</p>
-                </div>
-                <div>
-                    <span style="color: #94a3b8; font-size: 12px;">Added</span>
-                    <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</p>
-                </div>
-            </div>
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
-                <span style="color: #94a3b8; font-size: 12px;">Status</span>
-                <p style="color: {'#10b981' if stock > 0 else '#ef4444'}; font-weight: 600; margin: 2px 0;">
-                    {stock_status}
-                </p>
-            </div>
+        """, unsafe_allow_html=True)
+        
+        # Create a 2-column grid using Streamlit columns instead of HTML grid
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            st.markdown(f"**Category:** {product.get('category', 'N/A')}")
+            st.markdown(f"**Stock:** {stock} units")
+            st.markdown(f"**SKU:** {product.get('sku', 'N/A')}")
+        
+        with col_b:
+            st.markdown(f"**Price:** {product.get('price', 0)} ETB")
+            st.markdown(f"**Weight:** {product.get('weight', 0)} kg")
+            st.markdown(f"**Added:** {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}")
+        
+        st.markdown(f"""
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
+            <span style="color: #94a3b8; font-size: 12px;">Status</span>
+            <p style="color: {stock_color}; font-weight: 600; margin: 2px 0;">{stock_status}</p>
         </div>
-        """
-        st.markdown(detail_html, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
     
     # Producer Information
     st.markdown("### 👤 Producer Information")
@@ -171,7 +157,7 @@ def render_product_detail(product, user_info):
     producer_region = producer_data.get('region', 'N/A')
     producer_address = producer_data.get('address', 'N/A')
     
-    producer_html = f"""
+    st.markdown(f"""
     <div style="background: #1a1a2e; padding: 16px 20px; border-radius: 12px; border: 1px solid #2d3748; margin: 8px 0;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div>
@@ -196,8 +182,7 @@ def render_product_detail(product, user_info):
             </div>
         </div>
     </div>
-    """
-    st.markdown(producer_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
     # Order Section
     st.markdown("### 🛒 Order This Product")
@@ -223,14 +208,13 @@ def render_product_detail(product, user_info):
         
         with col2:
             total_price = quantity * product.get('price', 0)
-            price_html = f"""
+            st.markdown(f"""
             <div style="background: #1a1a2e; padding: 12px 16px; border-radius: 8px; border: 1px solid #2d3748; margin-top: 20px;">
                 <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
                 <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
                 <span style="color: #94a3b8; font-size: 11px;">{quantity} x {product.get('price', 0)} ETB</span>
             </div>
-            """
-            st.markdown(price_html, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
         
         with col3:
             if st.button("🛒 Place Order", use_container_width=True, type="primary"):
