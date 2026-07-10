@@ -2,11 +2,20 @@
 import streamlit as st
 import os
 import uuid
+import base64
 from PIL import Image
 from utils.db_helpers import update_user, update_user_profile_image
 
+def get_image_base64(image_path):
+    """Convert image to base64 for embedding in HTML"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except:
+        return None
+
 def render_profile(user_info):
-    """Render the business card profile - Mobile Responsive"""
+    """Render the business card profile with image in circle"""
     
     # CSS for responsive business card
     st.markdown("""
@@ -245,20 +254,21 @@ def render_profile(user_info):
     # Get role and format
     role = user_info.get('role', 'producer').capitalize()
     
-    # Build profile image HTML
+    # Build profile image HTML with base64 encoding
     profile_html = ""
     if profile_image and os.path.exists(profile_image):
         try:
-            # Use Streamlit's image display for reliable rendering
-            st.image(profile_image, width=120, use_container_width=False)
-            profile_html = ""  # Let Streamlit handle the image
+            # Convert image to base64 for embedding
+            with open(profile_image, "rb") as img_file:
+                img_data = base64.b64encode(img_file.read()).decode()
+                profile_html = f'<img src="data:image/jpeg;base64,{img_data}" alt="Profile">'
         except Exception as e:
             profile_html = f'<div class="initial">{initial}</div>'
     else:
         # Show initial if no image
         profile_html = f'<div class="initial">{initial}</div>'
     
-    # Render Business Card - Use Streamlit image for reliable display
+    # Render Business Card with embedded image
     st.markdown(f"""
     <div class="business-card">
         <div class="card-container">
@@ -301,7 +311,7 @@ def render_profile(user_info):
     </div>
     """, unsafe_allow_html=True)
     
-    # Show welcome message
+    # Show welcome message below the card
     st.caption(f"👋 Welcome, {name}!")
 
 def render_edit_profile(user_info):
@@ -332,7 +342,7 @@ def render_edit_profile(user_info):
             st.markdown("---")
             st.markdown("### 📷 Profile Picture")
             
-            # Show current profile image using Streamlit
+            # Show current profile image
             current_image = user_info.get('profile_image', None)
             if current_image and os.path.exists(current_image):
                 st.markdown("#### Current Profile Picture:")
