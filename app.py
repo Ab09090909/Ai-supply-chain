@@ -54,11 +54,6 @@ def main():
         # --- FETCH REAL-TIME AI CONTEXT ---
         user_context = get_ai_context(user_id, user_role)
         
-        # --- RENDER CHATBOT WITH CONTEXT ---
-        # IMPORTANT: Render the chatbot AFTER all other content
-        # This ensures it appears on top of everything
-        render_floating_chatbot(user_context=user_context, show=True)
-        
         # Navigation based on role
         if user_role == 'producer':
             page = st.sidebar.radio(
@@ -85,6 +80,11 @@ def main():
             from utils.auth import logout_user
             logout_user()
             st.rerun()
+            
+        # --- RENDER CHATBOT (AT THE END) ---
+        # This ensures it renders on top of all content
+        render_floating_chatbot(user_context=user_context, show=True)
+        
     else:
         # Login/Signup page
         render_login()
