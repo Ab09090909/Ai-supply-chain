@@ -23,8 +23,10 @@ from utils.db_helpers import get_products, get_user_by_id, supabase
 def query_grok_api(product_name, region="Addis Ababa"):
     """Query the Grok API for current product price in Ethiopia."""
     try:
+        # Get API key from Streamlit secrets
         api_key = st.secrets["GROK_API_KEY"]
-        # Using the correct xAI API endpoint
+        
+        # Grok API endpoint (xAI)
         url = "https://api.x.ai/v1/chat/completions"
         
         headers = {
@@ -32,19 +34,30 @@ def query_grok_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
+        # Craft the prompt for Ethiopian market prices
         prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia? 
-        Provide the price in ETB per kilogram or unit. 
-        Only respond with the price and a brief source. 
-        Format: 'Price: [number] ETB per [unit] from [source]'."""
+        
+Please provide:
+1. The current price in ETB per kilogram or unit
+2. The price range (minimum and maximum)
+3. The market trend (increasing, stable, or decreasing)
+4. The demand level (high, medium, or low)
+
+Format your response as:
+Price: [number] ETB per [unit]
+Range: [min] - [max] ETB
+Trend: [trend]
+Demand: [level]
+Source: [market source if known]"""
         
         payload = {
-            "model": "grok-1",  # You may need to adjust the model name
+            "model": "grok-1",  # Using Grok model
             "messages": [
-                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products."},
+                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products. Provide accurate, current market prices."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
-            "max_tokens": 100
+            "max_tokens": 250
         }
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -53,42 +66,55 @@ def query_grok_api(product_name, region="Addis Ababa"):
             data = response.json()
             if 'choices' in data and len(data['choices']) > 0:
                 content = data['choices'][0]['message']['content']
-                # Parse the content to extract price
+                
+                # Parse the response
                 price_match = re.search(r'Price:\s*([\d.]+)', content)
+                range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
+                trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
+                demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
+                unit_match = re.search(r'per\s+(\w+)', content)
+                
+                result = {
+                    "success": True,
+                    "raw_response": content,
+                    "source": "Grok API"
+                }
+                
                 if price_match:
-                    price = float(price_match.group(1))
-                    # Extract unit
-                    unit_match = re.search(r'per\s+(\w+)', content)
-                    unit = unit_match.group(1) if unit_match else "kg"
-                    return {
-                        "price": price,
-                        "unit": unit,
-                        "raw_response": content,
-                        "source": "Grok API",
-                        "success": True
-                    }
+                    result["price"] = float(price_match.group(1))
+                
+                if range_match:
+                    result["min_price"] = float(range_match.group(1))
+                    result["max_price"] = float(range_match.group(2))
+                
+                if trend_match:
+                    result["trend"] = trend_match.group(1).lower()
+                
+                if demand_match:
+                    result["demand"] = demand_match.group(1).lower()
+                
+                if unit_match:
+                    result["unit"] = unit_match.group(1)
                 else:
-                    return {
-                        "error": "Could not parse price from Grok response",
-                        "raw_response": content,
-                        "success": False
-                    }
+                    result["unit"] = "kg"
+                
+                return result
             else:
                 return {
-                    "error": "Unexpected response format from Grok",
-                    "success": False
+                    "success": False,
+                    "error": "Unexpected response format from Grok"
                 }
         else:
             return {
+                "success": False,
                 "error": f"Grok API request failed with status {response.status_code}",
-                "response_text": response.text,
-                "success": False
+                "response_text": response.text
             }
     
     except requests.exceptions.Timeout:
-        return {"error": "Grok API request timed out", "success": False}
+        return {"success": False, "error": "Grok API request timed out"}
     except Exception as e:
-        return {"error": str(e), "success": False}
+        return {"success": False, "error": str(e)}
 
 # ==========================================
 # SUPABASE FUNCTIONS
@@ -105,13 +131,13 @@ def save_training_data_supabase(user_id, data):
             'product_name': data.get('product_name'),
             'price': data.get('price'),
             'market_price': data.get('market_price'),
-            'demand_score': data.get('demand_score'),
+            'demand_score': data.get('demand_score', 70),
             'seasonal_factor': data.get('seasonal_factor', 1.0),
             'region_factor': data.get('region_factor', 1.0),
             'trend_factor': data.get('trend_factor', 1.0),
             'predicted_price': data.get('predicted_price'),
             'actual_price': data.get('actual_price'),
-            'data_source': data.get('data_source', 'user_input'),
+            'data_source': data.get('data_source', 'grok_api'),
             'region': data.get('region', 'Addis Ababa')
         }
         
@@ -356,7 +382,7 @@ class SelfLearningAIInsights:
                 'product': product_name,
                 'region': region,
                 'price': result.get('price'),
-                'unit': result.get('unit'),
+                'unit': result.get('unit', 'kg'),
                 'timestamp': datetime.now().isoformat(),
                 'raw_response': result.get('raw_response')
             })
@@ -368,7 +394,7 @@ class SelfLearningAIInsights:
                 'market_price': result.get('price'),
                 'data_source': 'grok_api',
                 'region': region,
-                'demand_score': 70,  # Default
+                'demand_score': 70,
                 'predicted_price': result.get('price')
             })
             
@@ -387,10 +413,8 @@ class SelfLearningAIInsights:
             )
             
             if market_data:
-                # Use stored market data
                 market_price = market_data.get('market_price')
             else:
-                # Use product data
                 market_price = product_data.get('current_price', 100)
             
             # Get features
@@ -426,7 +450,6 @@ class SelfLearningAIInsights:
             return round(predicted_price, 2)
             
         except Exception as e:
-            # Fallback to simple calculation
             return round(product_data.get('current_price', 100) * random.uniform(0.95, 1.15), 2)
     
     def calculate_demand_score(self, data):
@@ -437,7 +460,6 @@ class SelfLearningAIInsights:
             'low': 35
         }.get(data.get('demand', 'medium'), 50)
         
-        # Adjust based on price
         avg_price = data.get('avg_price', 100)
         current_price = data.get('current_price', 100)
         price_ratio = current_price / avg_price if avg_price > 0 else 1
@@ -470,10 +492,10 @@ class SelfLearningAIInsights:
                 'product': product_name,
                 'current_price': market_price,
                 'avg_price': market_price * 0.95,
-                'min_price': market_price * 0.8,
-                'max_price': market_price * 1.2,
-                'trend': 'stable',
-                'demand': 'medium',
+                'min_price': grok_result.get('min_price', market_price * 0.8),
+                'max_price': grok_result.get('max_price', market_price * 1.2),
+                'trend': grok_result.get('trend', 'stable'),
+                'demand': grok_result.get('demand', 'medium'),
                 'unit': grok_result.get('unit', 'kg'),
                 'source': 'Grok API'
             }
@@ -502,7 +524,6 @@ class SelfLearningAIInsights:
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
         """Forecast demand for a product"""
-        # Check if we have historical data
         demand_patterns = self.knowledge_base.get('demand_patterns', {})
         
         if product_name in demand_patterns:
@@ -510,7 +531,6 @@ class SelfLearningAIInsights:
             avg_demand = sum(history) / len(history) if history else 100
             trend = 'increasing' if len(history) > 1 and history[-1] > history[-2] else 'decreasing'
         else:
-            # Use product category base demand
             base_demand = {
                 'Grains': 150, 'Vegetables': 120, 'Fruits': 100,
                 'Dairy': 130, 'Meat': 110, 'Coffee': 100
@@ -518,7 +538,6 @@ class SelfLearningAIInsights:
             avg_demand = base_demand.get(product_name, 100)
             trend = 'stable'
         
-        # Seasonal adjustment
         current_month = datetime.now().month
         seasonal_factors = {
             1: 1.1, 2: 1.0, 3: 0.9, 4: 0.9, 5: 1.0,
@@ -527,7 +546,6 @@ class SelfLearningAIInsights:
         }
         seasonal_factor = seasonal_factors.get(current_month, 1.0)
         
-        # Region factor
         region_factors = {
             'Addis Ababa': 1.3, 'Oromia': 1.0, 'Amhara': 0.95,
             'Tigray': 0.9, 'SNNP': 0.85, 'Sidama': 0.9
@@ -553,7 +571,6 @@ class SelfLearningAIInsights:
         trend = market_data.get('trend', 'stable')
         demand = market_data.get('demand', 'medium')
         
-        # Base recommendation
         if trend == 'increasing' and demand == 'high':
             recommendation = 'Increase Price'
             recommended_price = current_price * 1.12
@@ -567,7 +584,6 @@ class SelfLearningAIInsights:
             recommendation = 'Maintain Price'
             recommended_price = current_price * 1.02
         
-        # Ensure within range
         min_price = market_data.get('min_price', 50)
         max_price = market_data.get('max_price', 300)
         recommended_price = max(min_price, min(recommended_price, max_price))
@@ -585,17 +601,14 @@ class SelfLearningAIInsights:
         """Calculate confidence score for predictions"""
         base_confidence = 0.7
         
-        # Adjust based on data quality
         if market_data.get('source') == 'Grok API':
             base_confidence += 0.15
         elif market_data.get('source') == 'Ethiopian Market Data':
             base_confidence += 0.1
         
-        # Adjust based on learning iterations
         iterations = self.knowledge_base.get('learning_iterations', 0)
         base_confidence += min(iterations / 1000, 0.15)
         
-        # Adjust based on model accuracy
         accuracy = self.knowledge_base.get('accuracy_score', 0.5)
         base_confidence += (accuracy - 0.5) * 0.3
         
@@ -615,19 +628,12 @@ class EthiopianMarketScraper:
             'Wheat': {'min': 45, 'max': 80, 'avg': 60, 'trend': 'stable', 'demand': 'high'},
             'Barley': {'min': 35, 'max': 55, 'avg': 45, 'trend': 'decreasing', 'demand': 'medium'},
             'Maize': {'min': 30, 'max': 55, 'avg': 40, 'trend': 'stable', 'demand': 'medium'},
-            'Sorghum': {'min': 32, 'max': 55, 'avg': 42, 'trend': 'increasing', 'demand': 'medium'},
             'Coffee': {'min': 200, 'max': 450, 'avg': 320, 'trend': 'increasing', 'demand': 'high'},
             'Milk': {'min': 60, 'max': 100, 'avg': 75, 'trend': 'increasing', 'demand': 'high'},
-            'Butter': {'min': 250, 'max': 400, 'avg': 320, 'trend': 'increasing', 'demand': 'medium'},
-            'Cheese': {'min': 200, 'max': 350, 'avg': 270, 'trend': 'stable', 'demand': 'medium'},
             'Beef': {'min': 400, 'max': 650, 'avg': 520, 'trend': 'increasing', 'demand': 'high'},
-            'Chicken': {'min': 250, 'max': 420, 'avg': 330, 'trend': 'stable', 'demand': 'medium'},
             'Onion': {'min': 25, 'max': 50, 'avg': 35, 'trend': 'volatile', 'demand': 'high'},
             'Tomato': {'min': 30, 'max': 60, 'avg': 42, 'trend': 'volatile', 'demand': 'high'},
-            'Cabbage': {'min': 20, 'max': 45, 'avg': 30, 'trend': 'stable', 'demand': 'medium'},
             'Potato': {'min': 35, 'max': 70, 'avg': 50, 'trend': 'increasing', 'demand': 'high'},
-            'Banana': {'min': 15, 'max': 30, 'avg': 22, 'trend': 'stable', 'demand': 'medium'},
-            'Mango': {'min': 12, 'max': 25, 'avg': 18, 'trend': 'decreasing', 'demand': 'medium'},
             'Avocado': {'min': 10, 'max': 22, 'avg': 16, 'trend': 'increasing', 'demand': 'high'}
         }
     
@@ -713,10 +719,10 @@ def render_ai_insights(user_info, ai):
     .insight-card .trend-neutral { color: #f59e0b; }
     .grok-badge {
         display: inline-block;
-        background: #667eea;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         font-size: 10px;
-        padding: 2px 10px;
+        padding: 2px 12px;
         border-radius: 12px;
         font-weight: 600;
     }
@@ -811,7 +817,6 @@ def render_ai_insights(user_info, ai):
     # Display Market Price Analysis
     st.markdown("### 📊 Ethiopian Market Price Analysis")
     
-    # Grok source badge
     if insights.get('grok_source'):
         st.markdown('<span class="grok-badge">🤖 Powered by Grok AI</span>', unsafe_allow_html=True)
     
@@ -1043,7 +1048,6 @@ def render_ai_insights(user_info, ai):
     with col1:
         if st.button("🔄 Train AI Model", use_container_width=True):
             with st.spinner("Training AI model with current data..."):
-                # Get data from Supabase
                 training_data = get_training_data_supabase(user_info['id'])
                 if training_data:
                     success = ai_insights.train_model(training_data)
