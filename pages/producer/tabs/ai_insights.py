@@ -10,15 +10,14 @@ import re
 from datetime import datetime, timedelta
 import random
 import hashlib
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
+from collections import defaultdict, Counter
 import warnings
 warnings.filterwarnings('ignore')
 
-from utils.db_helpers import get_products, get_user_by_id, supabase
+from utils.db_helpers import get_products, get_user_by_id, get_orders, supabase
 
 # ==========================================
-# GROQ API INTEGRATION
+# GROQ API FOR RECOMMENDATIONS ONLY
 # ==========================================
 
 def get_groq_api_key():
@@ -29,23 +28,9 @@ def get_groq_api_key():
     except Exception as e:
         return None
 
-def validate_product(product_name):
-    """Validate product input"""
-    if not product_name or len(product_name.strip()) < 2:
-        return False, "Please enter a valid product name (at least 2 characters)"
-    return True, "OK"
-
-def query_groq_market_data(product_name, region="Addis Ababa"):
-    """Query Groq API for detailed price breakdown"""
+def query_groq_recommendations(product_name, user_behavior, market_data):
+    """Query Groq for product recommendations based on user behavior and market data"""
     try:
-        is_valid, msg = validate_product(product_name)
-        if not is_valid:
-            return {
-                "success": False,
-                "error": msg,
-                "fallback_used": True
-            }
-        
         api_key = get_groq_api_key()
         if not api_key:
             return {
@@ -61,41 +46,32 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Enhanced prompt for detailed price breakdown
-        prompt = f"""Analyze the market for {product_name} in {region}, Ethiopia.
+        prompt = f"""Based on user behavior and market data, recommend products.
 
-Provide a DETAILED PRICE BREAKDOWN by grade, quality, model, or variant.
+User Behavior:
+- Products posted: {json.dumps(user_behavior.get('products', []), indent=2)}
+- Buy/Sell patterns: {json.dumps(user_behavior.get('transactions', []), indent=2)}
+- Preferred categories: {json.dumps(user_behavior.get('categories', []), indent=2)}
+- Average price range: {user_behavior.get('avg_price', 0)} ETB
 
-Format your response exactly like this:
+Market Data:
+- Popular products: {json.dumps(market_data.get('popular', []), indent=2)}
+- Trending products: {json.dumps(market_data.get('trending', []), indent=2)}
+- High demand products: {json.dumps(market_data.get('high_demand', []), indent=2)}
 
-Unit: [kg/liter/piece/unit]
-Base Price: [number] ETB per [unit]
-Price Range: [min] - [max] ETB per [unit]
-Trend: [increasing/stable/decreasing]
-Demand: [high/medium/low]
-Confidence: [HIGH/MEDIUM/LOW]
-Description: [2-3 sentences explaining the market situation]
+Current Product: {product_name}
 
-PRICE BREAKDOWN BY GRADE:
-- Grade A / Premium / High Quality: [price] ETB per [unit]
-- Grade B / Standard / Medium Quality: [price] ETB per [unit]
-- Grade C / Basic / Low Quality: [price] ETB per [unit]
-
-PRICE BREAKDOWN BY VARIANT (if applicable):
-- [Variant name 1]: [price] ETB per [unit]
-- [Variant name 2]: [price] ETB per [unit]
-- [Variant name 3]: [price] ETB per [unit]
-
-Make the breakdown realistic for Ethiopian market conditions.
-If the product doesn't have grades, use price tiers based on quality or size."""
+Provide 5 personalized product recommendations with reasons.
+Format as:
+1. Product Name - Reason - Estimated Price Range"""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian markets. Provide detailed price breakdowns by grade and quality."},
+                {"role": "system", "content": "You are a product recommendation system. Analyze user behavior and market trends to provide relevant recommendations."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 600,
+            "max_tokens": 500,
             "temperature": 0.1
         }
         
@@ -113,87 +89,37 @@ If the product doesn't have grades, use price tiers based on quality or size."""
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Parse main fields
-            unit_match = re.search(r'Unit:\s*(\w+)', content, re.IGNORECASE)
-            price_match = re.search(r'Base Price:\s*([\d.]+)', content, re.IGNORECASE)
-            range_match = re.search(r'Price Range:\s*([\d.]+)\s*-\s*([\d.]+)', content, re.IGNORECASE)
-            trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
-            demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
-            confidence_match = re.search(r'Confidence:\s*(\w+)', content, re.IGNORECASE)
-            description_match = re.search(r'Description:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
+            # Parse recommendations
+            recommendations = []
+            lines = content.split('\n')
             
-            # Parse price breakdown by grade
-            grade_pattern = r'Grade\s*([A-C])\s*/\s*([^:]+):?\s*([\d.]+)\s*ETB'
-            grade_matches = re.findall(grade_pattern, content, re.IGNORECASE)
+            for line in lines:
+                if re.match(r'^\d+\.', line):
+                    parts = line.split('-')
+                    if len(parts) >= 2:
+                        name = parts[0].strip()
+                        reason = parts[1].strip() if len(parts) > 1 else "Recommended based on your activity"
+                        price_match = re.search(r'([\d.]+)\s*-\s*([\d.]+)', line)
+                        if price_match:
+                            price_min = float(price_match.group(1))
+                            price_max = float(price_match.group(2))
+                        else:
+                            price_min = None
+                            price_max = None
+                        
+                        recommendations.append({
+                            'name': name.replace('^d+\.', '').strip(),
+                            'reason': reason,
+                            'price_min': price_min,
+                            'price_max': price_max
+                        })
             
-            # Parse price breakdown by variant
-            variant_pattern = r'-\s*([^:]+):?\s*([\d.]+)\s*ETB'
-            variant_matches = re.findall(variant_pattern, content, re.IGNORECASE)
-            
-            # If no grade matches found, try alternative pattern
-            if not grade_matches:
-                grade_pattern2 = r'([A-C])\s*/\s*([^:]+):?\s*([\d.]+)\s*ETB'
-                grade_matches = re.findall(grade_pattern2, content, re.IGNORECASE)
-            
-            # Filter out variant matches that are actually grades
-            grade_variants = [g[1].strip() for g in grade_matches]
-            variant_matches = [(v[0].strip(), float(v[1])) for v in variant_matches if v[0].strip() not in grade_variants]
-            
-            # Build grade breakdown
-            grade_breakdown = []
-            if grade_matches:
-                for grade in grade_matches:
-                    grade_breakdown.append({
-                        'grade': grade[0].upper(),
-                        'name': grade[1].strip(),
-                        'price': float(grade[2])
-                    })
-            
-            # Build variant breakdown
-            variant_breakdown = []
-            if variant_matches:
-                for variant in variant_matches[:5]:  # Limit to 5 variants
-                    variant_breakdown.append({
-                        'name': variant[0].strip(),
-                        'price': variant[1]
-                    })
-            
-            # Get values
-            unit = unit_match.group(1).lower() if unit_match else "unit"
-            base_price = float(price_match.group(1)) if price_match else None
-            description = description_match.group(1).strip() if description_match else "Market analysis based on available data."
-            
-            result = {
+            return {
                 "success": True,
+                "recommendations": recommendations,
                 "raw_response": content,
-                "source": "Groq API",
-                "unit": unit,
-                "base_price": base_price,
-                "description": description,
-                "grade_breakdown": grade_breakdown,
-                "variant_breakdown": variant_breakdown
+                "source": "Groq API"
             }
-            
-            if range_match:
-                result["min_price"] = float(range_match.group(1))
-                result["max_price"] = float(range_match.group(2))
-            
-            if trend_match:
-                result["trend"] = trend_match.group(1).lower()
-            else:
-                result["trend"] = "stable"
-            
-            if demand_match:
-                result["demand"] = demand_match.group(1).lower()
-            else:
-                result["demand"] = "medium"
-            
-            if confidence_match:
-                result["confidence"] = confidence_match.group(1).upper()
-            else:
-                result["confidence"] = "MEDIUM"
-            
-            return result
         else:
             return {
                 "success": False,
@@ -201,244 +127,375 @@ If the product doesn't have grades, use price tiers based on quality or size."""
                 "fallback_used": True
             }
             
-    except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out", "fallback_used": True}
     except Exception as e:
         return {"success": False, "error": str(e), "fallback_used": True}
 
 # ==========================================
-# FALLBACK DATA
+# PRICE PREDICTION SYSTEM (NO BENCHMARKS)
 # ==========================================
 
-def get_fallback_data(product_name, region="Addis Ababa"):
-    """Get fallback data with sample breakdown"""
-    return {
-        'product': product_name,
-        'price': None,
-        'min_price': None,
-        'max_price': None,
-        'avg_price': None,
-        'unit': 'unit',
-        'trend': 'stable',
-        'demand': 'medium',
-        'confidence': 'LOW',
-        'description': 'Limited data available for this product.',
-        'grade_breakdown': [],
-        'variant_breakdown': [],
-        'is_fallback': True
-    }
-
-# ==========================================
-# SELF-LEARNING AI SYSTEM
-# ==========================================
-
-class SelfLearningAIInsights:
-    """Self-learning AI system"""
+class PricePredictionSystem:
+    """Price prediction system based solely on user posted products and transactions"""
     
     def __init__(self, user_id):
         self.user_id = user_id
-        self.models_dir = "Models"
         self.data_dir = "data"
         
-        os.makedirs(self.models_dir, exist_ok=True)
         os.makedirs(self.data_dir, exist_ok=True)
         
-        self.knowledge_base = self.load_knowledge_base()
-        self.model = None
-        self.scaler = None
-        self.load_or_train_model()
+        self.product_data = []
+        self.transaction_data = []
+        self.prediction_history = []
+        self.load_data()
         
-    def load_knowledge_base(self):
+    def load_data(self):
+        """Load product data from database"""
         try:
-            path = f"{self.data_dir}/ai_knowledge_{self.user_id}.json"
-            if os.path.exists(path):
-                with open(path, 'r') as f:
-                    return json.load(f)
+            # Get user's products
+            products = get_products(producer_id=self.user_id)
+            self.product_data = products if products else []
+            
+            # Get user's orders/transactions
+            orders = get_orders(self.user_id, 'producer', limit=100)
+            self.transaction_data = orders if orders else []
+            
+            # Load prediction history
+            pred_path = f"{self.data_dir}/predictions_{self.user_id}.json"
+            if os.path.exists(pred_path):
+                with open(pred_path, 'r') as f:
+                    self.prediction_history = json.load(f)
             else:
-                default = {
-                    'market_data': {},
-                    'price_history': {},
-                    'demand_patterns': {},
-                    'product_insights': {},
-                    'training_data': [],
-                    'predictions': {},
-                    'learning_iterations': 0,
-                    'accuracy_score': 0
-                }
-                with open(path, 'w') as f:
-                    json.dump(default, f, indent=2)
-                return default
-        except:
-            return {
-                'market_data': {},
-                'price_history': {},
-                'demand_patterns': {},
-                'product_insights': {},
-                'training_data': [],
-                'predictions': {},
-                'learning_iterations': 0,
-                'accuracy_score': 0
-            }
+                self.prediction_history = []
+                
+        except Exception as e:
+            self.product_data = []
+            self.transaction_data = []
+            self.prediction_history = []
     
-    def save_knowledge_base(self):
+    def save_predictions(self):
+        """Save prediction history"""
         try:
-            with open(f"{self.data_dir}/ai_knowledge_{self.user_id}.json", 'w') as f:
-                json.dump(self.knowledge_base, f, indent=2)
-        except:
+            with open(f"{self.data_dir}/predictions_{self.user_id}.json", 'w') as f:
+                json.dump(self.prediction_history, f, indent=2)
+        except Exception as e:
             pass
     
-    def load_or_train_model(self):
-        try:
-            model_path = f"{self.models_dir}/ai_model_{self.user_id}.pkl"
-            scaler_path = f"{self.models_dir}/ai_scaler_{self.user_id}.pkl"
+    def get_category_prices(self, product_name):
+        """Get price data for similar products"""
+        category = self.get_product_category(product_name)
+        
+        similar_prices = []
+        for product in self.product_data:
+            if product.get('category') == category and product.get('price', 0) > 0:
+                similar_prices.append(product.get('price', 0))
+        
+        return similar_prices
+    
+    def get_product_category(self, product_name):
+        """Get category for a product"""
+        categories = {
+            'Grains': ['teff', 'wheat', 'barley', 'maize', 'sorghum', 'millet'],
+            'Vegetables': ['onion', 'tomato', 'cabbage', 'potato', 'carrot', 'garlic'],
+            'Fruits': ['banana', 'mango', 'avocado', 'orange', 'papaya', 'apple'],
+            'Dairy': ['milk', 'butter', 'cheese', 'yogurt'],
+            'Meat': ['beef', 'chicken', 'mutton', 'goat', 'fish'],
+            'Coffee': ['coffee'],
+            'Other': ['honey', 'sesame', 'sugar', 'oil']
+        }
+        
+        product_lower = product_name.lower().strip()
+        for category, products in categories.items():
+            if any(p in product_lower for p in products):
+                return category
+        return 'Other'
+    
+    def predict_price(self, product_name, current_price):
+        """Predict fair price based on user's own data"""
+        # Get similar products from same category
+        similar_prices = self.get_category_prices(product_name)
+        
+        # Get transaction history for this product
+        transaction_prices = []
+        for trans in self.transaction_data:
+            if trans.get('product_name', '').lower() == product_name.lower():
+                if trans.get('total_amount', 0) > 0:
+                    transaction_prices.append(trans.get('total_amount', 0))
+        
+        # Combine all price data
+        all_prices = similar_prices + transaction_prices
+        
+        if all_prices:
+            # Calculate statistics from user's own data
+            avg_price = sum(all_prices) / len(all_prices)
+            min_price = min(all_prices)
+            max_price = max(all_prices)
             
-            if os.path.exists(model_path) and os.path.exists(scaler_path):
-                with open(model_path, 'rb') as f:
-                    self.model = pickle.load(f)
-                with open(scaler_path, 'rb') as f:
-                    self.scaler = pickle.load(f)
-                return True
+            # Determine if price is fair
+            if min_price <= current_price <= max_price:
+                is_fair = "Yes"
+                recommendation = "Maintain"
+            elif current_price < min_price:
+                is_fair = "No (Too Low)"
+                recommendation = "Increase"
             else:
-                self.model = RandomForestRegressor(
-                    n_estimators=100,
-                    max_depth=10,
-                    random_state=42,
-                    n_jobs=-1
-                )
-                self.scaler = StandardScaler()
-                self.train_model(self.generate_synthetic_data())
-                return True
-        except:
-            return False
-    
-    def train_model(self, training_data):
-        try:
-            X = []
-            y = []
+                is_fair = "No (Too High)"
+                recommendation = "Decrease"
             
-            for item in training_data:
-                features = [
-                    item.get('price', 100),
-                    item.get('demand_score', 50),
-                    item.get('seasonal_factor', 1.0),
-                    item.get('region_factor', 1.0),
-                    item.get('trend_factor', 1.0)
-                ]
-                target = item.get('predicted_price', item.get('price', 100))
-                
-                X.append(features)
-                y.append(target)
+            # Confidence based on data points
+            if len(all_prices) > 10:
+                confidence = "HIGH"
+            elif len(all_prices) > 5:
+                confidence = "MEDIUM"
+            else:
+                confidence = "LOW"
             
-            if len(X) > 5:
-                X = np.array(X)
-                y = np.array(y)
-                
-                self.scaler.fit(X)
-                X_scaled = self.scaler.transform(X)
-                
-                self.model.fit(X_scaled, y)
-                
-                self.knowledge_base['accuracy_score'] = self.model.score(X_scaled, y)
-                self.knowledge_base['learning_iterations'] = len(training_data)
-                
-                self.save_model()
-                self.save_knowledge_base()
-                return True
-            return False
-        except:
-            return False
-    
-    def generate_synthetic_data(self):
-        synthetic_data = []
-        products = [
-            {'name': 'coffee', 'price': 300, 'demand': 90, 'seasonal': 1.1},
-            {'name': 'teff', 'price': 100, 'demand': 85, 'seasonal': 1.0},
-            {'name': 'wheat', 'price': 55, 'demand': 88, 'seasonal': 1.0},
-            {'name': 'sugar', 'price': 65, 'demand': 85, 'seasonal': 0.9},
-            {'name': 'oil', 'price': 150, 'demand': 92, 'seasonal': 1.0},
-            {'name': 'milk', 'price': 75, 'demand': 88, 'seasonal': 1.0},
-            {'name': 'beef', 'price': 500, 'demand': 80, 'seasonal': 1.1},
-            {'name': 'onion', 'price': 35, 'demand': 92, 'seasonal': 0.9},
-            {'name': 'tomato', 'price': 42, 'demand': 90, 'seasonal': 0.8},
-            {'name': 'potato', 'price': 50, 'demand': 85, 'seasonal': 1.0},
-        ]
-        
-        for product in products:
-            for i in range(10):
-                variation = random.uniform(0.85, 1.15)
-                data = {
-                    'product_name': product['name'],
-                    'price': product['price'] * variation,
-                    'demand_score': product['demand'] * random.uniform(0.9, 1.05),
-                    'seasonal_factor': product['seasonal'] * random.uniform(0.9, 1.1),
-                    'region_factor': random.uniform(0.9, 1.1),
-                    'trend_factor': random.uniform(0.95, 1.05),
-                    'predicted_price': product['price'] * variation * random.uniform(0.95, 1.05)
-                }
-                synthetic_data.append(data)
-        
-        return synthetic_data
-    
-    def save_model(self):
-        try:
-            model_path = f"{self.models_dir}/ai_model_{self.user_id}.pkl"
-            scaler_path = f"{self.models_dir}/ai_scaler_{self.user_id}.pkl"
+            # Generate explanation
+            explanation = self.generate_explanation(product_name, current_price, avg_price, min_price, max_price)
             
-            with open(model_path, 'wb') as f:
-                pickle.dump(self.model, f)
-            with open(scaler_path, 'wb') as f:
-                pickle.dump(self.scaler, f)
-            return True
-        except:
-            return False
-    
-    def get_market_data(self, product_name, region="Addis Ababa"):
-        is_valid, msg = validate_product(product_name)
-        if not is_valid:
-            return {
-                'product': product_name,
-                'error': msg,
-                'is_valid': False
-            }
-        
-        groq_result = query_groq_market_data(product_name, region)
-        
-        if groq_result.get('success') and groq_result.get('base_price'):
-            return {
-                'product': product_name,
-                'base_price': groq_result.get('base_price'),
-                'min_price': groq_result.get('min_price', groq_result.get('base_price') * 0.7),
-                'max_price': groq_result.get('max_price', groq_result.get('base_price') * 1.3),
-                'unit': groq_result.get('unit', 'unit'),
-                'trend': groq_result.get('trend', 'stable'),
-                'demand': groq_result.get('demand', 'medium'),
-                'confidence': groq_result.get('confidence', 'MEDIUM'),
-                'description': groq_result.get('description', ''),
-                'grade_breakdown': groq_result.get('grade_breakdown', []),
-                'variant_breakdown': groq_result.get('variant_breakdown', []),
-                'source': 'Groq API',
-                'is_valid': True,
-                'raw_response': groq_result.get('raw_response', '')
+            prediction = {
+                'is_fair': is_fair,
+                'ideal_min': int(min_price * 0.9),
+                'ideal_max': int(max_price * 0.9),
+                'recommendation': recommendation,
+                'confidence': confidence,
+                'explanation': explanation,
+                'data_points': len(all_prices)
             }
         else:
-            fallback_data = get_fallback_data(product_name, region)
-            return {
-                'product': product_name,
-                'base_price': None,
-                'min_price': None,
-                'max_price': None,
-                'unit': 'unit',
-                'trend': 'stable',
-                'demand': 'medium',
-                'confidence': 'LOW',
-                'description': 'Limited data available.',
-                'grade_breakdown': [],
-                'variant_breakdown': [],
-                'source': 'Estimated',
-                'is_valid': True,
-                'raw_response': '',
-                'error': groq_result.get('error', 'No data available')
+            # No data available
+            prediction = {
+                'is_fair': "Unknown",
+                'ideal_min': None,
+                'ideal_max': None,
+                'recommendation': "Insufficient Data",
+                'confidence': "LOW",
+                'explanation': f"No price data available for {product_name} or similar products. Add more products or transactions to get predictions.",
+                'data_points': 0
             }
+        
+        # Save to history
+        self.prediction_history.append({
+            'product': product_name,
+            'current_price': current_price,
+            'prediction': prediction,
+            'timestamp': datetime.now().isoformat()
+        })
+        self.save_predictions()
+        
+        return prediction
+    
+    def generate_explanation(self, product_name, current_price, avg_price, min_price, max_price):
+        """Generate explanation for prediction"""
+        if avg_price == 0:
+            return f"No price data available for {product_name} or similar products."
+        
+        if current_price < avg_price * 0.8:
+            return f"Your price is significantly below the average ({avg_price:.0f} ETB) for similar products. Consider increasing to match market rates."
+        elif current_price > avg_price * 1.2:
+            return f"Your price is above the average ({avg_price:.0f} ETB) for similar products. Consider reducing to stay competitive."
+        else:
+            return f"Your price is within the typical range ({min_price:.0f} - {max_price:.0f} ETB) for similar products."
+    
+    def record_transaction(self, product_name, price, action):
+        """Record a buy/sell transaction"""
+        if 'transactions' not in self.__dict__:
+            self.transaction_data = []
+        
+        self.transaction_data.append({
+            'product_name': product_name,
+            'total_amount': price,
+            'action': action,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Save to database if needed
+        self.save_transactions()
+    
+    def save_transactions(self):
+        """Save transactions to file"""
+        try:
+            with open(f"{self.data_dir}/transactions_{self.user_id}.json", 'w') as f:
+                json.dump(self.transaction_data, f, indent=2)
+        except Exception as e:
+            pass
+    
+    def get_demand_analysis(self):
+        """Get demand analysis based on user's transactions"""
+        product_demand = defaultdict(int)
+        product_transactions = defaultdict(list)
+        
+        for trans in self.transaction_data:
+            product_name = trans.get('product_name', '')
+            if product_name:
+                product_demand[product_name] += 1
+                product_transactions[product_name].append(trans)
+        
+        # Get recent transactions (last 7 days)
+        week_ago = datetime.now() - timedelta(days=7)
+        recent_products = defaultdict(int)
+        
+        for trans in self.transaction_data:
+            try:
+                trans_date = datetime.fromisoformat(trans.get('timestamp', datetime.now().isoformat()))
+                if trans_date > week_ago:
+                    product_name = trans.get('product_name', '')
+                    if product_name:
+                        recent_products[product_name] += 1
+            except:
+                pass
+        
+        # Determine demand levels
+        demand_levels = {}
+        all_products = set(product_demand.keys()) | set(recent_products.keys())
+        
+        for product in all_products:
+            total_count = product_demand.get(product, 0)
+            recent_count = recent_products.get(product, 0)
+            
+            if total_count > 10:
+                demand_levels[product] = '🔥 High Demand'
+            elif total_count > 5:
+                demand_levels[product] = '📈 Growing Demand'
+            elif total_count > 0:
+                demand_levels[product] = '📊 Moderate Demand'
+            else:
+                demand_levels[product] = '📉 Low Demand'
+        
+        return {
+            'demand_levels': demand_levels,
+            'total_transactions': len(self.transaction_data),
+            'unique_products': len(product_demand),
+            'recent_activity': len(recent_products)
+        }
+
+
+# ==========================================
+# RECOMMENDATION SYSTEM
+# ==========================================
+
+class RecommendationSystem:
+    """Product recommendation system based on user behavior"""
+    
+    def __init__(self, user_id):
+        self.user_id = user_id
+        self.user_products = []
+        self.user_orders = []
+        self.view_history = []
+        self.load_user_data()
+        
+    def load_user_data(self):
+        """Load user data from database"""
+        try:
+            products = get_products(producer_id=self.user_id)
+            self.user_products = products if products else []
+            
+            orders = get_orders(self.user_id, 'producer', limit=50)
+            self.user_orders = orders if orders else []
+            
+            view_path = f"data/view_history_{self.user_id}.json"
+            if os.path.exists(view_path):
+                with open(view_path, 'r') as f:
+                    self.view_history = json.load(f)
+            else:
+                self.view_history = []
+                
+        except Exception as e:
+            self.user_products = []
+            self.user_orders = []
+            self.view_history = []
+    
+    def save_view_history(self):
+        """Save view history"""
+        try:
+            os.makedirs("data", exist_ok=True)
+            with open(f"data/view_history_{self.user_id}.json", 'w') as f:
+                json.dump(self.view_history, f, indent=2)
+        except Exception as e:
+            pass
+    
+    def add_view(self, product_name):
+        """Add product to view history"""
+        entry = {
+            'product': product_name,
+            'timestamp': datetime.now().isoformat()
+        }
+        self.view_history.append(entry)
+        
+        if len(self.view_history) > 100:
+            self.view_history = self.view_history[-100:]
+        
+        self.save_view_history()
+    
+    def get_user_behavior_summary(self):
+        """Get summary of user behavior"""
+        behavior = {
+            'products': [p.get('name') for p in self.user_products if p.get('name')],
+            'transactions': [o.get('product_name') for o in self.user_orders if o.get('product_name')],
+            'categories': [],
+            'avg_price': 0,
+            'viewed_products': [v.get('product') for v in self.view_history if v.get('product')]
+        }
+        
+        # Get categories
+        categories = set()
+        prices = []
+        for product in self.user_products:
+            if product.get('category'):
+                categories.add(product.get('category'))
+            if product.get('price', 0) > 0:
+                prices.append(product.get('price', 0))
+        
+        behavior['categories'] = list(categories)
+        behavior['avg_price'] = sum(prices) / len(prices) if prices else 0
+        
+        return behavior
+    
+    def get_recommendations(self, product_name, market_data):
+        """Get product recommendations based on user behavior and market data"""
+        # Get user behavior summary
+        behavior = self.get_user_behavior_summary()
+        
+        # Query Groq for recommendations
+        result = query_groq_recommendations(product_name, behavior, market_data)
+        
+        if result.get('success') and result.get('recommendations'):
+            return result.get('recommendations', [])
+        else:
+            return self.get_fallback_recommendations(product_name)
+    
+    def get_fallback_recommendations(self, product_name):
+        """Get fallback recommendations"""
+        recommendations = []
+        
+        # Get user's product categories
+        user_categories = set()
+        for product in self.user_products:
+            user_categories.add(product.get('category', 'Other'))
+        
+        # Category-based product suggestions
+        category_products = {
+            'Grains': ['Teff', 'Wheat', 'Barley', 'Maize', 'Sorghum'],
+            'Vegetables': ['Onion', 'Tomato', 'Cabbage', 'Potato', 'Carrot'],
+            'Fruits': ['Banana', 'Mango', 'Avocado', 'Orange', 'Papaya'],
+            'Dairy': ['Milk', 'Butter', 'Cheese', 'Yogurt'],
+            'Meat': ['Beef', 'Chicken', 'Mutton', 'Goat'],
+            'Coffee': ['Coffee'],
+            'Other': ['Honey', 'Sesame', 'Sugar', 'Oil']
+        }
+        
+        # Get products from user's categories
+        for category in user_categories:
+            if category in category_products:
+                for prod in category_products[category][:2]:
+                    if prod != product_name and not any(r['name'] == prod for r in recommendations):
+                        recommendations.append({
+                            'name': prod,
+                            'reason': f'Similar to your {category.lower()} products',
+                            'price_min': None,
+                            'price_max': None
+                        })
+        
+        return recommendations[:5]
 
 
 # ==========================================
@@ -446,13 +503,42 @@ class SelfLearningAIInsights:
 # ==========================================
 
 def render_ai_insights(user_info, ai=None):
-    """Render AI Insights tab with detailed price breakdown"""
+    """Render AI Insights tab with Price Prediction & Recommendation System"""
     
-    ai_insights = SelfLearningAIInsights(user_info['id'])
+    # Initialize systems
+    price_predictor = PricePredictionSystem(user_info['id'])
+    recommender = RecommendationSystem(user_info['id'])
     
     st.markdown("""
     <style>
-    .insight-card {
+    .search-bar {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background: #0a0e1a;
+        padding: 12px 16px;
+        border-bottom: 1px solid #2d3748;
+        margin-bottom: 16px;
+        border-radius: 12px;
+    }
+    .search-bar input {
+        width: 100%;
+        padding: 10px 18px;
+        border-radius: 25px;
+        border: 1px solid #2d3748;
+        background: #1a1a2e;
+        color: #f8fafc;
+        font-size: 14px;
+        outline: none;
+    }
+    .search-bar input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+    .search-bar input::placeholder {
+        color: #64748b;
+    }
+    .result-card {
         background: #1a1a2e;
         border-radius: 12px;
         padding: 16px 20px;
@@ -460,349 +546,467 @@ def render_ai_insights(user_info, ai=None):
         margin-bottom: 12px;
         transition: all 0.3s ease;
     }
-    .insight-card:hover {
+    .result-card:hover {
         border-color: #667eea;
         transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
     }
-    .insight-card .title {
-        color: #94a3b8;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 500;
-    }
-    .insight-card .value {
+    .result-card .title {
         color: #f8fafc;
-        font-size: 24px;
-        font-weight: 700;
-        margin: 4px 0;
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
     }
-    .insight-card .sub {
+    .result-card .subtitle {
         color: #94a3b8;
         font-size: 13px;
+        margin-bottom: 8px;
     }
-    .confidence-high { color: #10b981; }
-    .confidence-medium { color: #f59e0b; }
-    .confidence-low { color: #ef4444; }
-    .groq-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .result-card .price {
+        color: #10b981;
+        font-size: 24px;
+        font-weight: 700;
+    }
+    .badge-fair-yes {
+        background: #10b981;
         color: white;
-        font-size: 10px;
         padding: 2px 12px;
         border-radius: 12px;
+        font-size: 12px;
         font-weight: 600;
     }
-    .price-breakdown {
-        background: #1a1a2e;
+    .badge-fair-no {
+        background: #ef4444;
+        color: white;
+        padding: 2px 12px;
         border-radius: 12px;
-        padding: 16px 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .badge-fair-maybe {
+        background: #f59e0b;
+        color: white;
+        padding: 2px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .rec-card {
+        background: #1a1a2e;
+        border-radius: 8px;
+        padding: 12px 16px;
         border: 1px solid #2d3748;
-        margin: 8px 0;
+        margin-bottom: 8px;
+        transition: all 0.2s ease;
     }
-    .price-breakdown .item {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #1e293b;
+    .rec-card:hover {
+        border-color: #667eea;
+        transform: translateX(4px);
     }
-    .price-breakdown .item:last-child {
-        border-bottom: none;
+    .rec-card .name {
+        color: #f8fafc;
+        font-weight: 500;
     }
-    .price-breakdown .label {
+    .rec-card .reason {
         color: #94a3b8;
+        font-size: 12px;
     }
-    .price-breakdown .price {
+    .rec-card .price {
         color: #10b981;
         font-weight: 600;
-    }
-    .price-breakdown .grade-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        margin-right: 8px;
-    }
-    .grade-a { background: #10b981; color: #0f172a; }
-    .grade-b { background: #f59e0b; color: #0f172a; }
-    .grade-c { background: #ef4444; color: white; }
-    .description-box {
-        background: #1a1a2e;
-        border-radius: 12px;
-        padding: 16px 20px;
-        border: 1px solid #2d3748;
-        margin: 12px 0;
-        color: #e2e8f0;
-        font-size: 15px;
-        line-height: 1.7;
-    }
-    .search-section {
-        background: #1a1a2e;
-        border-radius: 12px;
-        padding: 16px 20px;
-        border: 1px solid #2d3748;
-        margin-bottom: 16px;
-    }
-    .result-box {
-        background: #1a1a2e;
-        border-radius: 12px;
-        padding: 20px;
-        border: 2px solid #667eea;
-        margin: 16px 0;
-        text-align: center;
-    }
-    .result-box .price {
-        font-size: 48px;
-        font-weight: 700;
-        color: #10b981;
-    }
-    .result-box .unit {
-        font-size: 20px;
-        color: #94a3b8;
-    }
-    .result-box .label {
-        color: #94a3b8;
         font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+    }
+    .demand-card {
+        background: #1a1a2e;
+        border-radius: 10px;
+        padding: 12px 16px;
+        border: 1px solid #2d3748;
+        margin-bottom: 8px;
+        transition: all 0.2s ease;
+    }
+    .demand-card:hover {
+        border-color: #f59e0b;
+    }
+    .demand-card .name {
+        color: #f8fafc;
+        font-weight: 500;
+    }
+    .demand-card .level {
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .demand-high { color: #10b981; }
+    .demand-growing { color: #f59e0b; }
+    .demand-moderate { color: #3b82f6; }
+    .demand-low { color: #ef4444; }
+    .light-mode .search-bar {
+        background: #f8fafc;
+        border-bottom-color: #e2e8f0;
+    }
+    .light-mode .search-bar input {
+        background: #ffffff;
+        color: #1e293b;
+        border-color: #e2e8f0;
+    }
+    .light-mode .result-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+    }
+    .light-mode .result-card .title {
+        color: #0f172a;
+    }
+    .light-mode .rec-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+    }
+    .light-mode .rec-card .name {
+        color: #0f172a;
+    }
+    .light-mode .demand-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+    }
+    .light-mode .demand-card .name {
+        color: #0f172a;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    st.subheader("🤖 AI-Powered Market Insights")
-    st.caption("Search and analyze any product with detailed price breakdown by grade and quality")
-    
-    # Status
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("🧠 Learning", ai_insights.knowledge_base.get('learning_iterations', 0))
-    with col2:
-        st.metric("📊 Accuracy", f"{ai_insights.knowledge_base.get('accuracy_score', 0)*100:.1f}%")
-    with col3:
-        st.metric("📚 Knowledge", len(ai_insights.knowledge_base.get('training_data', [])))
-    with col4:
-        progress = min(ai_insights.knowledge_base.get('learning_iterations', 0) / 100, 1.0)
-        st.metric("🎯 Progress", f"{progress*100:.0f}%")
+    # ==========================================
+    # FLOATING SEARCH BAR
+    # ==========================================
+    search_query = st.text_input(
+        "🔍 Search Products",
+        placeholder="Type product name...",
+        key="search_input",
+        label_visibility="collapsed"
+    )
     
     st.markdown("---")
     
-    # API Key Check
-    api_key = get_groq_api_key()
-    if not api_key:
-        st.warning("⚠️ Groq API key not found. Using fallback data.")
+    # ==========================================
+    # TAB LAYOUT
+    # ==========================================
+    tab1, tab2, tab3 = st.tabs(["📊 Price Prediction", "🎯 Recommendations", "📈 Demand Analysis"])
     
-    # Get user's products
-    all_products = get_products(producer_id=user_info['id'])
-    user_product_names = [p['name'] for p in all_products] if all_products else []
-    
-    # Product Selection
-    st.markdown('<div class="search-section">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Search Any Product")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        search_option = st.radio(
-            "Choose product source:",
-            ["Select from my products", "Enter any product name"],
-            horizontal=True
+    # ==========================================
+    # TAB 1: PRICE PREDICTION
+    # ==========================================
+    with tab1:
+        st.subheader("📊 Price Prediction System")
+        st.caption("Get price predictions based on your posted products and transaction history")
+        
+        user_products = get_products(producer_id=user_info['id'])
+        
+        if not user_products:
+            st.warning("⚠️ No products found. Please add products in the Inventory tab first.")
+            
+            # Show sample prediction
+            st.info("💡 Sample Prediction (based on user data):")
+            sample_data = {
+                'product_name': 'Sample Product',
+                'current_price': 100,
+                'prediction': {
+                    'is_fair': 'Yes',
+                    'ideal_min': 90,
+                    'ideal_max': 110,
+                    'recommendation': 'Maintain',
+                    'confidence': 'MEDIUM',
+                    'explanation': 'Based on your product data and transaction history.',
+                    'data_points': 8
+                }
+            }
+            display_prediction(sample_data)
+            return
+        
+        # Product selection
+        product_options = [p['name'] for p in user_products]
+        selected_product = st.selectbox(
+            "Select a product to predict",
+            product_options,
+            help="Choose a product from your inventory"
         )
-    
-    with col2:
-        regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
-                  "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
-        selected_region = st.selectbox("Region", regions, index=0)
-    
-    st.markdown("---")
-    
-    if search_option == "Select from my products":
-        if user_product_names:
-            selected_product_name = st.selectbox("Select Product", user_product_names)
-        else:
-            st.warning("No products in your inventory.")
-            selected_product_name = st.text_input(
-                "Enter Product Name",
-                placeholder="e.g., Coffee, Teff, Car, Phone..."
-            )
-    else:
-        selected_product_name = st.text_input(
-            "Enter Product Name",
-            placeholder="e.g., Coffee, Teff, Car, Phone, Laptop, Onion, Tomato, Beef, Milk, Egg...",
-            help="Enter any product to analyze market prices"
-        )
-        st.caption("💡 Examples: Coffee, Teff, Car, Phone, Laptop, Onion, Tomato, Beef, Milk, Egg, Banana, Shoes, TV")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    if not selected_product_name:
-        st.info("💡 Select or enter a product name above to get market insights.")
-        return
-    
-    product_name = selected_product_name.strip()
-    st.markdown("---")
-    
-    # Fetch data
-    with st.spinner(f"🔍 Analyzing market data for {product_name} in {selected_region}..."):
-        market_data = ai_insights.get_market_data(product_name, selected_region)
-    
-    if not market_data.get('is_valid', True):
-        st.error(f"❌ {market_data.get('error', 'Invalid product')}")
-        return
-    
-    st.markdown("### 📊 Market Analysis Results")
-    st.caption(f"📍 {product_name} in {selected_region}")
-    
-    if market_data.get('source') == 'Groq API':
-        st.markdown('<span class="groq-badge">🤖 Powered by Groq AI</span>', unsafe_allow_html=True)
         
-        base_price = market_data.get('base_price')
-        unit = market_data.get('unit', 'unit')
-        min_price = market_data.get('min_price')
-        max_price = market_data.get('max_price')
-        trend = market_data.get('trend', 'stable')
-        demand = market_data.get('demand', 'medium')
-        confidence = market_data.get('confidence', 'MEDIUM')
-        description = market_data.get('description', '')
-        grade_breakdown = market_data.get('grade_breakdown', [])
-        variant_breakdown = market_data.get('variant_breakdown', [])
+        # Search filter for products
+        if search_query:
+            filtered_options = [p for p in product_options if search_query.lower() in p.lower()]
+            if filtered_options:
+                selected_product = filtered_options[0]
         
-        # Base Price Display
-        if base_price:
-            st.markdown(f"""
-            <div class="result-box">
-                <div class="label">Base Market Price</div>
-                <div class="price">{base_price:,.0f}</div>
-                <div class="unit">ETB per {unit}</div>
-                <div style="margin-top: 12px; color: #94a3b8; font-size: 14px;">
-                    Range: {min_price:,.0f} - {max_price:,.0f} ETB/{unit}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        # Get product details
+        product_data = next((p for p in user_products if p['name'] == selected_product), None)
         
-        # Market Details
+        if product_data:
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.markdown(f"**Product:** {product_data.get('name', 'Unknown')}")
+                st.markdown(f"**Category:** {product_data.get('category', 'N/A')}")
+                st.markdown(f"**Current Price:** {product_data.get('price', 0)} ETB")
+                st.markdown(f"**Data Points:** {len([p for p in user_products if p.get('category') == product_data.get('category')])} similar products")
+            with col2:
+                if st.button("🔮 Predict Price", use_container_width=True, type="primary"):
+                    with st.spinner(f"Analyzing {selected_product}..."):
+                        result = price_predictor.predict_price(
+                            selected_product,
+                            product_data.get('price', 0)
+                        )
+                        st.session_state.prediction_result = result
+                        st.rerun()
+            
+            # Display prediction result
+            if 'prediction_result' in st.session_state:
+                display_prediction({
+                    'product_name': selected_product,
+                    'current_price': product_data.get('price', 0),
+                    'prediction': st.session_state.prediction_result
+                })
+        
+        # Show prediction history
+        if price_predictor.prediction_history:
+            with st.expander("📋 Prediction History", expanded=False):
+                for pred in price_predictor.prediction_history[-5:]:
+                    st.markdown(f"""
+                    <div class="result-card">
+                        <div class="title">{pred['product']}</div>
+                        <div class="subtitle">
+                            Price: {pred['current_price']} ETB | 
+                            Fair: {pred['prediction'].get('is_fair', 'N/A')} | 
+                            Confidence: {pred['prediction'].get('confidence', 'N/A')}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    # ==========================================
+    # TAB 2: RECOMMENDATIONS
+    # ==========================================
+    with tab2:
+        st.subheader("🎯 Product Recommendations")
+        st.caption("AI-powered recommendations based on your behavior and market trends")
+        
+        # User behavior summary
+        behavior = recommender.get_user_behavior_summary()
+        
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            trend_emoji = "📈" if trend == 'increasing' else "📉" if trend == 'decreasing' else "➡️"
-            st.metric("📈 Trend", f"{trend_emoji} {trend.capitalize()}")
+            st.metric("📦 Products Posted", len(behavior.get('products', [])))
         with col2:
-            demand_emoji = "🔥" if demand == 'high' else "📊" if demand == 'medium' else "❄️"
-            st.metric("📊 Demand", f"{demand_emoji} {demand.capitalize()}")
+            st.metric("📋 Orders", len(behavior.get('transactions', [])))
         with col3:
-            st.metric("🎯 Confidence", confidence)
-            color = "#10b981" if confidence == "HIGH" else "#f59e0b" if confidence == "MEDIUM" else "#ef4444"
-            st.caption(f"<span style='color:{color}'>{confidence}</span>", unsafe_allow_html=True)
+            st.metric("👁️ Viewed", len(behavior.get('viewed_products', [])))
         with col4:
-            st.metric("📏 Unit", unit.capitalize())
+            st.metric("💰 Avg Price", f"{behavior.get('avg_price', 0):.0f} ETB")
         
-        # Description
-        if description:
-            st.markdown("#### 📝 Market Description")
-            st.markdown(f"""
-            <div class="description-box">
-                {description}
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("---")
         
-        # Price Breakdown by Grade
-        if grade_breakdown:
-            st.markdown("#### 📊 Price Breakdown by Grade")
-            st.markdown('<div class="price-breakdown">', unsafe_allow_html=True)
-            
-            for item in grade_breakdown:
-                grade_class = f"grade-{item['grade'].lower()}" if item['grade'] in ['A', 'B', 'C'] else "grade-b"
-                st.markdown(f"""
-                <div class="item">
-                    <div>
-                        <span class="grade-badge {grade_class}">{item['grade']}</span>
-                        <span class="label">{item['name']}</span>
-                    </div>
-                    <span class="price">{item['price']:,.0f} ETB/{unit}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+        # Get market data from user's own products
+        market_data = {
+            'popular': behavior.get('products', [])[:5],
+            'trending': behavior.get('viewed_products', [])[:5],
+            'high_demand': [p for p in behavior.get('products', []) if p]  # From user's own products
+        }
         
-        # Price Breakdown by Variant
-        if variant_breakdown:
-            st.markdown("#### 🏷️ Price Breakdown by Variant/Model")
-            st.markdown('<div class="price-breakdown">', unsafe_allow_html=True)
-            
-            for item in variant_breakdown:
-                st.markdown(f"""
-                <div class="item">
-                    <span class="label">{item['name']}</span>
-                    <span class="price">{item['price']:,.0f} ETB/{unit}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # If no breakdown available
-        if not grade_breakdown and not variant_breakdown:
-            st.info("💡 No detailed price breakdown available for this product.")
-        
-        # Raw response
-        if market_data.get('raw_response'):
-            with st.expander("📋 View AI Analysis Details", expanded=False):
-                st.text(market_data.get('raw_response'))
-        
-        # Confidence warning
-        if confidence == "LOW":
-            st.warning("⚠️ Low confidence - Limited data available. Please verify with local sources.")
-        elif confidence == "MEDIUM":
-            st.info("📊 Medium confidence - Based on available market data.")
-        else:
-            st.success("✅ High confidence - Based on reliable market analysis.")
-            
-    else:
-        # Fallback
-        st.markdown('<span class="fallback-badge">📊 Estimated Data</span>', unsafe_allow_html=True)
-        st.warning(f"⚠️ Could not fetch AI analysis for {product_name}")
-        
-        if market_data.get('error'):
-            st.info(f"💡 {market_data.get('error')}")
-        
-        st.markdown("""
-        #### 💡 Tips:
-        - Make sure your GROQ_API_KEY is set in Streamlit secrets
-        - Check your internet connection
-        - Try a different product name
-        """)
-        
-        if market_data.get('raw_response'):
-            with st.expander("📋 View Raw Response", expanded=False):
-                st.text(market_data.get('raw_response'))
-    
-    st.markdown("---")
-    
-    # Training
-    st.markdown("### 🧠 AI Training")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("🔄 Train Model", use_container_width=True):
-            with st.spinner("Training AI model..."):
-                training_data = ai_insights.generate_synthetic_data()
-                success = ai_insights.train_model(training_data)
-                if success:
-                    st.success("✅ Model trained successfully!")
+        # Get recommendations
+        if st.button("🔄 Get Personalized Recommendations", use_container_width=True, type="primary"):
+            with st.spinner("Analyzing your behavior and generating recommendations..."):
+                if user_products:
+                    base_product = user_products[0]['name']
+                    recommendations = recommender.get_recommendations(base_product, market_data)
+                    st.session_state.recommendations = recommendations
                     st.rerun()
                 else:
-                    st.error("❌ Training failed.")
+                    st.warning("Please add products first to get personalized recommendations.")
+        
+        # Display recommendations
+        if 'recommendations' in st.session_state and st.session_state.recommendations:
+            st.markdown("#### 📌 Recommended Products")
+            
+            for i, rec in enumerate(st.session_state.recommendations, 1):
+                price_display = f"{rec.get('price_min', 0):.0f} - {rec.get('price_max', 0):.0f} ETB" if rec.get('price_min') else "Price varies"
+                st.markdown(f"""
+                <div class="rec-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span class="name">{i}. {rec.get('name', 'Unknown')}</span>
+                            <div class="reason">{rec.get('reason', 'Recommended based on your behavior')}</div>
+                        </div>
+                        <div class="price">
+                            {price_display}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("💡 Click 'Get Personalized Recommendations' to see products tailored to your behavior.")
+        
+        # Popular products from user's data
+        st.markdown("---")
+        st.markdown("#### 📦 Products from Your Inventory")
+        
+        if user_products:
+            for product in user_products[:6]:
+                st.markdown(f"""
+                <div class="rec-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span class="name">{product.get('name', 'Unknown')}</span>
+                            <div class="reason">Category: {product.get('category', 'Other')}</div>
+                        </div>
+                        <div class="price">{product.get('price', 0)} ETB</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No products in your inventory yet.")
     
-    with col2:
-        if st.button("📊 View Performance", use_container_width=True):
-            acc = ai_insights.knowledge_base.get('accuracy_score', 0)
-            samples = len(ai_insights.knowledge_base.get('training_data', []))
-            st.info(f"Accuracy: {acc*100:.1f}%")
-            st.info(f"Samples: {samples}")
-    
-    with col3:
-        if st.button("💾 Save Model", use_container_width=True):
-            if ai_insights.save_model():
-                st.success("✅ Model saved to Models/ folder!")
+    # ==========================================
+    # TAB 3: DEMAND ANALYSIS
+    # ==========================================
+    with tab3:
+        st.subheader("📈 Demand Analysis")
+        st.caption("Demand analysis based on your transactions and product activity")
+        
+        # Get demand analysis
+        demand_analysis = price_predictor.get_demand_analysis()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📊 Total Transactions", demand_analysis.get('total_transactions', 0))
+        with col2:
+            st.metric("📦 Unique Products", demand_analysis.get('unique_products', 0))
+        with col3:
+            st.metric("📈 Recent Activity", demand_analysis.get('recent_activity', 0))
+        
+        st.markdown("---")
+        
+        # Demand levels
+        demand_levels = demand_analysis.get('demand_levels', {})
+        
+        if demand_levels:
+            st.markdown("#### 📊 Product Demand Levels (Based on Your Transactions)")
+            
+            # Sort by demand level
+            sorted_products = sorted(
+                demand_levels.items(),
+                key=lambda x: (
+                    0 if 'High' in x[1] else 1 if 'Growing' in x[1] else 2 if 'Moderate' in x[1] else 3
+                )
+            )
+            
+            for product, level in sorted_products:
+                if 'High' in level:
+                    level_class = "demand-high"
+                elif 'Growing' in level:
+                    level_class = "demand-growing"
+                elif 'Moderate' in level:
+                    level_class = "demand-moderate"
+                else:
+                    level_class = "demand-low"
+                
+                st.markdown(f"""
+                <div class="demand-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="name">{product}</span>
+                        <span class="level {level_class}">{level}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("📭 No demand data available. Start adding transactions to see demand analysis.")
+        
+        st.markdown("---")
+        st.markdown("#### 💡 How Demand is Calculated")
+        st.caption("""
+        - **High Demand**: More than 10 transactions
+        - **Growing Demand**: 5-10 transactions
+        - **Moderate Demand**: 1-5 transactions
+        - **Low Demand**: No recent activity
+        """)
+        
+        # Add transaction button
+        st.markdown("---")
+        st.markdown("#### ➕ Record Transaction")
+        st.caption("Add a transaction to improve demand analysis")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            product_name = st.text_input("Product Name", placeholder="e.g., Teff, Coffee")
+        with col2:
+            price = st.number_input("Price (ETB)", min_value=0.0, step=1.0)
+        with col3:
+            action = st.selectbox("Action", ["buy", "sell"])
+        
+        if st.button("💾 Record Transaction", use_container_width=True):
+            if product_name and price > 0:
+                price_predictor.record_transaction(product_name, price, action)
+                st.success(f"✅ Transaction recorded for {product_name}")
+                st.rerun()
             else:
-                st.error("❌ Failed to save model")
+                st.error("❌ Please fill in all fields")
+
+
+def display_prediction(data):
+    """Display prediction results in a card"""
+    product_name = data.get('product_name', 'Unknown')
+    current_price = data.get('current_price', 0)
+    prediction = data.get('prediction', {})
     
-    st.caption("📁 Models saved to `Models/` folder")
+    is_fair = prediction.get('is_fair', 'Unknown')
+    ideal_min = prediction.get('ideal_min')
+    ideal_max = prediction.get('ideal_max')
+    recommendation = prediction.get('recommendation', 'N/A')
+    confidence = prediction.get('confidence', 'LOW')
+    explanation = prediction.get('explanation', '')
+    data_points = prediction.get('data_points', 0)
+    
+    # Fair badge
+    if is_fair == "Yes":
+        badge_class = "badge-fair-yes"
+    elif is_fair == "No (Too Low)" or is_fair == "No (Too High)":
+        badge_class = "badge-fair-no"
+    else:
+        badge_class = "badge-fair-maybe"
+    
+    st.markdown(f"""
+    <div class="result-card">
+        <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div>
+                <div class="title">{product_name}</div>
+                <div class="subtitle">
+                    Current Price: {current_price:.0f} ETB | 
+                    <span class="{badge_class}">Fair Price: {is_fair}</span>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="color: #94a3b8; font-size: 12px;">Recommendation</div>
+                <div style="color: {'#10b981' if recommendation == 'Maintain' else '#f59e0b' if recommendation == 'Increase' else '#ef4444' if recommendation == 'Decrease' else '#94a3b8'}; font-weight: 600; font-size: 16px;">
+                    {recommendation}
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 20px; margin: 12px 0; flex-wrap: wrap;">
+            <div>
+                <span style="color: #94a3b8; font-size: 12px;">Ideal Range</span>
+                <div style="color: #f8fafc; font-weight: 600;">
+                    {f'{ideal_min:.0f} - {ideal_max:.0f} ETB' if ideal_min and ideal_max else 'Insufficient data'}
+                </div>
+            </div>
+            <div>
+                <span style="color: #94a3b8; font-size: 12px;">Confidence</span>
+                <div style="color: {'#10b981' if confidence == 'HIGH' else '#f59e0b' if confidence == 'MEDIUM' else '#ef4444'}; font-weight: 600;">
+                    {confidence}
+                </div>
+            </div>
+            <div>
+                <span style="color: #94a3b8; font-size: 12px;">Data Points</span>
+                <div style="color: #f8fafc; font-weight: 600;">
+                    {data_points}
+                </div>
+            </div>
+        </div>
+        
+        <div style="color: #94a3b8; font-size: 13px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e293b;">
+            💡 {explanation}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
