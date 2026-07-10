@@ -8,7 +8,6 @@ float_init()
 
 def get_groq_client():
     """Initialize Groq client using Streamlit secrets or environment variables."""
-    # Try to get key from Streamlit secrets (for Streamlit Cloud) or .env (for local)
     api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     
     if not api_key:
@@ -75,45 +74,11 @@ def inject_chatbot_styles():
     .chat-messages::-webkit-scrollbar { width: 6px; }
     .chat-messages::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
 
-    /* Override Streamlit default chat styles to look like modern bubbles */
-    div[data-testid="stChatMessage"] {
-        background: transparent;
-        padding: 4px 0;
-        border: none;
-    }
-    div[data-testid="stChatMessageContent"] {
-        background: #f1f3f5;
-        padding: 10px 14px;
-        border-radius: 18px;
-        font-size: 14px;
-        line-height: 1.5;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    /* User messages on the right */
-    div[data-testid="stChatMessage"]:has(div[data-testid="chat-avatar-user"]) {
-        flex-direction: row-reverse;
-    }
-    div[data-testid="stChatMessage"]:has(div[data-testid="chat-avatar-user"]) div[data-testid="stChatMessageContent"] {
-        background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);
-        color: white;
-    }
-
     /* --- Chat Input Area --- */
     .chat-input-area {
         padding: 12px 16px;
         border-top: 1px solid rgba(0,0,0,0.05);
         background: rgba(255,255,255,0.8);
-    }
-    /* Make Streamlit input look cleaner */
-    div[data-testid="stChatInput"] {
-        padding: 0;
-        border: 1px solid #e0e0e0;
-        border-radius: 24px;
-        background: white;
-    }
-    div[data-testid="stChatInput"]:focus-within {
-        border-color: #4e54c8;
-        box-shadow: 0 0 0 2px rgba(78, 84, 200, 0.2);
     }
 
     /* --- Floating Action Button (FAB) --- */
@@ -130,9 +95,6 @@ def inject_chatbot_styles():
         transform: scale(1.05);
         box-shadow: 0 12px 25px rgba(78, 84, 200, 0.6);
     }
-    
-    /* Hide default streamlit deploy button if it overlaps */
-    header[data-testid="stHeader"] { z-index: 9998; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -143,7 +105,7 @@ def render_floating_chatbot(user_context: str = ""):
     if "chat_open" not in st.session_state:
         st.session_state.chat_open = False
     if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = [] # We will inject system prompt dynamically
+        st.session_state.chat_messages = []
 
     inject_chatbot_styles()
 
@@ -201,11 +163,14 @@ def render_floating_chatbot(user_context: str = ""):
 
                 # Generate response
                 with st.chat_message("assistant"):
+                    message_placeholder = st.empty()
+                    full_response = ""
+                    
                     with st.spinner("Thinking..."):
                         client = init_groq_client()
                         if client:
                             try:
-                                # 1. Build dynamic system prompt with real-time DB context
+                                # Build dynamic system prompt with real-time DB context
                                 system_msg = {
                                     "role": "system",
                                     "content": f"""You are the AI Supply Chain Assistant for the Ethiopian AgriTech platform. 
@@ -214,13 +179,13 @@ def render_floating_chatbot(user_context: str = ""):
                                     CURRENT USER REAL-TIME CONTEXT:
                                     {user_context}
                                     
-                                    Use this data to give personalized, data-driven answers. For example, if the context shows 'Critical Low Stock Alerts', proactively advise the user to restock those specific items immediately."""
+                                    Use this data to give personalized, data-driven answers."""
                                 }
                                 
-                                # 2. Combine system prompt with chat history (limit to last 10 messages to save tokens)
+                                # Combine system prompt with chat history
                                 messages_for_api = [system_msg] + st.session_state.chat_messages[-10:]
 
-                                # 3. Stream response from Groq
+                                # Stream response from Groq
                                 stream = client.chat.completions.create(
                                     model="llama-3.3-70b-versatile",
                                     messages=messages_for_api,
@@ -228,12 +193,23 @@ def render_floating_chatbot(user_context: str = ""):
                                     max_tokens=1024,
                                     stream=True,
                                 )
-                                response = st.write_stream(stream)
-                                st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                                
+                                # Process streaming response - extract only text content
+                                for chunk in stream:
+                                    if chunk.choices and len(chunk.choices) > 0:
+                                        delta = chunk.choices[0].delta
+                                        if delta.content:
+                                            full_response += delta.content
+                                            message_placeholder.markdown(full_response + "▌")
+                                
+                                # Show final response without cursor
+                                message_placeholder.markdown(full_response)
+                                st.session_state.chat_messages.append({"role": "assistant", "content": full_response})
+                                
                             except Exception as e:
                                 st.error(f"Error connecting to Groq: {e}")
         else:
             # --- FLOATING ACTION BUTTON (FAB) UI ---
-            if st.button("💬", key="open_chat", help="Open AI Assistant"):
+            if st.button("", key="open_chat", help="Open AI Assistant"):
                 st.session_state.chat_open = True
                 st.rerun()
