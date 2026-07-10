@@ -1,5 +1,6 @@
 # app.py - Main entry point
 import streamlit as st
+import os
 from utils.auth import initialize_session_state, render_login
 from utils.theme import initialize_theme, get_theme_css, render_theme_toggle
 
@@ -37,7 +38,13 @@ def main():
         
         # Show user info with profile image indicator
         user_name = st.session_state.user_info.get('name', 'User')
-        has_image = st.session_state.user_info.get('profile_image') and os.path.exists(st.session_state.user_info.get('profile_image', ''))
+        profile_image = st.session_state.user_info.get('profile_image', '')
+        
+        # Check if profile image exists
+        has_image = False
+        if profile_image and os.path.exists(profile_image):
+            has_image = True
+        
         image_indicator = "📷" if has_image else "👤"
         
         st.sidebar.write(f"{image_indicator} Logged in as: **{user_name}**")
