@@ -11,7 +11,7 @@ from utils.db_helpers import (
     get_low_stock_products, update_product, delete_product
 )
 
-from ..components.product_card import render_product_card
+from ..components.product_card import render_product_card, render_product_detail
 
 def render_inventory(user_info, ai):
     """Render Professional Inventory Management tab"""
@@ -24,39 +24,6 @@ def render_inventory(user_info, ai):
         max-width: 1400px;
         margin: 0 auto;
         padding: 0 2px;
-    }
-    
-    /* Sub-tabs styling - Improved Dark Mode */
-    .sub-tabs {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 12px;
-        background: #1e293b;
-        padding: 4px;
-        border-radius: 10px;
-        border: 1px solid #334155;
-    }
-    .sub-tab {
-        padding: 8px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 500;
-        font-size: 13px;
-        transition: all 0.3s ease;
-        background: transparent;
-        color: #94a3b8;
-        border: none;
-        flex: 1;
-        text-align: center;
-    }
-    .sub-tab:hover {
-        background: rgba(102, 126, 234, 0.15);
-        color: #e2e8f0;
-    }
-    .sub-tab.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: #ffffff;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     
     /* Stats Row - Single Compact Row */
@@ -109,80 +76,6 @@ def render_inventory(user_info, ai):
     .light-mode .stat-item .label {
         color: #475569 !important;
     }
-    .light-mode .sub-tabs {
-        background: #f1f5f9 !important;
-        border-color: #e2e8f0 !important;
-    }
-    .light-mode .sub-tab {
-        color: #64748b !important;
-    }
-    .light-mode .sub-tab:hover {
-        background: rgba(102, 126, 234, 0.08) !important;
-        color: #1e293b !important;
-    }
-    .light-mode .sub-tab.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-    }
-    
-    /* Browse Cards - Improved Dark Mode */
-    .browse-card {
-        background: #1e293b;
-        border-radius: 10px;
-        padding: 14px 16px;
-        border: 1px solid #334155;
-        margin-bottom: 10px;
-        transition: all 0.3s ease;
-    }
-    .browse-card:hover {
-        border-color: #667eea;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-    }
-    .browse-card .product-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: #f8fafc;
-    }
-    .browse-card .product-meta {
-        color: #94a3b8;
-        font-size: 12px;
-        margin: 2px 0;
-    }
-    .browse-card .product-price {
-        color: #10b981;
-        font-size: 18px;
-        font-weight: 700;
-    }
-    .browse-card .producer-info {
-        background: rgba(102, 126, 234, 0.1);
-        padding: 6px 10px;
-        border-radius: 6px;
-        margin: 6px 0;
-        font-size: 12px;
-        color: #94a3b8;
-    }
-    .browse-card .producer-info strong {
-        color: #e2e8f0;
-    }
-    
-    .light-mode .browse-card {
-        background: #ffffff !important;
-        border-color: #e2e8f0 !important;
-    }
-    .light-mode .browse-card .product-name {
-        color: #0f172a !important;
-    }
-    .light-mode .browse-card .product-meta {
-        color: #475569 !important;
-    }
-    .light-mode .browse-card .producer-info {
-        background: rgba(102, 126, 234, 0.05) !important;
-        color: #475569 !important;
-    }
-    .light-mode .browse-card .producer-info strong {
-        color: #0f172a !important;
-    }
     
     /* Search Bar - Improved */
     .search-container {
@@ -227,10 +120,6 @@ def render_inventory(user_info, ai):
         outline: none;
         border-color: #667eea;
     }
-    .search-container select option {
-        background: #1e293b;
-        color: #f8fafc;
-    }
     
     .light-mode .search-container {
         background: #f1f5f9 !important;
@@ -256,9 +145,6 @@ def render_inventory(user_info, ai):
     
     /* Responsive */
     @media (max-width: 768px) {
-        .sub-tabs {
-            flex-direction: column;
-        }
         .product-grid {
             grid-template-columns: 1fr;
         }
@@ -325,6 +211,14 @@ def render_inventory(user_info, ai):
 # ==========================================
 def render_my_products(user_info, ai):
     """Render the My Products sub-tab"""
+    
+    # Check if showing product detail
+    if st.session_state.get('show_product_detail', False) and st.session_state.get('selected_product_id'):
+        all_products = get_products(producer_id=user_info['id'])
+        selected_product = next((p for p in all_products if p['id'] == st.session_state.selected_product_id), None)
+        if selected_product:
+            render_product_detail(selected_product, user_info)
+            return
     
     # Get all products
     all_products = get_products(producer_id=user_info['id'])
@@ -700,22 +594,22 @@ def render_browse_products(user_info):
                 
                 # Product Card
                 st.markdown(f"""
-                <div class="browse-card">
+                <div style="background: #1e293b; border-radius: 10px; padding: 14px 16px; border: 1px solid #334155; margin-bottom: 10px;">
                     <div style="display:flex;justify-content:space-between;align-items:start;">
                         <div>
-                            <div class="product-name">{product.get('name', 'Unknown')}</div>
-                            <div class="product-meta">📂 {product.get('category', 'N/A')}</div>
-                            <div class="product-price">{product.get('price', 0):,.0f} ETB</div>
-                            <div class="product-meta">📦 Stock: {product.get('quantity', 0)} units</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #f8fafc;">{product.get('name', 'Unknown')}</div>
+                            <div style="color: #94a3b8; font-size: 12px; margin: 2px 0;">📂 {product.get('category', 'N/A')}</div>
+                            <div style="color: #10b981; font-size: 18px; font-weight: 700;">{product.get('price', 0):,.0f} ETB</div>
+                            <div style="color: #94a3b8; font-size: 12px;">📦 Stock: {product.get('quantity', 0)} units</div>
                         </div>
                         <span style="font-size:32px;">🌾</span>
                     </div>
-                    <div class="producer-info">
-                        👤 <strong>{producer_name}</strong> • 🏢 {producer_company}
+                    <div style="background: rgba(102, 126, 234, 0.08); padding: 6px 10px; border-radius: 6px; margin: 6px 0; font-size: 12px; color: #94a3b8;">
+                        👤 <strong style="color: #e2e8f0;">{producer_name}</strong> • 🏢 {producer_company}
                     </div>
                     <div style="display:flex;gap:6px;margin-top:6px;">
-                        <span class="product-info-badge">⚖️ {product.get('weight', 0)} kg</span>
-                        <span class="product-info-badge">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
+                        <span style="display:inline-block; background: #334155; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">⚖️ {product.get('weight', 0)} kg</span>
+                        <span style="display:inline-block; background: #334155; padding: 2px 10px; border-radius: 12px; font-size: 11px; color: #e2e8f0;">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
