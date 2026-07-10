@@ -6,140 +6,171 @@ import os
 import json
 import pickle
 import requests
+import re
 from datetime import datetime, timedelta
 import random
-from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings('ignore')
 
-from utils.db_helpers import get_products, get_user_by_id
+from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# ETHIOPIAN MARKET DATA SCRAPER
+# GROK API INTEGRATION
 # ==========================================
 
-class EthiopianMarketScraper:
-    """Scrape Ethiopian market data from various sources"""
-    
-    def __init__(self):
-        self.market_data = {}
-        self.ethiopian_markets = {
-            'Addis Ababa': ['Mercato', 'Bole', 'Piassa', 'Sarbet', 'Kazanches'],
-            'Oromia': ['Adama', 'Bishoftu', 'Shashemene', 'Ambo', 'Jimma'],
-            'Amhara': ['Bahir Dar', 'Gondar', 'Dessie', 'Debre Markos'],
-            'Tigray': ['Mekelle', 'Adwa', 'Axum'],
-            'SNNP': ['Hawassa', 'Arba Minch', 'Wolayita'],
-            'Sidama': ['Hawassa', 'Yirgalem', 'Dilla']
+def query_grok_api(product_name, region="Addis Ababa"):
+    """Query the Grok API for current product price in Ethiopia."""
+    try:
+        api_key = st.secrets["GROK_API_KEY"]
+        # Using the correct xAI API endpoint
+        url = "https://api.x.ai/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
         }
         
-        # Ethiopian product price database (realistic current prices)
-        self.product_prices = {
-            'Teff': {'min': 80, 'max': 160, 'avg': 120, 'trend': 'increasing', 'demand': 'high'},
-            'Wheat': {'min': 45, 'max': 80, 'avg': 60, 'trend': 'stable', 'demand': 'high'},
-            'Barley': {'min': 35, 'max': 55, 'avg': 45, 'trend': 'decreasing', 'demand': 'medium'},
-            'Maize': {'min': 30, 'max': 55, 'avg': 40, 'trend': 'stable', 'demand': 'medium'},
-            'Sorghum': {'min': 32, 'max': 55, 'avg': 42, 'trend': 'increasing', 'demand': 'medium'},
-            'Coffee': {'min': 200, 'max': 450, 'avg': 320, 'trend': 'increasing', 'demand': 'high'},
-            'Milk': {'min': 60, 'max': 100, 'avg': 75, 'trend': 'increasing', 'demand': 'high'},
-            'Butter': {'min': 250, 'max': 400, 'avg': 320, 'trend': 'increasing', 'demand': 'medium'},
-            'Cheese': {'min': 200, 'max': 350, 'avg': 270, 'trend': 'stable', 'demand': 'medium'},
-            'Beef': {'min': 400, 'max': 650, 'avg': 520, 'trend': 'increasing', 'demand': 'high'},
-            'Chicken': {'min': 250, 'max': 420, 'avg': 330, 'trend': 'stable', 'demand': 'medium'},
-            'Mutton': {'min': 350, 'max': 580, 'avg': 450, 'trend': 'increasing', 'demand': 'medium'},
-            'Onion': {'min': 25, 'max': 50, 'avg': 35, 'trend': 'volatile', 'demand': 'high'},
-            'Tomato': {'min': 30, 'max': 60, 'avg': 42, 'trend': 'volatile', 'demand': 'high'},
-            'Cabbage': {'min': 20, 'max': 45, 'avg': 30, 'trend': 'stable', 'demand': 'medium'},
-            'Potato': {'min': 35, 'max': 70, 'avg': 50, 'trend': 'increasing', 'demand': 'high'},
-            'Carrot': {'min': 28, 'max': 52, 'avg': 38, 'trend': 'stable', 'demand': 'medium'},
-            'Banana': {'min': 15, 'max': 30, 'avg': 22, 'trend': 'stable', 'demand': 'medium'},
-            'Mango': {'min': 12, 'max': 25, 'avg': 18, 'trend': 'decreasing', 'demand': 'medium'},
-            'Avocado': {'min': 10, 'max': 22, 'avg': 16, 'trend': 'increasing', 'demand': 'high'},
-            'Orange': {'min': 8, 'max': 18, 'avg': 13, 'trend': 'stable', 'demand': 'medium'},
-            'Honey': {'min': 250, 'max': 450, 'avg': 350, 'trend': 'increasing', 'demand': 'high'},
-            'Sesame': {'min': 120, 'max': 200, 'avg': 160, 'trend': 'increasing', 'demand': 'medium'}
+        prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia? 
+        Provide the price in ETB per kilogram or unit. 
+        Only respond with the price and a brief source. 
+        Format: 'Price: [number] ETB per [unit] from [source]'."""
+        
+        payload = {
+            "model": "grok-1",  # You may need to adjust the model name
+            "messages": [
+                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 100
         }
-    
-    def get_current_price(self, product_name):
-        """Get current price for a product from Ethiopian market"""
-        # Find closest match
-        closest_match = None
-        best_score = 0
         
-        for key in self.product_prices:
-            if product_name.lower() in key.lower() or key.lower() in product_name.lower():
-                score = len(set(product_name.lower().split()) & set(key.lower().split()))
-                if score > best_score:
-                    best_score = score
-                    closest_match = key
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        if closest_match:
-            price_data = self.product_prices[closest_match]
-            # Add some random variation for realism
-            current_price = random.uniform(price_data['min'], price_data['max'])
-            return {
-                'product': closest_match,
-                'current_price': round(current_price, 2),
-                'min_price': price_data['min'],
-                'max_price': price_data['max'],
-                'avg_price': price_data['avg'],
-                'trend': price_data['trend'],
-                'demand': price_data['demand'],
-                'unit': 'kg' if closest_match not in ['Milk', 'Butter', 'Cheese'] else 'liter',
-                'source': 'Ethiopian Market Data',
-                'last_updated': datetime.now().isoformat()
-            }
+        if response.status_code == 200:
+            data = response.json()
+            if 'choices' in data and len(data['choices']) > 0:
+                content = data['choices'][0]['message']['content']
+                # Parse the content to extract price
+                price_match = re.search(r'Price:\s*([\d.]+)', content)
+                if price_match:
+                    price = float(price_match.group(1))
+                    # Extract unit
+                    unit_match = re.search(r'per\s+(\w+)', content)
+                    unit = unit_match.group(1) if unit_match else "kg"
+                    return {
+                        "price": price,
+                        "unit": unit,
+                        "raw_response": content,
+                        "source": "Grok API",
+                        "success": True
+                    }
+                else:
+                    return {
+                        "error": "Could not parse price from Grok response",
+                        "raw_response": content,
+                        "success": False
+                    }
+            else:
+                return {
+                    "error": "Unexpected response format from Grok",
+                    "success": False
+                }
         else:
             return {
-                'product': product_name,
-                'current_price': round(random.uniform(50, 200), 2),
-                'min_price': 50,
-                'max_price': 200,
-                'avg_price': 125,
-                'trend': 'stable',
-                'demand': 'medium',
-                'unit': 'kg',
-                'source': 'Estimated',
-                'last_updated': datetime.now().isoformat()
+                "error": f"Grok API request failed with status {response.status_code}",
+                "response_text": response.text,
+                "success": False
             }
     
-    def get_region_price(self, product_name, region):
-        """Get price for product in specific region"""
-        base_price = self.get_current_price(product_name)
-        region_multipliers = {
-            'Addis Ababa': 1.2,
-            'Oromia': 1.0,
-            'Amhara': 0.95,
-            'Tigray': 0.98,
-            'SNNP': 0.92,
-            'Sidama': 0.95,
-            'Afar': 1.05,
-            'Benishangul-Gumuz': 0.9,
-            'Gambella': 0.88,
-            'Harari': 1.0,
-            'Dire Dawa': 1.08,
-            'Somali': 1.02
+    except requests.exceptions.Timeout:
+        return {"error": "Grok API request timed out", "success": False}
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
+# ==========================================
+# SUPABASE FUNCTIONS
+# ==========================================
+
+def save_training_data_supabase(user_id, data):
+    """Save AI training data to Supabase."""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        record = {
+            'user_id': user_id,
+            'product_name': data.get('product_name'),
+            'price': data.get('price'),
+            'market_price': data.get('market_price'),
+            'demand_score': data.get('demand_score'),
+            'seasonal_factor': data.get('seasonal_factor', 1.0),
+            'region_factor': data.get('region_factor', 1.0),
+            'trend_factor': data.get('trend_factor', 1.0),
+            'predicted_price': data.get('predicted_price'),
+            'actual_price': data.get('actual_price'),
+            'data_source': data.get('data_source', 'user_input'),
+            'region': data.get('region', 'Addis Ababa')
         }
-        multiplier = region_multipliers.get(region, 1.0)
-        return {
-            **base_price,
-            'current_price': round(base_price['current_price'] * multiplier, 2),
-            'region': region,
-            'region_multiplier': multiplier
-        }
+        
+        response = supabase.table('ai_training_data').insert(record).execute()
+        return True, "Training data saved to Supabase"
+    except Exception as e:
+        return False, str(e)
+
+def get_training_data_supabase(user_id, limit=1000):
+    """Retrieve AI training data from Supabase."""
+    try:
+        if supabase is None:
+            return []
+        
+        response = supabase.table('ai_training_data')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .order('created_at', desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        return response.data if response.data else []
+    except Exception as e:
+        return []
+
+def get_product_market_data(product_name, region="Addis Ababa"):
+    """Get stored market data for a product from Supabase."""
+    try:
+        if supabase is None:
+            return None
+        
+        response = supabase.table('ai_training_data')\
+            .select('*')\
+            .eq('product_name', product_name)\
+            .eq('region', region)\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        return None
 
 # ==========================================
 # SELF-LEARNING AI SYSTEM
 # ==========================================
 
 class SelfLearningAIInsights:
-    """Self-learning AI system for Ethiopian market analysis"""
+    """Self-learning AI system with Supabase storage and Grok integration"""
     
     def __init__(self, user_id):
         self.user_id = user_id
-        self.models_dir = "models"
+        self.models_dir = "Models"  # GitHub folder
         self.data_dir = "data"
+        
+        # Ensure directories exist
+        os.makedirs(self.models_dir, exist_ok=True)
+        os.makedirs(self.data_dir, exist_ok=True)
+        
         self.knowledge_base = self.load_knowledge_base()
         self.model = None
         self.scaler = None
@@ -148,7 +179,6 @@ class SelfLearningAIInsights:
     def load_knowledge_base(self):
         """Load knowledge base from disk"""
         try:
-            os.makedirs(self.data_dir, exist_ok=True)
             path = f"{self.data_dir}/ai_knowledge_{self.user_id}.json"
             if os.path.exists(path):
                 with open(path, 'r') as f:
@@ -162,7 +192,8 @@ class SelfLearningAIInsights:
                     'training_data': [],
                     'predictions': {},
                     'learning_iterations': 0,
-                    'accuracy_score': 0
+                    'accuracy_score': 0,
+                    'grok_queries': []
                 }
                 with open(path, 'w') as f:
                     json.dump(default, f, indent=2)
@@ -176,13 +207,13 @@ class SelfLearningAIInsights:
                 'training_data': [],
                 'predictions': {},
                 'learning_iterations': 0,
-                'accuracy_score': 0
+                'accuracy_score': 0,
+                'grok_queries': []
             }
     
     def save_knowledge_base(self):
         """Save knowledge base to disk"""
         try:
-            os.makedirs(self.data_dir, exist_ok=True)
             with open(f"{self.data_dir}/ai_knowledge_{self.user_id}.json", 'w') as f:
                 json.dump(self.knowledge_base, f, indent=2)
         except Exception as e:
@@ -191,7 +222,6 @@ class SelfLearningAIInsights:
     def load_or_train_model(self):
         """Load existing model or train a new one"""
         try:
-            os.makedirs(self.models_dir, exist_ok=True)
             model_path = f"{self.models_dir}/ai_model_{self.user_id}.pkl"
             scaler_path = f"{self.models_dir}/ai_scaler_{self.user_id}.pkl"
             
@@ -210,16 +240,98 @@ class SelfLearningAIInsights:
                     n_jobs=-1
                 )
                 self.scaler = StandardScaler()
-                # Train with initial data
-                self.train_model()
+                # Try to train with data from Supabase
+                self.train_with_supabase_data()
                 return True
         except Exception as e:
             return False
     
-    def save_model(self):
-        """Save model to disk"""
+    def train_with_supabase_data(self):
+        """Train model using data from Supabase"""
         try:
-            os.makedirs(self.models_dir, exist_ok=True)
+            training_data = get_training_data_supabase(self.user_id)
+            
+            if len(training_data) < 5:
+                # Use local data if Supabase data is insufficient
+                training_data = self.knowledge_base.get('training_data', [])
+            
+            if len(training_data) > 5:
+                self.train_model(training_data)
+                return True
+            else:
+                # Generate synthetic data for initial training
+                synthetic_data = self.generate_synthetic_data()
+                self.train_model(synthetic_data)
+                return True
+        except Exception as e:
+            return False
+    
+    def train_model(self, training_data):
+        """Train the AI model with provided data"""
+        try:
+            X = []
+            y = []
+            
+            for item in training_data:
+                features = [
+                    item.get('price', 100),
+                    item.get('demand_score', 50),
+                    item.get('seasonal_factor', 1.0),
+                    item.get('region_factor', 1.0),
+                    item.get('trend_factor', 1.0)
+                ]
+                target = item.get('predicted_price', item.get('price', 100))
+                
+                X.append(features)
+                y.append(target)
+            
+            if len(X) > 5:
+                X = np.array(X)
+                y = np.array(y)
+                
+                # Scale features
+                self.scaler.fit(X)
+                X_scaled = self.scaler.transform(X)
+                
+                # Train model
+                self.model.fit(X_scaled, y)
+                
+                # Calculate accuracy
+                self.knowledge_base['accuracy_score'] = self.model.score(X_scaled, y)
+                self.knowledge_base['learning_iterations'] = len(training_data)
+                
+                # Save model to GitHub folder
+                self.save_model()
+                self.save_knowledge_base()
+                return True
+            return False
+        except Exception as e:
+            return False
+    
+    def generate_synthetic_data(self):
+        """Generate synthetic training data"""
+        synthetic_data = []
+        products = ['Teff', 'Wheat', 'Coffee', 'Milk', 'Onion', 'Tomato', 'Beef']
+        
+        for product in products:
+            for i in range(5):
+                base_price = random.uniform(50, 300)
+                data = {
+                    'product_name': product,
+                    'price': base_price,
+                    'demand_score': random.uniform(30, 95),
+                    'seasonal_factor': random.uniform(0.7, 1.3),
+                    'region_factor': random.uniform(0.8, 1.2),
+                    'trend_factor': random.uniform(0.9, 1.1),
+                    'predicted_price': base_price * random.uniform(0.85, 1.25)
+                }
+                synthetic_data.append(data)
+        
+        return synthetic_data
+    
+    def save_model(self):
+        """Save model to disk (GitHub Models folder)"""
+        try:
             model_path = f"{self.models_dir}/ai_model_{self.user_id}.pkl"
             scaler_path = f"{self.models_dir}/ai_scaler_{self.user_id}.pkl"
             
@@ -231,110 +343,91 @@ class SelfLearningAIInsights:
         except Exception as e:
             return False
     
-    def train_model(self):
-        """Train the AI model with available data"""
+    def query_grok_for_price(self, product_name, region="Addis Ababa"):
+        """Query Grok API for product price and store results"""
+        result = query_grok_api(product_name, region)
+        
+        if result.get('success'):
+            # Store the query in knowledge base
+            if 'grok_queries' not in self.knowledge_base:
+                self.knowledge_base['grok_queries'] = []
+            
+            self.knowledge_base['grok_queries'].append({
+                'product': product_name,
+                'region': region,
+                'price': result.get('price'),
+                'unit': result.get('unit'),
+                'timestamp': datetime.now().isoformat(),
+                'raw_response': result.get('raw_response')
+            })
+            
+            # Save to Supabase
+            save_training_data_supabase(self.user_id, {
+                'product_name': product_name,
+                'price': result.get('price'),
+                'market_price': result.get('price'),
+                'data_source': 'grok_api',
+                'region': region,
+                'demand_score': 70,  # Default
+                'predicted_price': result.get('price')
+            })
+            
+            self.save_knowledge_base()
+            return result
+        else:
+            return result
+    
+    def predict_price(self, product_data):
+        """Predict optimal price using AI model"""
         try:
-            # Generate synthetic training data if not enough real data
-            training_data = self.knowledge_base.get('training_data', [])
+            # Try to get market data from Supabase first
+            market_data = get_product_market_data(
+                product_data.get('product', ''),
+                product_data.get('region', 'Addis Ababa')
+            )
             
-            if len(training_data) < 10:
-                # Generate synthetic data
-                synthetic_data = self.generate_synthetic_data()
-                training_data.extend(synthetic_data)
-                self.knowledge_base['training_data'] = training_data
-                self.save_knowledge_base()
+            if market_data:
+                # Use stored market data
+                market_price = market_data.get('market_price')
+            else:
+                # Use product data
+                market_price = product_data.get('current_price', 100)
             
-            if len(training_data) > 0:
-                # Prepare features and targets
-                X = []
-                y = []
-                
-                for item in training_data:
-                    features = [
-                        item.get('price', 0),
-                        item.get('demand_score', 50),
-                        item.get('seasonal_factor', 1.0),
-                        item.get('region_factor', 1.0),
-                        item.get('trend_factor', 1.0)
-                    ]
-                    target = item.get('predicted_price', item.get('price', 0))
-                    
-                    X.append(features)
-                    y.append(target)
-                
-                if len(X) > 5:
-                    X = np.array(X)
-                    y = np.array(y)
-                    
-                    # Scale features
-                    self.scaler.fit(X)
-                    X_scaled = self.scaler.transform(X)
-                    
-                    # Train model
-                    self.model.fit(X_scaled, y)
-                    
-                    # Calculate accuracy (R² score)
-                    self.knowledge_base['accuracy_score'] = self.model.score(X_scaled, y)
-                    self.knowledge_base['learning_iterations'] = len(training_data)
-                    
-                    self.save_model()
-                    self.save_knowledge_base()
-                    return True
-            return False
+            # Get features
+            features = [
+                market_price,
+                self.calculate_demand_score(product_data),
+                product_data.get('seasonal_factor', 1.0),
+                product_data.get('region_factor', 1.0),
+                self.calculate_trend_factor(product_data)
+            ]
+            
+            # Scale features
+            X = np.array([features])
+            X_scaled = self.scaler.transform(X)
+            
+            # Predict
+            predicted_price = self.model.predict(X_scaled)[0]
+            
+            # Ensure prediction is within reasonable range
+            min_price = product_data.get('min_price', 50) * 0.7
+            max_price = product_data.get('max_price', 300) * 1.3
+            predicted_price = max(min_price, min(predicted_price, max_price))
+            
+            # Store prediction
+            product_name = product_data.get('product', 'Unknown')
+            self.knowledge_base['predictions'][product_name] = {
+                'predicted_price': round(predicted_price, 2),
+                'current_price': product_data.get('current_price', 0),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.save_knowledge_base()
+            return round(predicted_price, 2)
+            
         except Exception as e:
-            return False
-    
-    def generate_synthetic_data(self):
-        """Generate synthetic training data"""
-        synthetic_data = []
-        products = ['Teff', 'Wheat', 'Coffee', 'Milk', 'Onion', 'Tomato', 'Beef']
-        
-        for product in products:
-            for _ in range(5):
-                base_price = random.uniform(50, 300)
-                data = {
-                    'product': product,
-                    'price': base_price,
-                    'demand_score': random.uniform(30, 95),
-                    'seasonal_factor': random.uniform(0.7, 1.3),
-                    'region_factor': random.uniform(0.8, 1.2),
-                    'trend_factor': random.uniform(0.9, 1.1),
-                    'predicted_price': base_price * random.uniform(0.9, 1.2)
-                }
-                synthetic_data.append(data)
-        
-        return synthetic_data
-    
-    def learn_from_data(self, product_data):
-        """Learn from new product data"""
-        if not product_data:
-            return
-        
-        # Add to training data
-        if 'training_data' not in self.knowledge_base:
-            self.knowledge_base['training_data'] = []
-        
-        # Convert to training format
-        training_item = {
-            'product': product_data.get('product_name', ''),
-            'price': product_data.get('current_price', 0),
-            'demand_score': self.calculate_demand_score(product_data),
-            'seasonal_factor': product_data.get('seasonal_factor', 1.0),
-            'region_factor': product_data.get('region_factor', 1.0),
-            'trend_factor': self.calculate_trend_factor(product_data),
-            'predicted_price': product_data.get('recommended_price', product_data.get('current_price', 0))
-        }
-        
-        # Add to training data (avoid duplicates)
-        self.knowledge_base['training_data'].append(training_item)
-        
-        # Keep only last 1000 items
-        if len(self.knowledge_base['training_data']) > 1000:
-            self.knowledge_base['training_data'] = self.knowledge_base['training_data'][-1000:]
-        
-        # Retrain model
-        self.train_model()
-        self.save_knowledge_base()
+            # Fallback to simple calculation
+            return round(product_data.get('current_price', 100) * random.uniform(0.95, 1.15), 2)
     
     def calculate_demand_score(self, data):
         """Calculate demand score for a product"""
@@ -366,58 +459,34 @@ class SelfLearningAIInsights:
         else:
             return 1.0
     
-    def predict_price(self, product_data):
-        """Predict optimal price using AI model"""
-        try:
-            # Get features
-            features = [
-                product_data.get('current_price', 100),
-                self.calculate_demand_score(product_data),
-                product_data.get('seasonal_factor', 1.0),
-                product_data.get('region_factor', 1.0),
-                self.calculate_trend_factor(product_data)
-            ]
-            
-            # Scale features
-            X = np.array([features])
-            X_scaled = self.scaler.transform(X)
-            
-            # Predict
-            predicted_price = self.model.predict(X_scaled)[0]
-            
-            # Ensure prediction is within reasonable range
-            min_price = product_data.get('min_price', 50) * 0.7
-            max_price = product_data.get('max_price', 300) * 1.3
-            predicted_price = max(min_price, min(predicted_price, max_price))
-            
-            # Store prediction
-            if 'predictions' not in self.knowledge_base:
-                self.knowledge_base['predictions'] = {}
-            
-            product_name = product_data.get('product', 'Unknown')
-            self.knowledge_base['predictions'][product_name] = {
-                'predicted_price': round(predicted_price, 2),
-                'current_price': product_data.get('current_price', 0),
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            self.save_knowledge_base()
-            return round(predicted_price, 2)
-            
-        except Exception as e:
-            # Fallback to simple calculation
-            return round(product_data.get('current_price', 100) * random.uniform(0.95, 1.15), 2)
-    
-    def get_market_insights(self, product_name):
+    def get_market_insights(self, product_name, region="Addis Ababa"):
         """Get comprehensive market insights for a product"""
-        scraper = EthiopianMarketScraper()
-        market_data = scraper.get_current_price(product_name)
+        # Try Grok API first
+        grok_result = self.query_grok_for_price(product_name, region)
+        
+        if grok_result.get('success'):
+            market_price = grok_result.get('price')
+            market_data = {
+                'product': product_name,
+                'current_price': market_price,
+                'avg_price': market_price * 0.95,
+                'min_price': market_price * 0.8,
+                'max_price': market_price * 1.2,
+                'trend': 'stable',
+                'demand': 'medium',
+                'unit': grok_result.get('unit', 'kg'),
+                'source': 'Grok API'
+            }
+        else:
+            # Fallback to local data
+            scraper = EthiopianMarketScraper()
+            market_data = scraper.get_current_price(product_name)
         
         # Get predictions
-        predicted_price = self.predict_price(market_data)
+        predicted_price = self.predict_price({**market_data, 'region': region})
         
         # Get demand forecast
-        demand_forecast = self.forecast_demand(product_name)
+        demand_forecast = self.forecast_demand(product_name, region)
         
         # Get price recommendations
         price_recommendations = self.get_price_recommendations(market_data)
@@ -427,10 +496,11 @@ class SelfLearningAIInsights:
             'predicted_price': predicted_price,
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
-            'confidence_score': self.calculate_confidence(market_data)
+            'confidence_score': self.calculate_confidence(market_data),
+            'grok_source': grok_result.get('success', False)
         }
     
-    def forecast_demand(self, product_name):
+    def forecast_demand(self, product_name, region="Addis Ababa"):
         """Forecast demand for a product"""
         # Check if we have historical data
         demand_patterns = self.knowledge_base.get('demand_patterns', {})
@@ -457,7 +527,14 @@ class SelfLearningAIInsights:
         }
         seasonal_factor = seasonal_factors.get(current_month, 1.0)
         
-        daily_demand = avg_demand * seasonal_factor
+        # Region factor
+        region_factors = {
+            'Addis Ababa': 1.3, 'Oromia': 1.0, 'Amhara': 0.95,
+            'Tigray': 0.9, 'SNNP': 0.85, 'Sidama': 0.9
+        }
+        region_factor = region_factors.get(region, 1.0)
+        
+        daily_demand = avg_demand * seasonal_factor * region_factor
         
         return {
             'daily_demand': round(daily_demand, 1),
@@ -465,6 +542,7 @@ class SelfLearningAIInsights:
             'monthly_demand': round(daily_demand * 30, 1),
             'trend': trend,
             'seasonal_factor': seasonal_factor,
+            'region_factor': region_factor,
             'confidence': 0.85 if product_name in demand_patterns else 0.65
         }
     
@@ -508,7 +586,9 @@ class SelfLearningAIInsights:
         base_confidence = 0.7
         
         # Adjust based on data quality
-        if market_data.get('source') == 'Ethiopian Market Data':
+        if market_data.get('source') == 'Grok API':
+            base_confidence += 0.15
+        elif market_data.get('source') == 'Ethiopian Market Data':
             base_confidence += 0.1
         
         # Adjust based on learning iterations
@@ -521,12 +601,77 @@ class SelfLearningAIInsights:
         
         return min(0.98, max(0.5, base_confidence))
 
+
+# ==========================================
+# ETHIOPIAN MARKET SCRAPER (FALLBACK)
+# ==========================================
+
+class EthiopianMarketScraper:
+    """Fallback Ethiopian market data when Grok is unavailable"""
+    
+    def __init__(self):
+        self.product_prices = {
+            'Teff': {'min': 80, 'max': 160, 'avg': 120, 'trend': 'increasing', 'demand': 'high'},
+            'Wheat': {'min': 45, 'max': 80, 'avg': 60, 'trend': 'stable', 'demand': 'high'},
+            'Barley': {'min': 35, 'max': 55, 'avg': 45, 'trend': 'decreasing', 'demand': 'medium'},
+            'Maize': {'min': 30, 'max': 55, 'avg': 40, 'trend': 'stable', 'demand': 'medium'},
+            'Sorghum': {'min': 32, 'max': 55, 'avg': 42, 'trend': 'increasing', 'demand': 'medium'},
+            'Coffee': {'min': 200, 'max': 450, 'avg': 320, 'trend': 'increasing', 'demand': 'high'},
+            'Milk': {'min': 60, 'max': 100, 'avg': 75, 'trend': 'increasing', 'demand': 'high'},
+            'Butter': {'min': 250, 'max': 400, 'avg': 320, 'trend': 'increasing', 'demand': 'medium'},
+            'Cheese': {'min': 200, 'max': 350, 'avg': 270, 'trend': 'stable', 'demand': 'medium'},
+            'Beef': {'min': 400, 'max': 650, 'avg': 520, 'trend': 'increasing', 'demand': 'high'},
+            'Chicken': {'min': 250, 'max': 420, 'avg': 330, 'trend': 'stable', 'demand': 'medium'},
+            'Onion': {'min': 25, 'max': 50, 'avg': 35, 'trend': 'volatile', 'demand': 'high'},
+            'Tomato': {'min': 30, 'max': 60, 'avg': 42, 'trend': 'volatile', 'demand': 'high'},
+            'Cabbage': {'min': 20, 'max': 45, 'avg': 30, 'trend': 'stable', 'demand': 'medium'},
+            'Potato': {'min': 35, 'max': 70, 'avg': 50, 'trend': 'increasing', 'demand': 'high'},
+            'Banana': {'min': 15, 'max': 30, 'avg': 22, 'trend': 'stable', 'demand': 'medium'},
+            'Mango': {'min': 12, 'max': 25, 'avg': 18, 'trend': 'decreasing', 'demand': 'medium'},
+            'Avocado': {'min': 10, 'max': 22, 'avg': 16, 'trend': 'increasing', 'demand': 'high'}
+        }
+    
+    def get_current_price(self, product_name):
+        """Get current price for a product"""
+        closest_match = None
+        for key in self.product_prices:
+            if product_name.lower() in key.lower() or key.lower() in product_name.lower():
+                closest_match = key
+                break
+        
+        if closest_match:
+            price_data = self.product_prices[closest_match]
+            return {
+                'product': closest_match,
+                'current_price': round(random.uniform(price_data['min'], price_data['max']), 2),
+                'min_price': price_data['min'],
+                'max_price': price_data['max'],
+                'avg_price': price_data['avg'],
+                'trend': price_data['trend'],
+                'demand': price_data['demand'],
+                'unit': 'kg',
+                'source': 'Fallback Data'
+            }
+        else:
+            return {
+                'product': product_name,
+                'current_price': round(random.uniform(50, 200), 2),
+                'min_price': 50,
+                'max_price': 200,
+                'avg_price': 125,
+                'trend': 'stable',
+                'demand': 'medium',
+                'unit': 'kg',
+                'source': 'Estimated'
+            }
+
+
 # ==========================================
 # RENDER AI INSIGHTS TAB
 # ==========================================
 
 def render_ai_insights(user_info, ai):
-    """Render AI Insights tab with Ethiopian market data"""
+    """Render AI Insights tab with Grok API integration"""
     
     # Initialize AI
     ai_insights = SelfLearningAIInsights(user_info['id'])
@@ -566,7 +711,15 @@ def render_ai_insights(user_info, ai):
     .insight-card .trend-up { color: #10b981; }
     .insight-card .trend-down { color: #ef4444; }
     .insight-card .trend-neutral { color: #f59e0b; }
-    
+    .grok-badge {
+        display: inline-block;
+        background: #667eea;
+        color: white;
+        font-size: 10px;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
     .light-mode .insight-card {
         background: #ffffff !important;
         border-color: #e2e8f0 !important;
@@ -584,7 +737,7 @@ def render_ai_insights(user_info, ai):
     """, unsafe_allow_html=True)
     
     st.subheader("🤖 AI-Powered Market Insights")
-    st.caption("Real-time Ethiopian market analysis with self-learning AI")
+    st.caption("Real-time Ethiopian market analysis with Grok AI integration")
     
     # Show AI Learning Status
     col1, col2, col3, col4 = st.columns(4)
@@ -621,6 +774,8 @@ def render_ai_insights(user_info, ai):
     if not selected_product:
         return
     
+    product_name = selected_product.get('name', '')
+    
     # Region selection
     regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
               "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
@@ -633,20 +788,32 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Get AI insights for selected product
-    product_name = selected_product.get('name', '')
-    insights = ai_insights.get_market_insights(product_name)
-    market_data = insights.get('market_data', {})
+    # Grok API Query Button
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown(f"### 🔍 Real-Time Price from Grok AI")
+        st.caption(f"Query Grok AI for current {product_name} prices in {selected_region}")
     
-    # Learn from this data
-    ai_insights.learn_from_data({
-        'product_name': product_name,
-        'current_price': selected_product.get('price', 0),
-        **market_data
-    })
+    with col2:
+        if st.button("🚀 Query Grok API", use_container_width=True, type="primary"):
+            with st.spinner(f"Querying Grok AI for {product_name} prices..."):
+                result = ai_insights.query_grok_for_price(product_name, selected_region)
+                if result.get('success'):
+                    st.success(f"✅ Price fetched from Grok: {result.get('price')} ETB per {result.get('unit', 'kg')}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Grok API error: {result.get('error', 'Unknown error')}")
+    
+    # Get AI insights for selected product
+    insights = ai_insights.get_market_insights(product_name, selected_region)
+    market_data = insights.get('market_data', {})
     
     # Display Market Price Analysis
     st.markdown("### 📊 Ethiopian Market Price Analysis")
+    
+    # Grok source badge
+    if insights.get('grok_source'):
+        st.markdown('<span class="grok-badge">🤖 Powered by Grok AI</span>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     
@@ -663,6 +830,9 @@ def render_ai_insights(user_info, ai):
             <div class="sub">Market Average: {market_avg:.0f} ETB</div>
             <div class="sub {'trend-up' if price_pct < 0 else 'trend-down'}">
                 {price_diff:+.0f} ETB ({price_pct:+.1f}%)
+            </div>
+            <div class="sub" style="font-size: 10px; color: #64748b;">
+                Source: {market_data.get('source', 'Local Data')}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -773,8 +943,9 @@ def render_ai_insights(user_info, ai):
         </div>
         """, unsafe_allow_html=True)
     
-    # Stock Analysis
     st.markdown("---")
+    
+    # Stock Analysis
     st.markdown("### 📦 Stock Analysis")
     
     current_stock = selected_product.get('quantity', 0)
@@ -872,7 +1043,13 @@ def render_ai_insights(user_info, ai):
     with col1:
         if st.button("🔄 Train AI Model", use_container_width=True):
             with st.spinner("Training AI model with current data..."):
-                success = ai_insights.train_model()
+                # Get data from Supabase
+                training_data = get_training_data_supabase(user_info['id'])
+                if training_data:
+                    success = ai_insights.train_model(training_data)
+                else:
+                    success = ai_insights.train_with_supabase_data()
+                
                 if success:
                     st.success("✅ AI model trained successfully!")
                     st.rerun()
@@ -884,19 +1061,22 @@ def render_ai_insights(user_info, ai):
             accuracy = ai_insights.knowledge_base.get('accuracy_score', 0)
             st.info(f"📊 Model Accuracy: {accuracy*100:.1f}%")
             st.info(f"📈 Training Samples: {len(ai_insights.knowledge_base.get('training_data', []))}")
+            st.info(f"📁 Model saved in: Models/ folder")
     
     with col3:
-        if st.button("💾 Save Model", use_container_width=True):
+        if st.button("💾 Save Model to GitHub", use_container_width=True):
             success = ai_insights.save_model()
             if success:
-                st.success("✅ Model saved successfully to models/ folder!")
+                st.success("✅ Model saved to Models/ folder!")
+                st.info("📁 File: Models/ai_model_{user_id}.pkl")
             else:
                 st.error("❌ Failed to save model")
     
     st.markdown("---")
     
     # Model Files Location
-    st.caption("📁 Model files saved in: `models/` folder")
+    st.caption("📁 Model files saved in: `Models/` folder (GitHub)")
     st.caption("📁 Knowledge base saved in: `data/` folder")
+    st.caption("📊 Training data stored in: Supabase `ai_training_data` table")
     
-    st.info("💡 The AI learns from every product you add and every analysis you perform.")
+    st.info("💡 The AI learns from every product you add and every Grok API query you perform.")
