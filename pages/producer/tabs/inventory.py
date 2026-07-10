@@ -16,7 +16,7 @@ from ..components.product_card import render_product_card
 def render_inventory(user_info, ai):
     """Render Professional Inventory Management tab"""
     
-    # Custom CSS for professional inventory with better colors
+    # Custom CSS with improved dark mode colors
     st.markdown("""
     <style>
     /* Inventory Container */
@@ -26,19 +26,19 @@ def render_inventory(user_info, ai):
         padding: 0 2px;
     }
     
-    /* Sub-tabs styling - Dark Mode */
+    /* Sub-tabs styling - Improved Dark Mode */
     .sub-tabs {
         display: flex;
         gap: 6px;
         margin-bottom: 12px;
-        background: #1a1a2e;
+        background: #1e293b;
         padding: 4px;
-        border-radius: 8px;
-        border: 1px solid #2d3748;
+        border-radius: 10px;
+        border: 1px solid #334155;
     }
     .sub-tab {
         padding: 8px 20px;
-        border-radius: 6px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: 500;
         font-size: 13px;
@@ -55,53 +55,89 @@ def render_inventory(user_info, ai):
     }
     .sub-tab.active {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        color: #ffffff;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     
-    /* Stats Cards - Minimized */
-    .stat-card {
-        background: #1a1a2e;
-        border-radius: 8px;
-        padding: 10px 14px;
-        border: 1px solid #2d3748;
+    /* Stats Row - Single Compact Row */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+        background: #1e293b;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+    }
+    .stat-item {
         text-align: center;
-        transition: all 0.2s ease;
-        margin-bottom: 4px;
+        padding: 4px 0;
     }
-    .stat-card:hover {
-        border-color: #667eea;
-        transform: translateY(-1px);
-    }
-    .stat-card .number {
-        font-size: 20px;
+    .stat-item .number {
+        font-size: 22px;
         font-weight: 700;
         color: #f8fafc;
+        line-height: 1.2;
     }
-    .stat-card .label {
+    .stat-item .number.green { color: #10b981; }
+    .stat-item .number.red { color: #ef4444; }
+    .stat-item .number.blue { color: #667eea; }
+    .stat-item .number.gold { color: #f59e0b; }
+    .stat-item .label {
         font-size: 10px;
         color: #94a3b8;
         text-transform: uppercase;
-        letter-spacing: 0.3px;
-        margin-top: 2px;
+        letter-spacing: 0.5px;
+        margin-top: 1px;
+        font-weight: 500;
     }
-    .stat-card .icon {
-        font-size: 18px;
+    .stat-item .icon {
+        font-size: 16px;
+        display: block;
+        margin-bottom: 2px;
     }
     
-    /* Browse Cards */
+    /* Light Mode Stats */
+    .light-mode .stats-row {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .stat-item .number {
+        color: #0f172a !important;
+    }
+    .light-mode .stat-item .label {
+        color: #475569 !important;
+    }
+    .light-mode .sub-tabs {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .sub-tab {
+        color: #64748b !important;
+    }
+    .light-mode .sub-tab:hover {
+        background: rgba(102, 126, 234, 0.08) !important;
+        color: #1e293b !important;
+    }
+    .light-mode .sub-tab.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+    }
+    
+    /* Browse Cards - Improved Dark Mode */
     .browse-card {
-        background: #1a1a2e;
+        background: #1e293b;
         border-radius: 10px;
         padding: 14px 16px;
-        border: 1px solid #2d3748;
+        border: 1px solid #334155;
         margin-bottom: 10px;
         transition: all 0.3s ease;
     }
     .browse-card:hover {
         border-color: #667eea;
         transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     }
     .browse-card .product-name {
         font-size: 16px;
@@ -119,84 +155,17 @@ def render_inventory(user_info, ai):
         font-weight: 700;
     }
     .browse-card .producer-info {
-        background: rgba(102, 126, 234, 0.08);
+        background: rgba(102, 126, 234, 0.1);
         padding: 6px 10px;
         border-radius: 6px;
         margin: 6px 0;
         font-size: 12px;
         color: #94a3b8;
     }
-    
-    /* Search Bar - Compact */
-    .search-container {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    .search-container input {
-        flex: 1;
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: 1px solid #2d3748;
-        background: #1a1a2e;
-        color: #f8fafc;
-        font-size: 13px;
-        min-width: 150px;
-    }
-    .search-container input:focus {
-        outline: none;
-        border-color: #667eea;
-    }
-    .search-container select {
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: 1px solid #2d3748;
-        background: #1a1a2e;
-        color: #f8fafc;
-        font-size: 13px;
-        min-width: 120px;
-    }
-    .search-container select:focus {
-        outline: none;
-        border-color: #667eea;
+    .browse-card .producer-info strong {
+        color: #e2e8f0;
     }
     
-    /* Product Grid - Compact */
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 12px;
-        margin-top: 10px;
-    }
-    
-    /* Light mode overrides */
-    .light-mode .sub-tabs {
-        background: #f1f5f9 !important;
-        border-color: #e2e8f0 !important;
-    }
-    .light-mode .sub-tab {
-        color: #64748b !important;
-    }
-    .light-mode .sub-tab:hover {
-        background: rgba(102, 126, 234, 0.08) !important;
-        color: #1e293b !important;
-    }
-    .light-mode .sub-tab.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-    }
-    .light-mode .stat-card {
-        background: #ffffff !important;
-        border-color: #e2e8f0 !important;
-    }
-    .light-mode .stat-card .number {
-        color: #0f172a !important;
-    }
-    .light-mode .stat-card .label {
-        color: #475569 !important;
-    }
     .light-mode .browse-card {
         background: #ffffff !important;
         border-color: #e2e8f0 !important;
@@ -211,11 +180,78 @@ def render_inventory(user_info, ai):
         background: rgba(102, 126, 234, 0.05) !important;
         color: #475569 !important;
     }
+    .light-mode .browse-card .producer-info strong {
+        color: #0f172a !important;
+    }
+    
+    /* Search Bar - Improved */
+    .search-container {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        background: #1e293b;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+    }
+    .search-container input {
+        flex: 1;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 150px;
+    }
+    .search-container input::placeholder {
+        color: #64748b;
+    }
+    .search-container input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+    .search-container select {
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    .search-container select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .search-container select option {
+        background: #1e293b;
+        color: #f8fafc;
+    }
+    
+    .light-mode .search-container {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
     .light-mode .search-container input,
     .light-mode .search-container select {
         background: #ffffff !important;
         color: #1e293b !important;
         border-color: #e2e8f0 !important;
+    }
+    .light-mode .search-container input::placeholder {
+        color: #94a3b8 !important;
+    }
+    
+    /* Product Grid */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
     }
     
     /* Responsive */
@@ -233,7 +269,11 @@ def render_inventory(user_info, ai):
         .search-container select {
             width: 100%;
         }
-        .stat-card .number {
+        .stats-row {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+        }
+        .stat-item .number {
             font-size: 18px;
         }
     }
@@ -288,68 +328,41 @@ def render_my_products(user_info, ai):
     
     # Get all products
     all_products = get_products(producer_id=user_info['id'])
+    low_stock = get_low_stock_products(producer_id=user_info['id'])
     
-    # Stats Row - Compact
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="icon">📦</div>
-            <div class="number">{len(all_products)}</div>
+    # Calculate stats
+    total_products = len(all_products)
+    low_stock_count = len(low_stock)
+    total_value = sum(p.get('price', 0) * p.get('quantity', 0) for p in all_products) if all_products else 0
+    categories_count = len(set(p.get('category', 'Other') for p in all_products)) if all_products else 0
+    
+    # ==========================================
+    # COMPACT STATS ROW - All in One Row
+    # ==========================================
+    st.markdown(f"""
+    <div class="stats-row">
+        <div class="stat-item">
+            <span class="icon">📦</span>
+            <div class="number blue">{total_products}</div>
             <div class="label">Products</div>
         </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        low_stock = get_low_stock_products(producer_id=user_info['id'])
-        color = "#ef4444" if len(low_stock) > 0 else "#10b981"
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="icon">⚠️</div>
-            <div class="number" style="color:{color}">{len(low_stock)}</div>
+        <div class="stat-item">
+            <span class="icon">⚠️</span>
+            <div class="number {'red' if low_stock_count > 0 else 'green'}">{low_stock_count}</div>
             <div class="label">Low Stock</div>
         </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        if all_products:
-            total_value = sum(p.get('price', 0) * p.get('quantity', 0) for p in all_products)
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="icon">💰</div>
-                <div class="number">{total_value:,.0f}</div>
-                <div class="label">Stock Value</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="icon">💰</div>
-                <div class="number">0</div>
-                <div class="label">Stock Value</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    with col4:
-        if all_products:
-            categories = len(set(p.get('category', 'Other') for p in all_products))
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="icon">📂</div>
-                <div class="number">{categories}</div>
-                <div class="label">Categories</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="icon">📂</div>
-                <div class="number">0</div>
-                <div class="label">Categories</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
+        <div class="stat-item">
+            <span class="icon">💰</span>
+            <div class="number gold">{total_value:,.0f}</div>
+            <div class="label">Stock Value</div>
+        </div>
+        <div class="stat-item">
+            <span class="icon">📂</span>
+            <div class="number blue">{categories_count}</div>
+            <div class="label">Categories</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Check if editing a product
     edit_mode = st.session_state.get('edit_product_id') is not None
@@ -503,7 +516,6 @@ def render_my_products(user_info, ai):
     st.markdown("---")
     
     # Low Stock Alerts
-    low_stock = get_low_stock_products(producer_id=user_info['id'])
     if low_stock:
         st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
         df_low = pd.DataFrame(low_stock)
@@ -515,7 +527,7 @@ def render_my_products(user_info, ai):
     if all_products:
         df_all = pd.DataFrame(all_products)
         
-        # Search and Filter - Compact
+        # Search and Filter - Improved
         st.markdown('<div class="search-container">', unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns([3, 2, 1.5])
@@ -617,7 +629,7 @@ def render_browse_products(user_info):
     # Producer cache
     producer_cache = {}
     
-    # Search and Filter - Compact
+    # Search and Filter - Improved
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([3, 2, 1.5])
