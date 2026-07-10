@@ -54,37 +54,35 @@ def _build_messages_html(messages: list) -> str:
 def render_floating_chatbot(user_context: str = "", show: bool = True):
     """
     Render the floating AI chat widget.
-
-    Parameters
-    ----------
-    user_context : str
-        Real-time DB context string injected into the system prompt.
-    show : bool
-        Pass False on the login / signup page to hide the widget entirely.
     """
-
     # ── Guard: don't show on login screen ─────────────────────────
     if not show:
         return
 
     # ── Session state ──────────────────────────────────────────────
-    if "chat_open"     not in st.session_state: st.session_state.chat_open     = False
-    if "chat_messages" not in st.session_state: st.session_state.chat_messages = []
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
 
-    # ── Read toggle signal from query params ───────────────────────
-    params = st.query_params
-    if params.get("chat_toggle") == "1":
+    # ── Handle toggle via session state ──────────────────────────
+    # Use a separate flag to detect toggle requests
+    if "chat_toggle_request" not in st.session_state:
+        st.session_state.chat_toggle_request = False
+
+    # Check for toggle request from JavaScript
+    if st.session_state.chat_toggle_request:
         st.session_state.chat_open = not st.session_state.chat_open
-        # Clear the param to prevent toggling again on rerun
-        st.query_params.clear()
+        st.session_state.chat_toggle_request = False
         st.rerun()
 
-    is_open       = st.session_state.chat_open
+    is_open = st.session_state.chat_open
     messages_html = _build_messages_html(st.session_state.chat_messages)
     
     # Determine display states
-    fab_style = "display: none;" if is_open else "display: flex;"
-    win_style = "display: flex;" if is_open else "display: none;"
+    fab_display = "none" if is_open else "flex"
+    win_display = "flex" if is_open else "none"
+    input_display = "block" if is_open else "none"
 
     # ── Inject CSS and HTML ────────────────────────────────────────
     st.markdown(f"""
@@ -99,7 +97,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         height: 58px !important;
         border-radius: 50% !important;
         background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
-        {fab_style}
+        display: {fab_display} !important;
         align-items: center !important;
         justify-content: center !important;
         font-size: 26px !important;
@@ -110,6 +108,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         color: white !important;
         transition: transform .2s, box-shadow .2s !important;
         user-select: none !important;
+        padding: 0 !important;
     }}
     #agri-fab:hover {{ 
         transform: scale(1.1) !important; 
@@ -128,7 +127,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         background: #1a1b2e !important;
         box-shadow: 0 20px 60px rgba(0,0,0,.6) !important;
         border: 1px solid rgba(255,255,255,.09) !important;
-        {win_style}
+        display: {win_display} !important;
         flex-direction: column !important;
         overflow: hidden !important;
         font-family: 'Inter', system-ui, sans-serif !important;
@@ -159,7 +158,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         justify-content: center !important;
         font-size: 18px !important;
     }}
-    .agri-title  {{ 
+    .agri-title {{ 
         font-size: 14px !important; 
         font-weight: 700 !important; 
         margin: 0 !important; 
@@ -170,7 +169,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         opacity: .82 !important; 
         margin: 0 !important; 
     }}
-    .dot-g       {{ color: #7bffb2 !important; }}
+    .dot-g {{ color: #7bffb2 !important; }}
     #agri-close-btn {{
         background: rgba(255,255,255,.18) !important;
         border: none !important;
@@ -218,7 +217,7 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         word-wrap: break-word !important;
     }}
     .bubble strong {{ font-weight: 700 !important; }}
-    .bubble em     {{ font-style: italic !important; }}
+    .bubble em {{ font-style: italic !important; }}
     .bubble code {{
         background: rgba(255,255,255,.13) !important;
         padding: 1px 5px !important;
@@ -239,120 +238,117 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         border-bottom-left-radius: 4px !important;
     }}
     
-    /* ── Hide Streamlit's default chat input when not open ── */
-    [data-testid="stChatInput"] {{
-        display: {'block' if is_open else 'none'} !important;
+    /* ── Chat input positioning ── */
+    .stChatInput {{
         position: fixed !important;
         bottom: 64px !important;
         right: 28px !important;
         width: 292px !important;
         z-index: 999997 !important;
+        display: {input_display} !important;
         margin: 0 !important;
     }}
-    [data-testid="stChatInput"] > div {{
-        border-radius: 12px !important;
-        border: 1.5px solid #4e54c8 !important;
-        background: #12132a !important;
-        box-shadow: none !important;
-        margin: 0 !important;
-    }}
-    [data-testid="stChatInput"] textarea {{
-        color: #dde0ff !important;
-        font-size: 13px !important;
-        background: transparent !important;
-    }}
-    [data-testid="stChatInput"] button {{ color: #8f94fb !important; }}
     </style>
 
     <!-- ── FAB ── -->
-    <div id="agri-fab" onclick="agriToggle()" title="Open AI Assistant">&#128172;</div>
+    <div id="agri-fab" onclick="toggleChat()">&#128172;</div>
 
     <!-- ── Chat window ── -->
     <div id="agri-chat-win">
-      <div id="agri-header">
-        <div id="agri-header-left">
-          <div class="agri-avatar">&#129302;</div>
-          <div>
-            <p class="agri-title">AgriTech AI Assistant</p>
-            <p class="agri-status"><span class="dot-g">&#9679;</span> Online &middot; Powered by Groq</p>
-          </div>
+        <div id="agri-header">
+            <div id="agri-header-left">
+                <div class="agri-avatar">&#129302;</div>
+                <div>
+                    <p class="agri-title">AgriTech AI Assistant</p>
+                    <p class="agri-status"><span class="dot-g">&#9679;</span> Online &middot; Powered by Groq</p>
+                </div>
+            </div>
+            <button id="agri-close-btn" onclick="toggleChat()" title="Close">&#10005;</button>
         </div>
-        <button id="agri-close-btn" onclick="agriToggle()" title="Close">&#10005;</button>
-      </div>
-
-      <div id="agri-messages">
-        {messages_html}
-      </div>
+        <div id="agri-messages">
+            {messages_html}
+        </div>
     </div>
 
     <script>
-    /* Scroll messages to bottom on every render */
-    (function() {{
-        var b = document.getElementById('agri-messages');
-        if (b) b.scrollTop = b.scrollHeight;
-    }})();
-
-    /* Toggle open/close by setting a query param */
-    function agriToggle() {{
-        var url = new URL(window.location.href);
-        // Toggle the param - if it exists remove it, otherwise set it
-        if (url.searchParams.has('chat_toggle')) {{
-            url.searchParams.delete('chat_toggle');
-        }} else {{
-            url.searchParams.set('chat_toggle', '1');
-        }}
-        window.location.href = url.toString();
+    function toggleChat() {{
+        // Set the toggle request in Streamlit session state via a hidden input
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'chat_toggle';
+        input.value = '1';
+        document.body.appendChild(input);
+        
+        // Submit the form to trigger a rerun
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '';
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
     }}
-    
-    /* Ensure the FAB is clickable after Streamlit rerenders */
-    document.addEventListener('DOMContentLoaded', function() {{
-        var fab = document.getElementById('agri-fab');
-        if (fab) {{
-            fab.style.cursor = 'pointer';
+
+    // Scroll to bottom of messages
+    (function() {{
+        var messages = document.getElementById('agri-messages');
+        if (messages) {{
+            messages.scrollTop = messages.scrollHeight;
         }}
-    }});
+    }})();
     </script>
     """, unsafe_allow_html=True)
 
-    # ── Chat input (always rendered, CSS shows/hides it) ──────────
-    prompt = st.chat_input(
-        "Ask about inventory, orders, pricing…",
-        key="agri_chat_input"
-    )
-
-    # ── Handle submitted message ───────────────────────────────────
-    if prompt and prompt.strip() and is_open:
-        st.session_state.chat_messages.append({"role": "user", "content": prompt.strip()})
-
-        client = init_groq_client()
-        if client:
-            try:
-                system_msg = {
-                    "role": "system",
-                    "content": (
-                        "You are the AI Supply Chain Assistant for the Ethiopian AgriTech platform. "
-                        "Help Producers, Merchants, Customers, and Admins. Be professional and concise.\n"
-                        "Formatting rules: use **bold** for key terms, numbered lists for steps, "
-                        "bullet points for options. Do NOT use markdown headers (#, ##).\n\n"
-                        f"CURRENT USER CONTEXT:\n{user_context}"
-                    ),
-                }
-                api_msgs = [system_msg] + [
-                    {"role": m["role"], "content": m["content"]}
-                    for m in st.session_state.chat_messages[-12:]
-                ]
-                resp = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=api_msgs,
-                    temperature=0.7,
-                    max_tokens=1024,
-                    stream=False,
-                )
-                reply = resp.choices[0].message.content or "Sorry, no response generated."
-            except Exception as e:
-                reply = f"⚠️ Connection error: {e}"
-        else:
-            reply = "⚠️ Groq API key not configured. Add GROQ_API_KEY to secrets.toml."
-
-        st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+    # ── Handle form submission for toggle ─────────────────────────
+    # Check if the toggle was triggered via form submission
+    if st.session_state.get("chat_toggle"):
+        st.session_state.chat_open = not st.session_state.chat_open
+        st.session_state["chat_toggle"] = False
         st.rerun()
+
+    # ── Chat input ─────────────────────────────────────────────────
+    # Only show chat input when chat is open
+    if is_open:
+        prompt = st.chat_input(
+            "Ask about inventory, orders, pricing…",
+            key="agri_chat_input"
+        )
+
+        # ── Handle submitted message ──────────────────────────────
+        if prompt and prompt.strip():
+            # Add user message
+            st.session_state.chat_messages.append({"role": "user", "content": prompt.strip()})
+
+            # Get AI response
+            client = init_groq_client()
+            if client:
+                try:
+                    system_msg = {
+                        "role": "system",
+                        "content": (
+                            "You are the AI Supply Chain Assistant for the Ethiopian AgriTech platform. "
+                            "Help Producers, Merchants, Customers, and Admins. Be professional and concise.\n"
+                            "Formatting rules: use **bold** for key terms, numbered lists for steps, "
+                            "bullet points for options. Do NOT use markdown headers (#, ##).\n\n"
+                            f"CURRENT USER CONTEXT:\n{user_context}"
+                        ),
+                    }
+                    api_msgs = [system_msg] + [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.chat_messages[-12:]
+                    ]
+                    resp = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=api_msgs,
+                        temperature=0.7,
+                        max_tokens=1024,
+                        stream=False,
+                    )
+                    reply = resp.choices[0].message.content or "Sorry, no response generated."
+                except Exception as e:
+                    reply = f"⚠️ Connection error: {e}"
+            else:
+                reply = "⚠️ Groq API key not configured. Add GROQ_API_KEY to secrets.toml."
+
+            # Add assistant response
+            st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+            st.rerun()
