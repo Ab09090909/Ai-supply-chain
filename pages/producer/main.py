@@ -3,7 +3,7 @@ import streamlit as st
 
 # --- Imports from utils ---
 from utils.auth import initialize_session_state
-from utils.db_helpers import get_products
+from utils.db_helpers import get_user_by_id
 
 # --- Import local modules ---
 from .components.profile import render_profile, render_edit_profile
@@ -12,6 +12,15 @@ from .tabs.inventory import render_inventory
 from .tabs.orders import render_orders
 from .tabs.ai_insights import render_ai_insights
 from .utils.self_learning_ai import SelfLearningAI
+
+def load_profile_image():
+    """Load profile image from database if not in session"""
+    if st.session_state.authenticated and st.session_state.user_info:
+        user_id = st.session_state.user_info.get('id')
+        if user_id:
+            user_data = get_user_by_id(user_id)
+            if user_data and user_data.get('profile_image'):
+                st.session_state.user_info['profile_image'] = user_data.get('profile_image')
 
 def render_producer_page():
     """Main entry point for producer page"""
@@ -29,6 +38,9 @@ def render_producer_page():
         st.stop()
     
     user_info = st.session_state.user_info
+    
+    # Load profile image from database
+    load_profile_image()
     
     # --- Initialize ALL States ---
     if 'show_edit_profile' not in st.session_state:
@@ -48,6 +60,12 @@ def render_producer_page():
     
     if 'inventory_subtab' not in st.session_state:
         st.session_state.inventory_subtab = "My Products"
+    
+    if 'show_product_detail' not in st.session_state:
+        st.session_state.show_product_detail = False
+    
+    if 'selected_product_id' not in st.session_state:
+        st.session_state.selected_product_id = None
     
     # Initialize AI
     ai = SelfLearningAI(user_info['id'])
