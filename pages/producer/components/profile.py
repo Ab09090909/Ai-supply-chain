@@ -432,3 +432,41 @@ def render_edit_profile(user_info):
             if cancel_btn:
                 st.session_state.show_edit_profile = False
                 st.rerun()
+
+# Add to any page
+def render_floating_theme_toggle():
+    """Render floating theme toggle button"""
+    import streamlit as st
+    from utils.theme import toggle_theme
+    
+    st.markdown("""
+    <style>
+    .floating-theme-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 999;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        font-size: 24px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .floating-theme-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    icon = "☀️" if st.session_state.theme_mode == 'dark' else "🌙"
+    if st.button(icon, key="floating_theme"):
+        toggle_theme()
