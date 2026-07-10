@@ -65,58 +65,27 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
 
-    # ── Handle toggle via session state ──────────────────────────
-    # Use a separate flag to detect toggle requests
-    if "chat_toggle_request" not in st.session_state:
-        st.session_state.chat_toggle_request = False
-
-    # Check for toggle request from JavaScript
-    if st.session_state.chat_toggle_request:
-        st.session_state.chat_open = not st.session_state.chat_open
-        st.session_state.chat_toggle_request = False
-        st.rerun()
-
     is_open = st.session_state.chat_open
     messages_html = _build_messages_html(st.session_state.chat_messages)
     
-    # Determine display states
-    fab_display = "none" if is_open else "flex"
-    win_display = "flex" if is_open else "none"
-    input_display = "block" if is_open else "none"
-
-    # ── Inject CSS and HTML ────────────────────────────────────────
-    st.markdown(f"""
+    # ── Inject CSS for the floating widget ────────────────────────
+    st.markdown("""
     <style>
-    /* ── FAB ── */
-    #agri-fab {{
+    /* Hide Streamlit's default chat input when chat is closed */
+    .stChatInput {
+        display: none !important;
+    }
+    
+    /* FAB Button - always visible when chat is closed */
+    .chat-fab {
         position: fixed !important;
         bottom: 24px !important;
         right: 24px !important;
         z-index: 999999 !important;
-        width: 58px !important;
-        height: 58px !important;
-        border-radius: 50% !important;
-        background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
-        display: {fab_display} !important;
-        align-items: center !important;
-        justify-content: center !important;
-        font-size: 26px !important;
-        line-height: 1 !important;
-        cursor: pointer !important;
-        box-shadow: 0 6px 22px rgba(78,84,200,.65) !important;
-        border: none !important;
-        color: white !important;
-        transition: transform .2s, box-shadow .2s !important;
-        user-select: none !important;
-        padding: 0 !important;
-    }}
-    #agri-fab:hover {{ 
-        transform: scale(1.1) !important; 
-        box-shadow: 0 10px 30px rgba(78,84,200,.85) !important; 
-    }}
-
-    /* ── Chat window ── */
-    #agri-chat-win {{
+    }
+    
+    /* Chat window container */
+    .chat-window {
         position: fixed !important;
         bottom: 20px !important;
         right: 20px !important;
@@ -127,14 +96,17 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         background: #1a1b2e !important;
         box-shadow: 0 20px 60px rgba(0,0,0,.6) !important;
         border: 1px solid rgba(255,255,255,.09) !important;
-        display: {win_display} !important;
+        display: none !important;
         flex-direction: column !important;
         overflow: hidden !important;
-        font-family: 'Inter', system-ui, sans-serif !important;
-    }}
-
-    /* header */
-    #agri-header {{
+    }
+    
+    .chat-window.open {
+        display: flex !important;
+    }
+    
+    /* Chat header */
+    .chat-header {
         background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
         padding: 13px 16px !important;
         display: flex !important;
@@ -142,13 +114,15 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         justify-content: space-between !important;
         flex-shrink: 0 !important;
         color: white !important;
-    }}
-    #agri-header-left {{ 
-        display: flex !important; 
-        align-items: center !important; 
-        gap: 10px !important; 
-    }}
-    .agri-avatar {{
+    }
+    
+    .chat-header-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+    }
+    
+    .chat-avatar {
         width: 36px !important;
         height: 36px !important;
         border-radius: 50% !important;
@@ -157,20 +131,24 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         align-items: center !important;
         justify-content: center !important;
         font-size: 18px !important;
-    }}
-    .agri-title {{ 
-        font-size: 14px !important; 
-        font-weight: 700 !important; 
-        margin: 0 !important; 
-        line-height: 1.3 !important; 
-    }}
-    .agri-status {{ 
-        font-size: 11px !important; 
-        opacity: .82 !important; 
-        margin: 0 !important; 
-    }}
-    .dot-g {{ color: #7bffb2 !important; }}
-    #agri-close-btn {{
+    }
+    
+    .chat-title {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
+        line-height: 1.3 !important;
+    }
+    
+    .chat-status {
+        font-size: 11px !important;
+        opacity: .82 !important;
+        margin: 0 !important;
+    }
+    
+    .dot-green { color: #7bffb2 !important; }
+    
+    .chat-close-btn {
         background: rgba(255,255,255,.18) !important;
         border: none !important;
         color: white !important;
@@ -182,14 +160,15 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        flex-shrink: 0 !important;
         transition: background .15s !important;
-        line-height: 1 !important;
-    }}
-    #agri-close-btn:hover {{ background: rgba(255,255,255,.36) !important; }}
-
-    /* messages */
-    #agri-messages {{
+    }
+    
+    .chat-close-btn:hover {
+        background: rgba(255,255,255,.36) !important;
+    }
+    
+    /* Messages area */
+    .chat-messages {
         flex: 1 !important;
         overflow-y: auto !important;
         padding: 14px 12px 8px 12px !important;
@@ -199,119 +178,189 @@ def render_floating_chatbot(user_context: str = "", show: bool = True):
         scroll-behavior: smooth !important;
         scrollbar-width: thin !important;
         scrollbar-color: #3a3b55 transparent !important;
-        padding-bottom: 60px !important;
-    }}
-    #agri-messages::-webkit-scrollbar {{ width: 4px !important; }}
-    #agri-messages::-webkit-scrollbar-thumb {{ 
-        background: #3a3b55 !important; 
-        border-radius: 4px !important; 
-    }}
-
-    /* bubbles */
-    .bubble {{
+        padding-bottom: 16px !important;
+    }
+    
+    .chat-messages::-webkit-scrollbar {
+        width: 4px !important;
+    }
+    
+    .chat-messages::-webkit-scrollbar-thumb {
+        background: #3a3b55 !important;
+        border-radius: 4px !important;
+    }
+    
+    /* Bubbles */
+    .bubble {
         max-width: 88% !important;
         padding: 9px 13px !important;
         border-radius: 16px !important;
         font-size: 13px !important;
         line-height: 1.58 !important;
         word-wrap: break-word !important;
-    }}
-    .bubble strong {{ font-weight: 700 !important; }}
-    .bubble em {{ font-style: italic !important; }}
-    .bubble code {{
+    }
+    
+    .bubble strong { font-weight: 700 !important; }
+    .bubble em { font-style: italic !important; }
+    
+    .bubble code {
         background: rgba(255,255,255,.13) !important;
         padding: 1px 5px !important;
         border-radius: 4px !important;
         font-size: 12px !important;
         font-family: monospace !important;
-    }}
-    .user-bubble {{
+    }
+    
+    .user-bubble {
         align-self: flex-end !important;
         background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
         color: white !important;
         border-bottom-right-radius: 4px !important;
-    }}
-    .bot-bubble {{
+    }
+    
+    .bot-bubble {
         align-self: flex-start !important;
         background: #252640 !important;
         color: #dde0ff !important;
         border-bottom-left-radius: 4px !important;
-    }}
+    }
     
-    /* ── Chat input positioning ── */
-    .stChatInput {{
-        position: fixed !important;
-        bottom: 64px !important;
-        right: 28px !important;
-        width: 292px !important;
-        z-index: 999997 !important;
-        display: {input_display} !important;
-        margin: 0 !important;
-    }}
+    /* FAB button styles */
+    .fab-button {
+        width: 58px !important;
+        height: 58px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 26px !important;
+        box-shadow: 0 6px 22px rgba(78,84,200,.65) !important;
+        border: none !important;
+        color: white !important;
+        cursor: pointer !important;
+        transition: transform .2s, box-shadow .2s !important;
+        user-select: none !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+    
+    .fab-button:hover {
+        transform: scale(1.1) !important;
+        box-shadow: 0 10px 30px rgba(78,84,200,.85) !important;
+    }
+    
+    /* Chat input inside the window */
+    .chat-input-container {
+        padding: 8px 12px !important;
+        border-top: 1px solid rgba(255,255,255,.06) !important;
+        background: #1a1b2e !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .chat-input-container input {
+        width: 100% !important;
+        padding: 8px 12px !important;
+        border-radius: 12px !important;
+        border: 1.5px solid #4e54c8 !important;
+        background: #12132a !important;
+        color: #dde0ff !important;
+        font-size: 13px !important;
+        outline: none !important;
+    }
+    
+    .chat-input-container input::placeholder {
+        color: #6a6b8a !important;
+    }
     </style>
-
-    <!-- ── FAB ── -->
-    <div id="agri-fab" onclick="toggleChat()">&#128172;</div>
-
-    <!-- ── Chat window ── -->
-    <div id="agri-chat-win">
-        <div id="agri-header">
-            <div id="agri-header-left">
-                <div class="agri-avatar">&#129302;</div>
-                <div>
-                    <p class="agri-title">AgriTech AI Assistant</p>
-                    <p class="agri-status"><span class="dot-g">&#9679;</span> Online &middot; Powered by Groq</p>
-                </div>
-            </div>
-            <button id="agri-close-btn" onclick="toggleChat()" title="Close">&#10005;</button>
-        </div>
-        <div id="agri-messages">
-            {messages_html}
-        </div>
-    </div>
-
-    <script>
-    function toggleChat() {{
-        // Set the toggle request in Streamlit session state via a hidden input
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'chat_toggle';
-        input.value = '1';
-        document.body.appendChild(input);
-        
-        // Submit the form to trigger a rerun
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '';
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-    }}
-
-    // Scroll to bottom of messages
-    (function() {{
-        var messages = document.getElementById('agri-messages');
-        if (messages) {{
-            messages.scrollTop = messages.scrollHeight;
-        }}
-    }})();
-    </script>
     """, unsafe_allow_html=True)
 
-    # ── Handle form submission for toggle ─────────────────────────
-    # Check if the toggle was triggered via form submission
-    if st.session_state.get("chat_toggle"):
-        st.session_state.chat_open = not st.session_state.chat_open
-        st.session_state["chat_toggle"] = False
-        st.rerun()
+    # ── Render the FAB button and chat window ──────────────────────
+    
+    # FAB Button - only show when chat is closed
+    if not is_open:
+        if st.button("💬", key="fab_button", help="Open Chat Assistant"):
+            st.session_state.chat_open = True
+            st.rerun()
+        
+        # Style the button to be floating
+        st.markdown("""
+        <style>
+        div[data-testid="column"]:has(button[kind="secondary"][data-testid="baseButton-secondary"]) {
+            position: fixed !important;
+            bottom: 24px !important;
+            right: 24px !important;
+            z-index: 999999 !important;
+            width: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        button[kind="secondary"][data-testid="baseButton-secondary"] {
+            width: 58px !important;
+            height: 58px !important;
+            border-radius: 50% !important;
+            background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+            font-size: 26px !important;
+            box-shadow: 0 6px 22px rgba(78,84,200,.65) !important;
+            border: none !important;
+            color: white !important;
+            cursor: pointer !important;
+            transition: transform .2s, box-shadow .2s !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        button[kind="secondary"][data-testid="baseButton-secondary"]:hover {
+            transform: scale(1.1) !important;
+            box-shadow: 0 10px 30px rgba(78,84,200,.85) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-    # ── Chat input ─────────────────────────────────────────────────
-    # Only show chat input when chat is open
+    # Chat Window - only show when open
     if is_open:
+        # Close button
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+        with col5:
+            if st.button("✕", key="close_chat", help="Close Chat"):
+                st.session_state.chat_open = False
+                st.rerun()
+        
+        # Display messages
+        st.markdown(f"""
+        <div style="
+            background: #1a1b2e;
+            border-radius: 12px;
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255,255,255,.06);
+        ">
+            {messages_html}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Chat input
         prompt = st.chat_input(
             "Ask about inventory, orders, pricing…",
             key="agri_chat_input"
         )
+        
+        # Style the chat input to be in the right place
+        st.markdown("""
+        <style>
+        [data-testid="stChatInput"] {
+            position: fixed !important;
+            bottom: 20px !important;
+            right: 24px !important;
+            width: 340px !important;
+            z-index: 999997 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
         # ── Handle submitted message ──────────────────────────────
         if prompt and prompt.strip():
