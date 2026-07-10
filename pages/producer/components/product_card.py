@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from utils.db_helpers import get_user_by_id
 
 def render_product_card(product, user_info):
     """Render a product card with image, info, and action buttons"""
@@ -90,6 +91,16 @@ def render_product_detail(product, user_info):
     st.markdown("---")
     st.markdown(f"## 📦 {product.get('name', 'Product Details')}")
     
+    # Get producer info from database if available
+    producer_id = product.get('producer_id')
+    producer_data = user_info  # Default to current user
+    
+    # If product has a different producer, fetch their info
+    if producer_id and producer_id != user_info.get('id'):
+        fetched_producer = get_user_by_id(producer_id)
+        if fetched_producer:
+            producer_data = fetched_producer
+    
     # Product Image
     col1, col2 = st.columns([1, 2])
     
@@ -112,7 +123,7 @@ def render_product_detail(product, user_info):
         stock_color = "#f59e0b" if stock > 0 else "#ef4444"
         
         st.markdown(f"""
-        <div style="background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155;">
+        <div style="background: #1a1a2e; padding: 20px; border-radius: 12px; border: 1px solid #2d3748;">
             <h3 style="color: #f8fafc; margin-top: 0;">{product.get('name', 'Unknown')}</h3>
             <p style="color: #94a3b8; font-size: 14px;">{product.get('description', 'No description available')}</p>
             
@@ -142,7 +153,7 @@ def render_product_detail(product, user_info):
                     <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</p>
                 </div>
             </div>
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155;">
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3748;">
                 <span style="color: #94a3b8; font-size: 12px;">Status</span>
                 <p style="color: {'#10b981' if stock > 0 else '#ef4444'}; font-weight: 600; margin: 2px 0;">
                     {'✅ In Stock' if stock > 0 else '❌ Out of Stock'}
@@ -153,28 +164,35 @@ def render_product_detail(product, user_info):
     
     # Producer Information
     st.markdown("### 👤 Producer Information")
+    
+    producer_name = producer_data.get('name', 'Unknown')
+    producer_company = producer_data.get('company_name', 'N/A')
+    producer_phone = producer_data.get('phone', 'N/A')
+    producer_region = producer_data.get('region', 'N/A')
+    producer_address = producer_data.get('address', 'N/A')
+    
     st.markdown(f"""
-    <div style="background: #1e293b; padding: 16px 20px; border-radius: 12px; border: 1px solid #334155; margin: 8px 0;">
+    <div style="background: #1a1a2e; padding: 16px 20px; border-radius: 12px; border: 1px solid #2d3748; margin: 8px 0;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div>
                 <span style="color: #94a3b8; font-size: 12px;">Name</span>
-                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{user_info.get('name', 'Unknown')}</p>
+                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{producer_name}</p>
             </div>
             <div>
                 <span style="color: #94a3b8; font-size: 12px;">Company</span>
-                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{user_info.get('company_name', 'N/A')}</p>
+                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{producer_company}</p>
             </div>
             <div>
                 <span style="color: #94a3b8; font-size: 12px;">Phone</span>
-                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{user_info.get('phone', 'N/A')}</p>
+                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{producer_phone}</p>
             </div>
             <div>
                 <span style="color: #94a3b8; font-size: 12px;">Region</span>
-                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{user_info.get('region', 'N/A')}</p>
+                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{producer_region}</p>
             </div>
             <div style="grid-column: span 2;">
                 <span style="color: #94a3b8; font-size: 12px;">Address</span>
-                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{user_info.get('address', 'N/A')}, {user_info.get('region', 'N/A')}</p>
+                <p style="color: #f8fafc; font-weight: 600; margin: 2px 0;">{producer_address}, {producer_region}</p>
             </div>
         </div>
     </div>
@@ -207,7 +225,7 @@ def render_product_detail(product, user_info):
         with col2:
             total_price = quantity * product.get('price', 0)
             st.markdown(f"""
-            <div style="background: #1e293b; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; margin-top: 20px;">
+            <div style="background: #1a1a2e; padding: 12px 16px; border-radius: 8px; border: 1px solid #2d3748; margin-top: 20px;">
                 <span style="color: #94a3b8; font-size: 12px;">Total Price</span>
                 <p style="color: #10b981; font-weight: 700; font-size: 20px; margin: 2px 0;">{total_price:,.2f} ETB</p>
                 <span style="color: #94a3b8; font-size: 11px;">{quantity} x {product.get('price', 0)} ETB</span>
