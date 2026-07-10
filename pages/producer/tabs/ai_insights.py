@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROQ API INTEGRATION - FIXED PROMPT
+# GROQ API INTEGRATION - FIXED
 # ==========================================
 
 def get_groq_api_key():
@@ -35,7 +35,7 @@ def query_groq_api(product_name, region="Addis Ababa"):
         if not api_key:
             return {
                 "success": False,
-                "error": "Groq API key not configured. Please add GROQ_API_KEY to secrets."
+                "error": "Groq API key not configured."
             }
 
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -45,28 +45,28 @@ def query_groq_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Direct prompt - no web search, just knowledge
-        prompt = f"""Based on your knowledge, what is the current average market price of {product_name} in {region}, Ethiopia?
+        # Better prompt for quick response
+        prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia?
 
-Provide ONLY the following information in this exact format:
+Give me a quick estimate based on your knowledge. Format your response exactly like this:
 Price: [number] ETB/kg
 Range: [min] - [max] ETB/kg
 Trend: [increasing/stable/decreasing]
 Demand: [high/medium/low]
 
-Use your internal knowledge only. Do not search the web. Give a reasonable estimate based on known Ethiopian market prices."""
+Provide only these 4 lines, nothing else."""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian agricultural prices. Provide estimates based on your training data. Do not search the web."},
+                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian agricultural prices. Provide quick, accurate estimates."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 150,
+            "max_tokens": 100,
             "temperature": 0.1
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
@@ -102,15 +102,6 @@ Use your internal knowledge only. Do not search the web. Give a reasonable estim
             
             if price_match:
                 result["price"] = float(price_match.group(1))
-            else:
-                # Try to find any number
-                all_numbers = re.findall(r'(\d+\.?\d*)', content)
-                if all_numbers:
-                    for num in all_numbers:
-                        num_float = float(num)
-                        if 1 <= num_float <= 10000:
-                            result["price"] = num_float
-                            break
             
             if range_match:
                 result["min_price"] = float(range_match.group(1))
@@ -122,61 +113,19 @@ Use your internal knowledge only. Do not search the web. Give a reasonable estim
             if demand_match:
                 result["demand"] = demand_match.group(1).lower()
             
-            # Generate insight based on the data
-            insight = generate_insight(result, product_name, region)
-            result["insight"] = insight
-            
             result["unit"] = "kg"
             
             return result
         else:
             return {
                 "success": False,
-                "error": "Unexpected API response format",
-                "raw_data": data
+                "error": "Unexpected API response format"
             }
             
     except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out. Please try again."}
-    except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "Connection error. Please check your internet."}
+        return {"success": False, "error": "Request timed out"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-def generate_insight(result, product_name, region):
-    """Generate a market insight based on the price data"""
-    price = result.get('price', 0)
-    trend = result.get('trend', 'stable')
-    demand = result.get('demand', 'medium')
-    
-    insights = []
-    
-    # Price level insight
-    if price > 0:
-        if price < 50:
-            insights.append(f"{product_name} is currently at an affordable price point in {region}")
-        elif price < 100:
-            insights.append(f"{product_name} is moderately priced in {region} market")
-        elif price < 200:
-            insights.append(f"{product_name} is priced at a premium level in {region}")
-        else:
-            insights.append(f"{product_name} is at a high price point in {region} market")
-    
-    # Trend insight
-    if trend == 'increasing':
-        insights.append("Prices are trending upward, suggesting growing demand or supply constraints")
-    elif trend == 'decreasing':
-        insights.append("Prices are trending downward, indicating good supply or reduced demand")
-    else:
-        insights.append("Prices remain stable, indicating a balanced market")
-    
-    # Demand insight
-    if demand == 'high':
-        insights.append("High demand suggests strong market activity and quick turnover")
-    elif demand == 'low':
-        insights.append("Low demand suggests slower market activity")
-    
-    return " ".join(insights)
 
 # ==========================================
 # SUPABASE FUNCTIONS
@@ -436,7 +385,6 @@ class SelfLearningAIInsights:
                 'unit': result.get('unit', 'kg'),
                 'trend': result.get('trend', 'N/A'),
                 'demand': result.get('demand', 'N/A'),
-                'insight': result.get('insight', 'N/A'),
                 'timestamp': datetime.now().isoformat(),
                 'raw_response': result.get('raw_response')
             })
@@ -538,12 +486,11 @@ class SelfLearningAIInsights:
             market_data = {
                 'product': product_name,
                 'current_price': market_price,
-                'avg_price': market_price * 0.95,
+                'avg_price': market_price,
                 'min_price': groq_result.get('min_price', market_price * 0.8),
                 'max_price': groq_result.get('max_price', market_price * 1.2),
                 'trend': groq_result.get('trend', 'stable'),
                 'demand': groq_result.get('demand', 'medium'),
-                'insight': groq_result.get('insight', 'Market data from Groq AI'),
                 'unit': groq_result.get('unit', 'kg'),
                 'source': 'Groq API'
             }
@@ -551,7 +498,6 @@ class SelfLearningAIInsights:
             # Fallback to local data
             scraper = EthiopianMarketScraper()
             market_data = scraper.get_current_price(product_name)
-            market_data['insight'] = 'Estimated market data (Groq API unavailable)'
         
         predicted_price = self.predict_price({**market_data, 'region': region})
         demand_forecast = self.forecast_demand(product_name, region)
@@ -563,8 +509,7 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'groq_source': groq_result.get('success', False),
-            'groq_insight': market_data.get('insight', '')
+            'groq_source': groq_result.get('success', False)
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -826,13 +771,15 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Query button
+    # Query button with loading state
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"### 🔍 Get Price for {product_name}")
         st.caption(f"Query Groq AI for current {product_name} prices in {selected_region}")
     with col2:
-        if st.button("🚀 Query Groq", use_container_width=True, type="primary"):
+        query_button = st.button("🚀 Query Groq", use_container_width=True, type="primary")
+        
+        if query_button:
             with st.spinner("Querying Groq AI..."):
                 result = ai_insights.query_groq_for_price(product_name, selected_region)
                 if result.get('success'):
@@ -849,17 +796,32 @@ def render_ai_insights(user_info, ai):
     
     if insights.get('groq_source'):
         st.markdown('<span class="groq-badge">🤖 Groq AI</span>', unsafe_allow_html=True)
-        
-        # Show AI Insight
-        if insights.get('groq_insight'):
-            st.markdown(f"""
-            <div class="insight-text">
-                💡 <strong>AI Insight:</strong> {insights.get('groq_insight')}
-            </div>
-            """, unsafe_allow_html=True)
     
     current_price = selected_product.get('price', 0)
     market_avg = market_data.get('avg_price', 0)
+    
+    # Generate a proper market insight
+    diff = current_price - market_avg
+    pct = (diff / market_avg * 100) if market_avg > 0 else 0
+    
+    if diff > 0:
+        price_status = f"Your price is {pct:.0f}% above the market average"
+        status_color = "#ef4444"
+    elif diff < 0:
+        price_status = f"Your price is {abs(pct):.0f}% below the market average"
+        status_color = "#10b981"
+    else:
+        price_status = "Your price matches the market average"
+        status_color = "#f59e0b"
+    
+    st.markdown(f"""
+    <div class="insight-text">
+        💡 <strong>Market Insight:</strong> The current market price of {product_name} in {selected_region} is approximately <strong>{market_avg:.0f} ETB/kg</strong>.
+        {price_status}. 
+        {f'Price range: {market_data.get("min_price", 0):.0f} - {market_data.get("max_price", 0):.0f} ETB/kg. ' if market_data.get("min_price") and market_data.get("max_price") else ''}
+        Market trend is <strong>{market_data.get("trend", "stable")}</strong> with <strong>{market_data.get("demand", "medium")}</strong> demand.
+    </div>
+    """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -867,21 +829,22 @@ def render_ai_insights(user_info, ai):
     with col2:
         st.metric("📊 Market Avg", f"{market_avg:.0f} ETB")
     with col3:
-        diff = current_price - market_avg
-        pct = (diff / market_avg * 100) if market_avg > 0 else 0
         st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
     
     # Market Details
-    if market_data.get('min_price') and market_data.get('max_price'):
-        st.caption(f"📊 Price Range: {market_data.get('min_price', 0):.0f} - {market_data.get('max_price', 0):.0f} ETB/kg")
-    
-    if market_data.get('trend'):
-        trend_emoji = "📈" if market_data.get('trend') == 'increasing' else "📉" if market_data.get('trend') == 'decreasing' else "➡️"
-        st.caption(f"{trend_emoji} Trend: {market_data.get('trend', 'N/A').capitalize()}")
-    
-    if market_data.get('demand'):
-        demand_emoji = "🔥" if market_data.get('demand') == 'high' else "📊" if market_data.get('demand') == 'medium' else "❄️"
-        st.caption(f"{demand_emoji} Demand: {market_data.get('demand', 'N/A').capitalize()}")
+    st.caption("---")
+    detail_cols = st.columns(3)
+    with detail_cols[0]:
+        if market_data.get('min_price') and market_data.get('max_price'):
+            st.caption(f"📊 Range: {market_data.get('min_price', 0):.0f} - {market_data.get('max_price', 0):.0f} ETB/kg")
+    with detail_cols[1]:
+        if market_data.get('trend'):
+            trend_emoji = "📈" if market_data.get('trend') == 'increasing' else "📉" if market_data.get('trend') == 'decreasing' else "➡️"
+            st.caption(f"{trend_emoji} Trend: {market_data.get('trend', 'N/A').capitalize()}")
+    with detail_cols[2]:
+        if market_data.get('demand'):
+            demand_emoji = "🔥" if market_data.get('demand') == 'high' else "📊" if market_data.get('demand') == 'medium' else "❄️"
+            st.caption(f"{demand_emoji} Demand: {market_data.get('demand', 'N/A').capitalize()}")
     
     st.markdown("---")
     
@@ -902,7 +865,7 @@ def render_ai_insights(user_info, ai):
     with col2:
         rec_price = price_rec.get('recommended_price', current_price)
         pct_change = ((rec_price - current_price) / current_price * 100) if current_price > 0 else 0
-        color = "#10b981" if pct_change > 0 else "#ef4444"
+        color = "#10b981" if pct_change > 0 else "#ef4444" if pct_change < 0 else "#f59e0b"
         st.markdown(f"""
         <div class="insight-card">
             <div class="title">📊 Impact</div>
