@@ -17,30 +17,30 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROK API INTEGRATION - CORRECT FORMAT
+# GROQ API INTEGRATION - CORRECT
 # ==========================================
 
-def get_grok_api_key():
-    """Get Grok API key from secrets"""
+def get_groq_api_key():
+    """Get Groq API key from secrets"""
     try:
         # Try different possible key names
-        api_key = st.secrets.get("GROK_API_KEY") or st.secrets.get("grok_api_key") or st.secrets.get("GROK_KEY") or st.secrets.get("XAI_API_KEY")
+        api_key = st.secrets.get("GROQ_API_KEY") or st.secrets.get("groq_api_key") or st.secrets.get("GROQ_KEY")
         return api_key
     except Exception as e:
         return None
 
-def query_grok_api(product_name, region="Addis Ababa"):
-    """Query the Grok API for current product price in Ethiopia."""
+def query_groq_api(product_name, region="Addis Ababa"):
+    """Query the Groq API for current product price in Ethiopia."""
     try:
-        api_key = get_grok_api_key()
+        api_key = get_groq_api_key()
         if not api_key:
             return {
                 "success": False,
-                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
+                "error": "Groq API key not configured. Please add GROQ_API_KEY to secrets."
             }
 
-        # xAI API endpoint - from official documentation
-        url = "https://api.x.ai/v1/chat/completions"
+        # Groq API endpoint
+        url = "https://api.groq.com/openai/v1/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -51,12 +51,12 @@ def query_grok_api(product_name, region="Addis Ababa"):
         prompt = f"What is the current price of {product_name} in {region}, Ethiopia in Ethiopian Birr (ETB)? Reply with just a number."
         
         payload = {
-            "model": "grok-1-latest",  # Latest Grok model
+            "model": "llama-3.3-70b-versatile",  # Correct Groq model
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.0,
-            "max_tokens": 10
+            "max_tokens": 10,
+            "temperature": 0.0
         }
         
         # Make the request with timeout
@@ -101,7 +101,7 @@ def query_grok_api(product_name, region="Addis Ababa"):
                         "price": price,
                         "unit": "kg",
                         "raw_response": content,
-                        "source": "Grok API"
+                        "source": "Groq API"
                     }
                 else:
                     return {
@@ -150,7 +150,7 @@ def save_training_data_supabase(user_id, data):
             'trend_factor': data.get('trend_factor', 1.0),
             'predicted_price': data.get('predicted_price'),
             'actual_price': data.get('actual_price'),
-            'data_source': data.get('data_source', 'grok_api'),
+            'data_source': data.get('data_source', 'groq_api'),
             'region': data.get('region', 'Addis Ababa')
         }
         
@@ -199,7 +199,7 @@ def get_product_market_data(product_name, region="Addis Ababa"):
 # ==========================================
 
 class SelfLearningAIInsights:
-    """Self-learning AI system with Supabase storage and Grok integration"""
+    """Self-learning AI system with Supabase storage and Groq integration"""
     
     def __init__(self, user_id):
         self.user_id = user_id
@@ -231,7 +231,7 @@ class SelfLearningAIInsights:
                     'predictions': {},
                     'learning_iterations': 0,
                     'accuracy_score': 0,
-                    'grok_queries': []
+                    'groq_queries': []
                 }
                 with open(path, 'w') as f:
                     json.dump(default, f, indent=2)
@@ -246,7 +246,7 @@ class SelfLearningAIInsights:
                 'predictions': {},
                 'learning_iterations': 0,
                 'accuracy_score': 0,
-                'grok_queries': []
+                'groq_queries': []
             }
     
     def save_knowledge_base(self):
@@ -372,15 +372,15 @@ class SelfLearningAIInsights:
         except Exception as e:
             return False
     
-    def query_grok_for_price(self, product_name, region="Addis Ababa"):
-        """Query Grok API for product price and store results"""
-        result = query_grok_api(product_name, region)
+    def query_groq_for_price(self, product_name, region="Addis Ababa"):
+        """Query Groq API for product price and store results"""
+        result = query_groq_api(product_name, region)
         
         if result.get('success'):
-            if 'grok_queries' not in self.knowledge_base:
-                self.knowledge_base['grok_queries'] = []
+            if 'groq_queries' not in self.knowledge_base:
+                self.knowledge_base['groq_queries'] = []
             
-            self.knowledge_base['grok_queries'].append({
+            self.knowledge_base['groq_queries'].append({
                 'product': product_name,
                 'region': region,
                 'price': result.get('price'),
@@ -393,7 +393,7 @@ class SelfLearningAIInsights:
                 'product_name': product_name,
                 'price': result.get('price'),
                 'market_price': result.get('price'),
-                'data_source': 'grok_api',
+                'data_source': 'groq_api',
                 'region': region,
                 'demand_score': 70,
                 'predicted_price': result.get('price')
@@ -478,11 +478,11 @@ class SelfLearningAIInsights:
     
     def get_market_insights(self, product_name, region="Addis Ababa"):
         """Get comprehensive market insights for a product"""
-        # Try Grok API
-        grok_result = self.query_grok_for_price(product_name, region)
+        # Try Groq API
+        groq_result = self.query_groq_for_price(product_name, region)
         
-        if grok_result.get('success'):
-            market_price = grok_result.get('price')
+        if groq_result.get('success'):
+            market_price = groq_result.get('price')
             market_data = {
                 'product': product_name,
                 'current_price': market_price,
@@ -491,8 +491,8 @@ class SelfLearningAIInsights:
                 'max_price': market_price * 1.2,
                 'trend': 'stable',
                 'demand': 'medium',
-                'unit': grok_result.get('unit', 'kg'),
-                'source': 'Grok API'
+                'unit': groq_result.get('unit', 'kg'),
+                'source': 'Groq API'
             }
         else:
             # Fallback to local data
@@ -509,7 +509,7 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'grok_source': grok_result.get('success', False)
+            'groq_source': groq_result.get('success', False)
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -591,7 +591,7 @@ class SelfLearningAIInsights:
         """Calculate confidence score for predictions"""
         base_confidence = 0.7
         
-        if market_data.get('source') == 'Grok API':
+        if market_data.get('source') == 'Groq API':
             base_confidence += 0.15
         elif market_data.get('source') == 'Ethiopian Market Data':
             base_confidence += 0.1
@@ -610,7 +610,7 @@ class SelfLearningAIInsights:
 # ==========================================
 
 class EthiopianMarketScraper:
-    """Fallback Ethiopian market data when Grok is unavailable"""
+    """Fallback Ethiopian market data when Groq is unavailable"""
     
     def __init__(self):
         self.product_prices = {
@@ -667,7 +667,7 @@ class EthiopianMarketScraper:
 # ==========================================
 
 def render_ai_insights(user_info, ai):
-    """Render AI Insights tab with Grok API integration"""
+    """Render AI Insights tab with Groq API integration"""
     
     ai_insights = SelfLearningAIInsights(user_info['id'])
     
@@ -705,7 +705,7 @@ def render_ai_insights(user_info, ai):
     .insight-card .trend-up { color: #10b981; }
     .insight-card .trend-down { color: #ef4444; }
     .insight-card .trend-neutral { color: #f59e0b; }
-    .grok-badge {
+    .groq-badge {
         display: inline-block;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -718,7 +718,7 @@ def render_ai_insights(user_info, ai):
     """, unsafe_allow_html=True)
     
     st.subheader("🤖 AI-Powered Market Insights")
-    st.caption("Real-time Ethiopian market analysis with Grok AI integration")
+    st.caption("Real-time Ethiopian market analysis with Groq AI integration")
     
     # Status
     col1, col2, col3, col4 = st.columns(4)
@@ -735,10 +735,10 @@ def render_ai_insights(user_info, ai):
     st.markdown("---")
     
     # API Key Check
-    api_key = get_grok_api_key()
+    api_key = get_groq_api_key()
     if not api_key:
-        st.warning("⚠️ Grok API key not found. Please add GROK_API_KEY to secrets.")
-        st.info("Format: GROK_API_KEY = 'your_key_here'")
+        st.warning("⚠️ Groq API key not found. Please add GROQ_API_KEY to secrets.")
+        st.info("Format: GROQ_API_KEY = 'your_key_here'")
     
     # Products
     all_products = get_products(producer_id=user_info['id'])
@@ -765,11 +765,11 @@ def render_ai_insights(user_info, ai):
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"### 🔍 Get Price for {product_name}")
-        st.caption(f"Query Grok AI for current {product_name} prices in {selected_region}")
+        st.caption(f"Query Groq AI for current {product_name} prices in {selected_region}")
     with col2:
         if st.button("🚀 Query", use_container_width=True, type="primary"):
-            with st.spinner("Querying Grok AI..."):
-                result = ai_insights.query_grok_for_price(product_name, selected_region)
+            with st.spinner("Querying Groq AI..."):
+                result = ai_insights.query_groq_for_price(product_name, selected_region)
                 if result.get('success'):
                     st.success(f"✅ Price: {result.get('price')} ETB per {result.get('unit', 'kg')}")
                     st.rerun()
@@ -778,14 +778,14 @@ def render_ai_insights(user_info, ai):
                     if result.get('status_code'):
                         st.caption(f"Status: {result.get('status_code')}")
     
-    # Get insights (always shows local data if Grok fails)
+    # Get insights (always shows local data if Groq fails)
     insights = ai_insights.get_market_insights(product_name, selected_region)
     market_data = insights.get('market_data', {})
     
     st.markdown("### 📊 Market Analysis")
     
-    if insights.get('grok_source'):
-        st.markdown('<span class="grok-badge">🤖 Grok AI</span>', unsafe_allow_html=True)
+    if insights.get('groq_source'):
+        st.markdown('<span class="groq-badge">🤖 Groq AI</span>', unsafe_allow_html=True)
     
     current_price = selected_product.get('price', 0)
     market_avg = market_data.get('avg_price', 0)
