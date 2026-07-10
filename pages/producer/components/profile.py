@@ -41,38 +41,32 @@ def render_profile(user_info):
     }
     
     .profile-pic-container {
-        position: relative;
         width: 120px;
         height: 120px;
         margin-bottom: 12px;
-    }
-    
-    .profile-pic-large {
-        width: 120px;
-        height: 120px;
         border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid #fff;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
+    }
+    
+    .profile-pic-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    
+    .profile-pic-container .initial {
         font-size: 48px;
         font-weight: bold;
         color: white;
-        border: 4px solid #fff;
-        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-        object-fit: cover;
-        transition: transform 0.3s ease;
-    }
-    
-    .profile-pic-large:hover {
-        transform: scale(1.05);
-    }
-    
-    .profile-pic-large img {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        object-fit: cover;
+        text-align: center;
     }
     
     .card-name {
@@ -181,9 +175,7 @@ def render_profile(user_info):
             height: 100px;
         }
         
-        .profile-pic-large {
-            width: 100px;
-            height: 100px;
+        .profile-pic-container .initial {
             font-size: 40px;
         }
         
@@ -229,9 +221,7 @@ def render_profile(user_info):
             height: 80px;
         }
         
-        .profile-pic-large {
-            width: 80px;
-            height: 80px;
+        .profile-pic-container .initial {
             font-size: 32px;
         }
         
@@ -255,17 +245,20 @@ def render_profile(user_info):
     # Get role and format
     role = user_info.get('role', 'producer').capitalize()
     
-    # Display profile image or initial
+    # Build profile image HTML
     profile_html = ""
     if profile_image and os.path.exists(profile_image):
         try:
-            profile_html = f'<img src="{profile_image}" alt="Profile" class="profile-pic-large">'
-        except:
-            profile_html = f'<div class="profile-pic-large">{initial}</div>'
+            # Use Streamlit's image display for reliable rendering
+            st.image(profile_image, width=120, use_container_width=False)
+            profile_html = ""  # Let Streamlit handle the image
+        except Exception as e:
+            profile_html = f'<div class="initial">{initial}</div>'
     else:
-        profile_html = f'<div class="profile-pic-large">{initial}</div>'
+        # Show initial if no image
+        profile_html = f'<div class="initial">{initial}</div>'
     
-    # Render Business Card
+    # Render Business Card - Use Streamlit image for reliable display
     st.markdown(f"""
     <div class="business-card">
         <div class="card-container">
@@ -339,20 +332,18 @@ def render_edit_profile(user_info):
             st.markdown("---")
             st.markdown("### 📷 Profile Picture")
             
-            # Show current profile image
+            # Show current profile image using Streamlit
             current_image = user_info.get('profile_image', None)
             if current_image and os.path.exists(current_image):
                 st.markdown("#### Current Profile Picture:")
                 try:
                     st.image(current_image, width=150)
-                except:
-                    pass
-            else:
-                st.info("No profile picture set. Upload one below.")
+                except Exception as e:
+                    st.warning("Could not load current image")
             
             # Image upload
             uploaded_file = st.file_uploader(
-                "Upload Profile Picture",
+                "Upload New Profile Picture",
                 type=['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'],
                 help="Supported formats: JPG, JPEG, PNG, GIF, WEBP, BMP, TIFF"
             )
