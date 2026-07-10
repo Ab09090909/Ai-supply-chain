@@ -214,7 +214,13 @@ def get_products(producer_id=None, limit=100):
         response = query.execute()
         
         if response.data:
-            return response.data
+            # Verify image paths exist
+            products = response.data
+            for product in products:
+                if product.get('image_url'):
+                    if not os.path.exists(product.get('image_url')):
+                        product['image_url'] = None
+            return products
         return []
     
     except Exception as e:
@@ -286,6 +292,11 @@ def update_product(product_id, **kwargs):
         if supabase is None:
             return False, "Database connection failed"
         
+        # Map stock_quantity to quantity if needed
+        if 'stock_quantity' in kwargs:
+            kwargs['quantity'] = kwargs.pop('stock_quantity')
+        
+        # Remove None values
         update_data = {k: v for k, v in kwargs.items() if v is not None}
         update_data['updated_at'] = datetime.now().isoformat()
         
