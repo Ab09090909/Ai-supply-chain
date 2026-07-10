@@ -67,6 +67,12 @@ def render_producer_page():
     if 'selected_product_id' not in st.session_state:
         st.session_state.selected_product_id = None
     
+    if 'show_browse_detail' not in st.session_state:
+        st.session_state.show_browse_detail = False
+    
+    if 'selected_browse_product_id' not in st.session_state:
+        st.session_state.selected_browse_product_id = None
+    
     # Initialize AI
     ai = SelfLearningAI(user_info['id'])
     
