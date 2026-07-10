@@ -17,14 +17,40 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROK API INTEGRATION
+# GROK API INTEGRATION WITH BETTER ERROR HANDLING
 # ==========================================
+
+def get_grok_api_key():
+    """Get Grok API key from secrets with proper error handling"""
+    try:
+        # Try to get from st.secrets
+        api_key = st.secrets.get("GROK_API_KEY")
+        
+        if not api_key:
+            # Try alternative key names
+            api_key = st.secrets.get("grok_api_key") or st.secrets.get("GROK_KEY")
+        
+        if not api_key:
+            st.error("❌ Grok API key not found in secrets. Please add GROK_API_KEY to your Streamlit secrets.")
+            st.info("📝 Go to your app settings → Secrets and add: GROK_API_KEY = 'your_key_here'")
+            return None
+        
+        return api_key
+    except Exception as e:
+        st.error(f"❌ Error accessing secrets: {e}")
+        return None
 
 def query_grok_api(product_name, region="Addis Ababa"):
     """Query the Grok API for current product price in Ethiopia."""
     try:
-        # Get API key from Streamlit secrets
-        api_key = st.secrets["GROK_API_KEY"]
+        # Get API key from Streamlit secrets with proper error handling
+        api_key = get_grok_api_key()
+        
+        if not api_key:
+            return {
+                "success": False,
+                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
+            }
         
         # Grok API endpoint (xAI)
         url = "https://api.x.ai/v1/chat/completions"
@@ -758,6 +784,13 @@ def render_ai_insights(user_info, ai):
         st.metric("🎯 Progress", f"{progress*100:.0f}%")
     
     st.markdown("---")
+    
+    # Check if Grok API key is configured
+    api_key_check = get_grok_api_key()
+    if not api_key_check:
+        st.warning("⚠️ Grok API key not configured. Please add GROK_API_KEY to your Streamlit secrets.")
+        st.info("📝 Go to your app settings → Secrets and add: `GROK_API_KEY = 'your_key_here'`")
+        st.markdown("---")
     
     # Get all products for analysis
     all_products = get_products(producer_id=user_info['id'])
