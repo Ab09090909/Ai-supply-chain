@@ -87,15 +87,43 @@ def get_theme_css():
         color: #f8fafc !important;
     }
     
-    /* Tabs */
+    /* Tabs - Dark Mode */
+    .stTabs {
+        background: transparent !important;
+    }
     .stTabs [data-baseweb="tab-list"] {
-        background: #1a1a2e;
+        background: #1a1a2e !important;
+        border: 1px solid #2d3748 !important;
+        border-radius: 8px !important;
+        padding: 4px !important;
+        gap: 4px !important;
     }
     .stTabs [data-baseweb="tab"] {
+        background: transparent !important;
         color: #94a3b8 !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        padding: 8px 16px !important;
+        transition: all 0.2s ease !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(102, 126, 234, 0.1) !important;
+        color: #e2e8f0 !important;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: #2d3748 !important;
         color: #667eea !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+    }
+    .stTabs [data-baseweb="tab"] button {
+        color: inherit !important;
+    }
+    .stTabs [data-baseweb="tab"] p {
+        color: inherit !important;
+    }
+    .stTabs [data-baseweb="tab-panel"] {
+        background: transparent !important;
+        padding-top: 16px !important;
     }
     
     /* Sidebar */
@@ -132,9 +160,6 @@ def get_theme_css():
     .stInfo {
         background: rgba(59,130,246,0.15) !important;
         border-color: #3b82f6 !important;
-    }
-    .stAlert .stMarkdown p {
-        color: #f8fafc !important;
     }
     
     /* Buttons */
@@ -200,6 +225,10 @@ def get_theme_css():
         background: rgba(102, 126, 234, 0.1) !important;
         color: #94a3b8 !important;
     }
+    .product-info-badge {
+        background: #2d3748 !important;
+        color: #e2e8f0 !important;
+    }
     
     /* AI Insights */
     .ai-insight-card {
@@ -258,6 +287,12 @@ def get_theme_css():
     .section-title {
         color: #94a3b8 !important;
     }
+    
+    /* Badges */
+    .badge-sm.delivered { background: rgba(16,185,129,0.2); color: #10b981; }
+    .badge-sm.pending { background: rgba(245,158,11,0.2); color: #f59e0b; }
+    .badge-sm.shipped { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .badge-sm.cancelled { background: rgba(239,68,68,0.2); color: #ef4444; }
     """
     
     light_css = """
@@ -286,7 +321,7 @@ def get_theme_css():
         color: #0f172a !important;
     }
     
-    /* Inputs - Light background with dark text */
+    /* Inputs */
     .stSelectbox, .stTextInput, .stNumberInput, .stTextArea {
         background: #ffffff !important;
     }
@@ -333,15 +368,52 @@ def get_theme_css():
         color: #1e293b !important;
     }
     
-    /* Tabs */
+    /* Tabs - Light Mode (FIXED) */
+    .stTabs {
+        background: transparent !important;
+    }
     .stTabs [data-baseweb="tab-list"] {
-        background: #ffffff;
+        background: #f1f5f9 !important;
+        border-radius: 8px !important;
+        padding: 4px !important;
+        gap: 4px !important;
+        border: 1px solid #e2e8f0 !important;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #475569 !important;
+        background: transparent !important;
+        color: #64748b !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        padding: 8px 16px !important;
+        transition: all 0.2s ease !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(102, 126, 234, 0.08) !important;
+        color: #1e293b !important;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: #ffffff !important;
         color: #667eea !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    .stTabs [data-baseweb="tab"] button {
+        color: inherit !important;
+    }
+    .stTabs [data-baseweb="tab"] p {
+        color: inherit !important;
+    }
+    .stTabs [data-baseweb="tab-panel"] {
+        background: transparent !important;
+        padding-top: 16px !important;
+    }
+    
+    /* Sidebar Tabs */
+    .stSidebar .stTabs [data-baseweb="tab-list"] {
+        background: #f1f5f9 !important;
+    }
+    .stSidebar .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: #ffffff !important;
     }
     
     /* Sidebar */
@@ -378,9 +450,6 @@ def get_theme_css():
     .stInfo {
         background: rgba(59,130,246,0.1) !important;
         border-color: #3b82f6 !important;
-    }
-    .stAlert .stMarkdown p {
-        color: #1e293b !important;
     }
     
     /* Buttons */
