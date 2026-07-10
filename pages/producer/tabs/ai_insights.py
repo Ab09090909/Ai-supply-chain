@@ -32,17 +32,17 @@ def get_grok_api_key():
     except Exception as e:
         return None
 
-def query_grok_api(product_name, region="Addis Ababa"):
+def query_grok_api(product_name, region="Addis Ababa", model="grok-1"):
     """Query the Grok API for current product price in Ethiopia."""
     try:
         api_key = get_grok_api_key()
         if not api_key:
             return {
                 "success": False,
-                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
+                "error": "Grok API key not configured."
             }
 
-        # xAI API endpoint - confirmed working
+        # xAI API endpoint
         url = "https://api.x.ai/v1/chat/completions"
         
         headers = {
@@ -50,11 +50,10 @@ def query_grok_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Simple direct prompt
-        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in ETB? Just give me the price number."
+        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in ETB? Give me just the number."
         
         payload = {
-            "model": "grok-beta",  # Using grok-beta model
+            "model": model,
             "messages": [
                 {"role": "user", "content": prompt}
             ],
@@ -62,10 +61,8 @@ def query_grok_api(product_name, region="Addis Ababa"):
             "max_tokens": 50
         }
         
-        # Make the request
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        # Debug info
         if response.status_code != 200:
             return {
                 "success": False,
@@ -78,8 +75,6 @@ def query_grok_api(product_name, region="Addis Ababa"):
         
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content']
-            
-            # Try to extract price
             price_match = re.search(r'([\d.]+)', content)
             
             if price_match:
@@ -94,20 +89,16 @@ def query_grok_api(product_name, region="Addis Ababa"):
             else:
                 return {
                     "success": False,
-                    "error": "Could not parse price from response",
+                    "error": "Could not parse price",
                     "raw_response": content
                 }
         else:
             return {
                 "success": False,
-                "error": "Unexpected API response format",
+                "error": "Unexpected response",
                 "raw_data": data
             }
             
-    except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out"}
-    except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "Connection error. Please check your internet."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -354,9 +345,9 @@ class SelfLearningAIInsights:
         except Exception as e:
             return False
     
-    def query_grok_for_price(self, product_name, region="Addis Ababa"):
+    def query_grok_for_price(self, product_name, region="Addis Ababa", model="grok-1"):
         """Query Grok API for product price and store results"""
-        result = query_grok_api(product_name, region)
+        result = query_grok_api(product_name, region, model)
         
         if result.get('success'):
             if 'grok_queries' not in self.knowledge_base:
@@ -460,9 +451,17 @@ class SelfLearningAIInsights:
     
     def get_market_insights(self, product_name, region="Addis Ababa"):
         """Get comprehensive market insights for a product"""
-        grok_result = self.query_grok_for_price(product_name, region)
+        # Try multiple models
+        models = ["grok-1", "grok-beta"]
+        grok_result = None
         
-        if grok_result.get('success'):
+        for model in models:
+            result = self.query_grok_for_price(product_name, region, model)
+            if result.get('success'):
+                grok_result = result
+                break
+        
+        if grok_result and grok_result.get('success'):
             market_price = grok_result.get('price')
             market_data = {
                 'product': product_name,
@@ -489,7 +488,7 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'grok_source': grok_result.get('success', False)
+            'grok_source': grok_result.get('success', False) if grok_result else False
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -694,88 +693,75 @@ def render_ai_insights(user_info, ai):
         border-radius: 12px;
         font-weight: 600;
     }
-    .light-mode .insight-card {
-        background: #ffffff !important;
-        border-color: #e2e8f0 !important;
-    }
-    .light-mode .insight-card .title {
-        color: #475569 !important;
-    }
-    .light-mode .insight-card .value {
-        color: #0f172a !important;
-    }
-    .light-mode .insight-card .sub {
-        color: #64748b !important;
-    }
     </style>
     """, unsafe_allow_html=True)
     
     st.subheader("🤖 AI-Powered Market Insights")
     st.caption("Real-time Ethiopian market analysis with Grok AI integration")
     
+    # Status
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("🧠 Learning Iterations", ai_insights.knowledge_base.get('learning_iterations', 0))
+        st.metric("🧠 Learning", ai_insights.knowledge_base.get('learning_iterations', 0))
     with col2:
-        st.metric("📊 Accuracy Score", f"{ai_insights.knowledge_base.get('accuracy_score', 0)*100:.1f}%")
+        st.metric("📊 Accuracy", f"{ai_insights.knowledge_base.get('accuracy_score', 0)*100:.1f}%")
     with col3:
-        st.metric("📚 Knowledge Items", len(ai_insights.knowledge_base.get('training_data', [])))
+        st.metric("📚 Knowledge", len(ai_insights.knowledge_base.get('training_data', [])))
     with col4:
         progress = min(ai_insights.knowledge_base.get('learning_iterations', 0) / 100, 1.0)
         st.metric("🎯 Progress", f"{progress*100:.0f}%")
     
     st.markdown("---")
     
-    # Check API key
+    # API Key Check
     api_key = get_grok_api_key()
     if not api_key:
         st.warning("⚠️ Grok API key not found. Please add GROK_API_KEY to secrets.")
+        st.info("Format: GROK_API_KEY = 'your_key_here'")
     
-    # Get products
+    # Products
     all_products = get_products(producer_id=user_info['id'])
     if not all_products:
         st.warning("⚠️ Please add products first")
         return
     
-    # Product selection
+    # Selection
     product_names = {p['id']: p['name'] for p in all_products}
-    selected_prod_id = st.selectbox(
-        "Select Product", 
-        list(product_names.keys()), 
-        format_func=lambda x: product_names[x]
-    )
+    selected_prod_id = st.selectbox("Product", list(product_names.keys()), format_func=lambda x: product_names[x])
     selected_product = next((p for p in all_products if p['id'] == selected_prod_id), None)
     if not selected_product:
         return
     
     product_name = selected_product.get('name', '')
     
-    # Region selection
     regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
               "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
-    selected_region = st.selectbox(
-        "Region",
-        regions,
-        index=0
-    )
+    selected_region = st.selectbox("Region", regions, index=0)
     
     st.markdown("---")
     
     # Query button
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"### 🔍 Get Price for {product_name}")
     with col2:
         if st.button("🚀 Query Grok", use_container_width=True, type="primary"):
             with st.spinner("Querying Grok..."):
-                result = ai_insights.query_grok_for_price(product_name, selected_region)
-                if result.get('success'):
+                # Try both models
+                models = ["grok-1", "grok-beta"]
+                result = None
+                
+                for model in models:
+                    result = ai_insights.query_grok_for_price(product_name, selected_region, model)
+                    if result.get('success'):
+                        break
+                
+                if result and result.get('success'):
                     st.success(f"✅ Price: {result.get('price')} ETB per {result.get('unit', 'kg')}")
                     st.rerun()
                 else:
-                    st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
-                    if result.get('status_code'):
-                        st.code(f"Status: {result.get('status_code')}\nResponse: {result.get('response_text', '')}")
+                    error = result.get('error', 'Unknown error') if result else 'No response'
+                    st.error(f"❌ Error: {error}")
     
     # Get insights
     insights = ai_insights.get_market_insights(product_name, selected_region)
@@ -790,7 +776,6 @@ def render_ai_insights(user_info, ai):
     market_avg = market_data.get('avg_price', 0)
     
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         st.metric("💰 Your Price", f"{current_price:.0f} ETB")
     with col2:
@@ -803,7 +788,7 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Price Recommendation
+    # Recommendation
     price_rec = insights.get('price_recommendations', {})
     col1, col2 = st.columns(2)
     
@@ -818,34 +803,34 @@ def render_ai_insights(user_info, ai):
         """, unsafe_allow_html=True)
     
     with col2:
+        rec_price = price_rec.get('recommended_price', current_price)
+        pct_change = ((rec_price - current_price) / current_price * 100) if current_price > 0 else 0
+        color = "#10b981" if pct_change > 0 else "#ef4444"
         st.markdown(f"""
         <div class="insight-card">
             <div class="title">📊 Impact</div>
-            <div class="value" style="color: {'#10b981' if price_rec.get('recommended_price', 0) > current_price else '#ef4444'}">
-                {((price_rec.get('recommended_price', current_price) - current_price) / current_price * 100):+.1f}%
-            </div>
-            <div class="sub">Current: {current_price:.0f} → Recommended: {price_rec.get('recommended_price', current_price):.0f}</div>
+            <div class="value" style="color:{color}">{pct_change:+.1f}%</div>
+            <div class="sub">Current: {current_price:.0f} → Recommended: {rec_price:.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Demand Forecast
-    demand_forecast = insights.get('demand_forecast', {})
+    # Demand
+    demand = insights.get('demand_forecast', {})
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.metric("📅 Daily", f"{demand_forecast.get('daily_demand', 0):.0f} units")
+        st.metric("📅 Daily", f"{demand.get('daily_demand', 0):.0f}")
     with col2:
-        st.metric("📅 Weekly", f"{demand_forecast.get('weekly_demand', 0):.0f} units")
+        st.metric("📅 Weekly", f"{demand.get('weekly_demand', 0):.0f}")
     with col3:
-        st.metric("📅 Monthly", f"{demand_forecast.get('monthly_demand', 0):.0f} units")
+        st.metric("📅 Monthly", f"{demand.get('monthly_demand', 0):.0f}")
     
     st.markdown("---")
     
-    # Stock Analysis
+    # Stock
     stock = selected_product.get('quantity', 0)
-    daily = demand_forecast.get('daily_demand', 1)
+    daily = demand.get('daily_demand', 1)
     days = stock / daily if daily > 0 else 0
     
     col1, col2 = st.columns(2)
@@ -855,10 +840,9 @@ def render_ai_insights(user_info, ai):
         color = "#10b981" if days > 14 else "#f59e0b" if days > 7 else "#ef4444"
         st.markdown(f"""
         <div class="insight-card">
-            <div class="title">📦 Stock Status</div>
+            <div class="title">📦 Stock</div>
             <div class="value" style="color:{color}">{status}</div>
             <div class="sub">{days:.1f} days remaining</div>
-            <div class="sub">Stock: {stock} units</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -882,25 +866,26 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Training section
+    # Training
     st.markdown("### 🧠 AI Training")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔄 Train Model", use_container_width=True):
+        if st.button("🔄 Train", use_container_width=True):
             training_data = get_training_data_supabase(user_info['id'])
             if training_data:
                 success = ai_insights.train_model(training_data)
             else:
                 success = ai_insights.train_with_supabase_data()
             if success:
-                st.success("✅ Model trained!")
+                st.success("✅ Trained!")
                 st.rerun()
     
     with col2:
         if st.button("📊 Performance", use_container_width=True):
             acc = ai_insights.knowledge_base.get('accuracy_score', 0)
-            st.info(f"Accuracy: {acc*100:.1f}%\nSamples: {len(ai_insights.knowledge_base.get('training_data', []))}")
+            samples = len(ai_insights.knowledge_base.get('training_data', []))
+            st.info(f"Accuracy: {acc*100:.1f}%\nSamples: {samples}")
     
     with col3:
         if st.button("💾 Save Model", use_container_width=True):
