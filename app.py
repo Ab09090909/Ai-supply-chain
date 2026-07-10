@@ -2,10 +2,8 @@ import streamlit as st
 import os
 from utils.auth import initialize_session_state, render_login
 from utils.theme import initialize_theme, get_theme_css, render_theme_toggle
-from utils.floating_chatbot import render_floating_chatbot # 1. Import Chatbot
-
-# Note: If shared_ui.py is inside the utils folder, change this to: from utils.shared_ui import get_ai_context
-from utils.shared_ui import get_ai_context # 2. Import Context Builder # 2. Import Context Builder
+from utils.floating_chatbot import render_floating_chatbot
+from utils.shared_ui import get_ai_context
 
 # Configure page
 st.set_page_config(
@@ -53,12 +51,13 @@ def main():
         st.sidebar.write(f"🔑 Role: **{user_role.capitalize()}**")
         st.sidebar.markdown("---")
         
-        # --- 3. FETCH REAL-TIME AI CONTEXT ---
-        # This gets live data (revenue, low stock, etc.) from Supabase
+        # --- FETCH REAL-TIME AI CONTEXT ---
         user_context = get_ai_context(user_id, user_role)
         
-        # --- 4. RENDER CHATBOT WITH CONTEXT ---
-        render_floating_chatbot(user_context=user_context)
+        # --- RENDER CHATBOT WITH CONTEXT ---
+        # IMPORTANT: Render the chatbot AFTER all other content
+        # This ensures it appears on top of everything
+        render_floating_chatbot(user_context=user_context, show=True)
         
         # Navigation based on role
         if user_role == 'producer':
