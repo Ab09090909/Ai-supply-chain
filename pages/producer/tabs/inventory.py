@@ -16,32 +16,32 @@ from ..components.product_card import render_product_card
 def render_inventory(user_info, ai):
     """Render Professional Inventory Management tab"""
     
-    # Custom CSS for professional inventory
+    # Custom CSS for professional inventory with better colors
     st.markdown("""
     <style>
     /* Inventory Container */
     .inventory-container {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 0 4px;
+        padding: 0 2px;
     }
     
-    /* Sub-tabs styling */
+    /* Sub-tabs styling - Dark Mode */
     .sub-tabs {
         display: flex;
-        gap: 8px;
-        margin-bottom: 20px;
+        gap: 6px;
+        margin-bottom: 12px;
         background: #1a1a2e;
-        padding: 6px;
-        border-radius: 10px;
+        padding: 4px;
+        border-radius: 8px;
         border: 1px solid #2d3748;
     }
     .sub-tab {
-        padding: 10px 24px;
-        border-radius: 8px;
+        padding: 8px 20px;
+        border-radius: 6px;
         cursor: pointer;
         font-weight: 500;
-        font-size: 14px;
+        font-size: 13px;
         transition: all 0.3s ease;
         background: transparent;
         color: #94a3b8;
@@ -50,43 +50,125 @@ def render_inventory(user_info, ai):
         text-align: center;
     }
     .sub-tab:hover {
-        background: rgba(102, 126, 234, 0.1);
+        background: rgba(102, 126, 234, 0.15);
         color: #e2e8f0;
     }
     .sub-tab.active {
-        background: #667eea;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     
-    /* Stats Cards */
+    /* Stats Cards - Minimized */
     .stat-card {
         background: #1a1a2e;
-        border-radius: 10px;
-        padding: 16px 20px;
+        border-radius: 8px;
+        padding: 10px 14px;
         border: 1px solid #2d3748;
         text-align: center;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
+        margin-bottom: 4px;
     }
     .stat-card:hover {
         border-color: #667eea;
-        transform: translateY(-2px);
+        transform: translateY(-1px);
     }
     .stat-card .number {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 700;
         color: #f8fafc;
     }
     .stat-card .label {
-        font-size: 12px;
+        font-size: 10px;
         color: #94a3b8;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-top: 4px;
+        letter-spacing: 0.3px;
+        margin-top: 2px;
     }
     .stat-card .icon {
-        font-size: 24px;
-        margin-bottom: 4px;
+        font-size: 18px;
+    }
+    
+    /* Browse Cards */
+    .browse-card {
+        background: #1a1a2e;
+        border-radius: 10px;
+        padding: 14px 16px;
+        border: 1px solid #2d3748;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    .browse-card:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .browse-card .product-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+    .browse-card .product-meta {
+        color: #94a3b8;
+        font-size: 12px;
+        margin: 2px 0;
+    }
+    .browse-card .product-price {
+        color: #10b981;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .browse-card .producer-info {
+        background: rgba(102, 126, 234, 0.08);
+        padding: 6px 10px;
+        border-radius: 6px;
+        margin: 6px 0;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+    
+    /* Search Bar - Compact */
+    .search-container {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .search-container input {
+        flex: 1;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #2d3748;
+        background: #1a1a2e;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 150px;
+    }
+    .search-container input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    .search-container select {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #2d3748;
+        background: #1a1a2e;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    .search-container select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    /* Product Grid - Compact */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
     }
     
     /* Light mode overrides */
@@ -102,7 +184,7 @@ def render_inventory(user_info, ai):
         color: #1e293b !important;
     }
     .light-mode .sub-tab.active {
-        background: #667eea !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
     }
     .light-mode .stat-card {
@@ -115,53 +197,6 @@ def render_inventory(user_info, ai):
     .light-mode .stat-card .label {
         color: #475569 !important;
     }
-    
-    /* Product Grid */
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 16px;
-        margin-top: 16px;
-    }
-    
-    /* Browse Section */
-    .browse-card {
-        background: #1a1a2e;
-        border-radius: 12px;
-        padding: 20px;
-        border: 1px solid #2d3748;
-        margin-bottom: 12px;
-        transition: all 0.3s ease;
-    }
-    .browse-card:hover {
-        border-color: #667eea;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-    }
-    .browse-card .product-name {
-        font-size: 18px;
-        font-weight: 600;
-        color: #f8fafc;
-    }
-    .browse-card .product-meta {
-        color: #94a3b8;
-        font-size: 13px;
-        margin: 4px 0;
-    }
-    .browse-card .product-price {
-        color: #10b981;
-        font-size: 20px;
-        font-weight: 700;
-    }
-    .browse-card .producer-info {
-        background: rgba(102, 126, 234, 0.08);
-        padding: 8px 12px;
-        border-radius: 8px;
-        margin: 8px 0;
-        font-size: 13px;
-        color: #94a3b8;
-    }
-    
     .light-mode .browse-card {
         background: #ffffff !important;
         border-color: #e2e8f0 !important;
@@ -176,43 +211,6 @@ def render_inventory(user_info, ai):
         background: rgba(102, 126, 234, 0.05) !important;
         color: #475569 !important;
     }
-    
-    /* Search Bar */
-    .search-container {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 16px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    .search-container input {
-        flex: 1;
-        padding: 10px 16px;
-        border-radius: 8px;
-        border: 1px solid #2d3748;
-        background: #1a1a2e;
-        color: #f8fafc;
-        font-size: 14px;
-        min-width: 200px;
-    }
-    .search-container input:focus {
-        outline: none;
-        border-color: #667eea;
-    }
-    .search-container select {
-        padding: 10px 16px;
-        border-radius: 8px;
-        border: 1px solid #2d3748;
-        background: #1a1a2e;
-        color: #f8fafc;
-        font-size: 14px;
-        min-width: 150px;
-    }
-    .search-container select:focus {
-        outline: none;
-        border-color: #667eea;
-    }
-    
     .light-mode .search-container input,
     .light-mode .search-container select {
         background: #ffffff !important;
@@ -236,7 +234,7 @@ def render_inventory(user_info, ai):
             width: 100%;
         }
         .stat-card .number {
-            font-size: 22px;
+            font-size: 18px;
         }
     }
     </style>
@@ -253,21 +251,16 @@ def render_inventory(user_info, ai):
     if 'inventory_subtab' not in st.session_state:
         st.session_state.inventory_subtab = "My Products"
     
-    st.markdown("""
-    <div class="sub-tabs">
-        <button class="sub-tab active" onclick="document.getElementById('subtab-my').click()">📦 My Products</button>
-        <button class="sub-tab" onclick="document.getElementById('subtab-browse').click()">🔍 Browse Products</button>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Hidden buttons for sub-tab switching
+    # Custom sub-tab buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📦 My Products", key="subtab-my", use_container_width=True):
+        if st.button("📦 My Products", key="subtab-my", use_container_width=True, 
+                    type="primary" if st.session_state.inventory_subtab == "My Products" else "secondary"):
             st.session_state.inventory_subtab = "My Products"
             st.rerun()
     with col2:
-        if st.button("🔍 Browse Products", key="subtab-browse", use_container_width=True):
+        if st.button("🔍 Browse Products", key="subtab-browse", use_container_width=True,
+                    type="primary" if st.session_state.inventory_subtab == "Browse Products" else "secondary"):
             st.session_state.inventory_subtab = "Browse Products"
             st.rerun()
     
@@ -296,23 +289,24 @@ def render_my_products(user_info, ai):
     # Get all products
     all_products = get_products(producer_id=user_info['id'])
     
-    # Stats Row
+    # Stats Row - Compact
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
         <div class="stat-card">
             <div class="icon">📦</div>
             <div class="number">{len(all_products)}</div>
-            <div class="label">Total Products</div>
+            <div class="label">Products</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         low_stock = get_low_stock_products(producer_id=user_info['id'])
+        color = "#ef4444" if len(low_stock) > 0 else "#10b981"
         st.markdown(f"""
         <div class="stat-card">
             <div class="icon">⚠️</div>
-            <div class="number">{len(low_stock)}</div>
+            <div class="number" style="color:{color}">{len(low_stock)}</div>
             <div class="label">Low Stock</div>
         </div>
         """, unsafe_allow_html=True)
@@ -323,7 +317,7 @@ def render_my_products(user_info, ai):
             st.markdown(f"""
             <div class="stat-card">
                 <div class="icon">💰</div>
-                <div class="number">{total_value:,.0f} ETB</div>
+                <div class="number">{total_value:,.0f}</div>
                 <div class="label">Stock Value</div>
             </div>
             """, unsafe_allow_html=True)
@@ -331,7 +325,7 @@ def render_my_products(user_info, ai):
             st.markdown(f"""
             <div class="stat-card">
                 <div class="icon">💰</div>
-                <div class="number">0 ETB</div>
+                <div class="number">0</div>
                 <div class="label">Stock Value</div>
             </div>
             """, unsafe_allow_html=True)
@@ -358,7 +352,7 @@ def render_my_products(user_info, ai):
     st.markdown("---")
     
     # Check if editing a product
-    edit_mode = st.session_state.edit_product_id is not None
+    edit_mode = st.session_state.get('edit_product_id') is not None
     
     # Add/Edit Product Form
     with st.expander("➕ Add New Product" if not edit_mode else "✏️ Edit Product", expanded=edit_mode):
@@ -384,7 +378,7 @@ def render_my_products(user_info, ai):
             with col2:
                 stock = st.number_input("Stock Quantity", min_value=0, step=1,
                                        value=int(product_data['quantity']) if product_data else 0)
-                min_stock = st.number_input("Minimum Stock Alert Level", min_value=1, step=1,
+                min_stock = st.number_input("Min Stock Alert", min_value=1, step=1,
                                            value=int(product_data.get('min_stock', 10)) if product_data else 10)
                 weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1,
                                         value=float(product_data.get('weight', 0)) if product_data else 0.0)
@@ -398,7 +392,7 @@ def render_my_products(user_info, ai):
             
             if current_image and os.path.exists(current_image):
                 st.markdown("#### Current Image:")
-                st.image(current_image, width=200)
+                st.image(current_image, width=150)
             
             uploaded_file = st.file_uploader(
                 "Upload Product Image" + (" (leave empty to keep current)" if edit_mode else ""),
@@ -409,13 +403,13 @@ def render_my_products(user_info, ai):
             if uploaded_file is not None:
                 st.markdown("#### Preview:")
                 try:
-                    st.image(uploaded_file, caption=f"📷 {uploaded_file.name}", width=300)
+                    st.image(uploaded_file, caption=f"📷 {uploaded_file.name}", width=250)
                     st.caption(f"Size: {uploaded_file.size / 1024:.1f} KB")
                 except Exception as e:
                     st.error(f"Error displaying image: {e}")
             
             submitted = st.form_submit_button(
-                "💾 Update Product" if edit_mode else "➕ Add Product to Inventory", 
+                "💾 Update Product" if edit_mode else "➕ Add Product", 
                 use_container_width=True, type="primary"
             )
             
@@ -521,17 +515,17 @@ def render_my_products(user_info, ai):
     if all_products:
         df_all = pd.DataFrame(all_products)
         
-        # Search and Filter
+        # Search and Filter - Compact
         st.markdown('<div class="search-container">', unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns([3, 2, 1])
+        col1, col2, col3 = st.columns([3, 2, 1.5])
         with col1:
-            search_term = st.text_input("🔍 Search Products", placeholder="Search by name...", key="search_products")
+            search_term = st.text_input("🔍 Search", placeholder="Search by name...", key="search_products", label_visibility="collapsed")
         with col2:
-            categories = ["All Categories"] + sorted(list(set(p.get('category', 'Other') for p in all_products)))
-            filter_category = st.selectbox("📂 Filter by Category", categories, key="filter_category")
+            categories = ["All"] + sorted(list(set(p.get('category', 'Other') for p in all_products)))
+            filter_category = st.selectbox("📂 Category", categories, key="filter_category", label_visibility="collapsed")
         with col3:
-            sort_by = st.selectbox("Sort By", ["Newest", "Price: Low to High", "Price: High to Low", "Stock: Low to High"], key="sort_products")
+            sort_by = st.selectbox("Sort", ["Newest", "Price: Low", "Price: High", "Stock: Low"], key="sort_products", label_visibility="collapsed")
         
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -541,17 +535,16 @@ def render_my_products(user_info, ai):
         if search_term:
             filtered_products = [p for p in filtered_products if search_term.lower() in p.get('name', '').lower()]
         
-        if filter_category != "All Categories":
+        if filter_category != "All":
             filtered_products = [p for p in filtered_products if p.get('category', 'Other') == filter_category]
         
         # Apply sorting
-        if sort_by == "Price: Low to High":
+        if sort_by == "Price: Low":
             filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0))
-        elif sort_by == "Price: High to Low":
+        elif sort_by == "Price: High":
             filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0), reverse=True)
-        elif sort_by == "Stock: Low to High":
+        elif sort_by == "Stock: Low":
             filtered_products = sorted(filtered_products, key=lambda x: x.get('quantity', 0))
-        # Newest is default (already sorted by created_at desc)
         
         st.caption(f"Showing {len(filtered_products)} of {len(all_products)} products")
         
@@ -563,7 +556,7 @@ def render_my_products(user_info, ai):
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Delete Confirmation Dialog
-        if 'delete_product_id' in st.session_state and st.session_state.delete_product_id:
+        if st.session_state.get('delete_product_id'):
             product_to_delete = next((p for p in all_products if p['id'] == st.session_state.delete_product_id), None)
             if product_to_delete:
                 st.warning(f"⚠️ Are you sure you want to delete '{product_to_delete['name']}'?")
@@ -586,7 +579,7 @@ def render_my_products(user_info, ai):
                         st.rerun()
         
         # Detailed Table View
-        with st.expander("📋 Detailed Product List", expanded=False):
+        with st.expander("📋 Detailed List", expanded=False):
             display_df = df_all[['name', 'category', 'price', 'quantity', 'sku', 'created_at']].copy()
             display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d')
             display_df['Producer'] = user_info.get('name', 'Unknown')
@@ -596,7 +589,7 @@ def render_my_products(user_info, ai):
             # Export option
             csv = display_df.to_csv(index=False)
             st.download_button(
-                label="📥 Export to CSV",
+                label="📥 Export CSV",
                 data=csv,
                 file_name=f"products_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
@@ -611,7 +604,7 @@ def render_my_products(user_info, ai):
 def render_browse_products(user_info):
     """Render the Browse Products sub-tab"""
     
-    st.subheader("🔍 Browse Products from Other Producers")
+    st.subheader("🔍 Browse Products")
     st.caption("Discover products from other producers on the platform")
     
     # Get all products from all producers (excluding current user's products)
@@ -621,20 +614,20 @@ def render_browse_products(user_info):
     # Filter out current user's products
     other_products = [p for p in all_products if p.get('producer_id') != user_info['id']]
     
-    # Get producer names (we'll fetch them)
+    # Producer cache
     producer_cache = {}
     
-    # Search and Filter
+    # Search and Filter - Compact
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([3, 2, 1])
+    col1, col2, col3 = st.columns([3, 2, 1.5])
     with col1:
-        browse_search = st.text_input("🔍 Search Products", placeholder="Search by name...", key="browse_search")
+        browse_search = st.text_input("🔍 Search", placeholder="Search by name...", key="browse_search", label_visibility="collapsed")
     with col2:
-        categories = ["All Categories"] + sorted(list(set(p.get('category', 'Other') for p in other_products))) if other_products else ["All Categories"]
-        browse_category = st.selectbox("📂 Filter by Category", categories, key="browse_category")
+        categories = ["All"] + sorted(list(set(p.get('category', 'Other') for p in other_products))) if other_products else ["All"]
+        browse_category = st.selectbox("📂 Category", categories, key="browse_category", label_visibility="collapsed")
     with col3:
-        browse_sort = st.selectbox("Sort By", ["Newest", "Price: Low to High", "Price: High to Low"], key="browse_sort")
+        browse_sort = st.selectbox("Sort", ["Newest", "Price: Low", "Price: High"], key="browse_sort", label_visibility="collapsed")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -644,20 +637,19 @@ def render_browse_products(user_info):
     if browse_search:
         filtered_products = [p for p in filtered_products if browse_search.lower() in p.get('name', '').lower()]
     
-    if browse_category != "All Categories":
+    if browse_category != "All":
         filtered_products = [p for p in filtered_products if p.get('category', 'Other') == browse_category]
     
     # Apply sorting
-    if browse_sort == "Price: Low to High":
+    if browse_sort == "Price: Low":
         filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0))
-    elif browse_sort == "Price: High to Low":
+    elif browse_sort == "Price: High":
         filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0), reverse=True)
-    # Newest is default
     
-    # Stats
+    # Stats - Compact
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("🌾 Total Products", len(filtered_products))
+        st.metric("🌾 Products", len(filtered_products))
     with col2:
         if filtered_products:
             avg_price = sum(p.get('price', 0) for p in filtered_products) / len(filtered_products)
@@ -674,7 +666,6 @@ def render_browse_products(user_info):
     st.markdown("---")
     
     if filtered_products:
-        # Display products in a grid
         cols = st.columns(3)
         
         for idx, product in enumerate(filtered_products):
@@ -705,45 +696,29 @@ def render_browse_products(user_info):
                             <div class="product-price">{product.get('price', 0):,.0f} ETB</div>
                             <div class="product-meta">📦 Stock: {product.get('quantity', 0)} units</div>
                         </div>
-                        <span style="font-size:40px;">🌾</span>
+                        <span style="font-size:32px;">🌾</span>
                     </div>
                     <div class="producer-info">
                         👤 <strong>{producer_name}</strong> • 🏢 {producer_company}
                     </div>
-                    <div style="display:flex;gap:8px;margin-top:8px;">
+                    <div style="display:flex;gap:6px;margin-top:6px;">
                         <span class="product-info-badge">⚖️ {product.get('weight', 0)} kg</span>
                         <span class="product-info-badge">📅 {pd.to_datetime(product.get('created_at')).strftime('%Y-%m-%d') if product.get('created_at') else 'N/A'}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Contact button
-                if st.button(f"📞 Contact Producer", key=f"contact_{product.get('id', '')}", use_container_width=True):
-                    st.info(f"Contact {producer_name} about {product.get('name', 'this product')}")
+                if st.button(f"📞 Contact", key=f"contact_{product.get('id', '')}", use_container_width=True):
+                    st.info(f"📧 Contact {producer_name} about {product.get('name', 'this product')}")
         
         st.caption(f"Showing {len(filtered_products)} products from other producers")
         
     else:
         st.info("📭 No products found from other producers. Check back later!")
         
-        # Show some suggestions
         st.markdown("### 💡 Tips")
         st.markdown("""
         - Add your own products to get discovered
         - Connect with other producers in your region
         - Browse different categories to find what you need
         """)
-
-# ==========================================
-# HELPER FUNCTIONS
-# ==========================================
-def get_producer_name(producer_id):
-    """Get producer name by ID"""
-    try:
-        from utils.db_helpers import get_user_by_id
-        user = get_user_by_id(producer_id)
-        if user:
-            return user.get('name', 'Unknown Producer')
-        return "Unknown Producer"
-    except:
-        return "Unknown Producer"
