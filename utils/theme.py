@@ -13,34 +13,58 @@ def toggle_theme():
     st.rerun()
 
 def get_theme_css():
-    """Get theme-specific CSS"""
+    """Get theme-specific CSS with proper contrast"""
     
     dark_css = """
-    /* Dark Theme */
-    .stApp {
+    /* ===== DARK THEME ===== */
+    /* Backgrounds */
+    .stApp, .main > div {
         background: #0a0e1a;
     }
-    .main > div {
-        background: #0a0e1a;
+    
+    /* Text Colors - High Contrast */
+    .stMarkdown, .stText, .stCaption, .stMetric,
+    .stMarkdown p, .stText p {
+        color: #e2e8f0 !important;
     }
-    .stMarkdown, .stText, .stCaption, .stMetric {
-        color: #f8fafc;
+    
+    /* Headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f8fafc !important;
     }
+    
+    /* Metric Cards */
     .stMetric label {
         color: #94a3b8 !important;
     }
     .stMetric .stMetricValue {
         color: #f8fafc !important;
     }
+    
+    /* Inputs */
     .stSelectbox, .stTextInput, .stNumberInput, .stTextArea {
         background: #1a1a2e;
-        color: #f8fafc;
     }
-    .stSelectbox input, .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background: #1a1a2e;
-        color: #f8fafc;
-        border-color: #2d3748;
+    .stSelectbox input, .stTextInput input, .stNumberInput input, 
+    .stTextArea textarea, .stSelectbox div {
+        background: #1a1a2e !important;
+        color: #f8fafc !important;
+        border-color: #2d3748 !important;
     }
+    .stSelectbox div[data-baseweb="select"] {
+        background: #1a1a2e !important;
+    }
+    .stSelectbox ul {
+        background: #1a1a2e !important;
+    }
+    .stSelectbox li {
+        color: #f8fafc !important;
+    }
+    .stSelectbox li:hover {
+        background: #2d3748 !important;
+    }
+    
+    /* DataFrames */
     .stDataFrame {
         background: #1a1a2e;
         color: #f8fafc;
@@ -53,56 +77,77 @@ def get_theme_css():
         background: #1a1a2e;
         color: #f8fafc;
     }
+    
+    /* Expanders */
     .stExpander {
         background: #1a1a2e;
         border-color: #2d3748;
     }
     .stExpander summary {
-        color: #f8fafc;
+        color: #f8fafc !important;
     }
+    
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         background: #1a1a2e;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #94a3b8;
+        color: #94a3b8 !important;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        color: #667eea;
+        color: #667eea !important;
     }
+    
+    /* Sidebar */
     .stSidebar {
         background: #0a0e1a;
     }
     .stSidebar .stMarkdown, .stSidebar .stText {
-        color: #f8fafc;
+        color: #f8fafc !important;
     }
+    .stSidebar .stMarkdown p {
+        color: #f8fafc !important;
+    }
+    
+    /* Alerts */
     .stAlert {
         background: #1a1a2e;
         border-color: #2d3748;
     }
+    .stAlert .stMarkdown p {
+        color: #f8fafc !important;
+    }
     .stSuccess {
-        background: rgba(16,185,129,0.1);
-        border-color: #10b981;
+        background: rgba(16,185,129,0.15) !important;
+        border-color: #10b981 !important;
     }
     .stWarning {
-        background: rgba(245,158,11,0.1);
-        border-color: #f59e0b;
+        background: rgba(245,158,11,0.15) !important;
+        border-color: #f59e0b !important;
     }
     .stError {
-        background: rgba(239,68,68,0.1);
-        border-color: #ef4444;
+        background: rgba(239,68,68,0.15) !important;
+        border-color: #ef4444 !important;
     }
     .stInfo {
-        background: rgba(59,130,246,0.1);
-        border-color: #3b82f6;
+        background: rgba(59,130,246,0.15) !important;
+        border-color: #3b82f6 !important;
     }
+    .stAlert .stMarkdown p {
+        color: #f8fafc !important;
+    }
+    
+    /* Buttons */
     .stButton button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        color: white !important;
     }
     .stButton button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
+    
+    /* Business Card */
     .business-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
         border-color: #2d3748 !important;
@@ -122,6 +167,8 @@ def get_theme_css():
     .business-card .contact-value {
         color: #f8fafc !important;
     }
+    
+    /* Metric Cards */
     .metric-card, .klip-card, .chart-card, .metric-sm {
         background: #1a1a2e !important;
         border-color: #2d3748 !important;
@@ -132,6 +179,13 @@ def get_theme_css():
     .metric-card .label, .klip-card .klip-title, .metric-sm .label {
         color: #94a3b8 !important;
     }
+    .metric-card .sub, .klip-card .klip-sub, .metric-sm .sub {
+        color: #64748b !important;
+    }
+    .metric-card .up, .klip-card .up { color: #10b981 !important; }
+    .metric-card .down, .klip-card .down { color: #ef4444 !important; }
+    
+    /* Product Card */
     .product-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
         border-color: #2d3748 !important;
@@ -146,11 +200,18 @@ def get_theme_css():
         background: rgba(102, 126, 234, 0.1) !important;
         color: #94a3b8 !important;
     }
+    
+    /* AI Insights */
     .ai-insight-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
         border-color: #2d3748 !important;
         color: #e2e8f0 !important;
     }
+    .ai-insight-card strong {
+        color: #f8fafc !important;
+    }
+    
+    /* Dashboard */
     .dash-header {
         border-bottom-color: #2d3748 !important;
     }
@@ -163,81 +224,93 @@ def get_theme_css():
     .row-sm .name {
         color: #e2e8f0 !important;
     }
-    .stSelectbox div[data-baseweb="select"] {
-        background: #1a1a2e;
-        color: #f8fafc;
+    .row-sm .meta {
+        color: #94a3b8 !important;
     }
-    .stSelectbox ul {
-        background: #1a1a2e;
+    .row-sm .val {
+        color: #10b981 !important;
     }
-    .stSelectbox li {
-        color: #f8fafc;
-    }
-    .stSelectbox li:hover {
-        background: #2d3748;
-    }
-    .stDateInput input {
-        background: #1a1a2e;
-        color: #f8fafc;
-    }
-    .stSlider .stSliderTrack {
-        background: #2d3748;
-    }
-    .stSlider .stSliderThumb {
-        background: #667eea;
-    }
+    
+    /* Checkboxes and Radio */
     .stCheckbox label {
-        color: #f8fafc;
+        color: #e2e8f0 !important;
     }
     .stRadio label {
-        color: #f8fafc;
+        color: #e2e8f0 !important;
     }
-    .stMultiselect div {
-        background: #1a1a2e;
-        color: #f8fafc;
-    }
+    
+    /* File Uploader */
     .stFileUploader div {
         background: #1a1a2e;
         border-color: #2d3748;
-        color: #f8fafc;
+        color: #e2e8f0;
     }
     .stFileUploader div:hover {
         border-color: #667eea;
     }
-    .stSpinner > div {
-        border-top-color: #667eea !important;
-    }
+    
+    /* Progress Bar */
     .stProgress .stProgressBar {
         background: linear-gradient(90deg, #667eea, #764ba2) !important;
+    }
+    
+    /* Section Titles */
+    .section-title {
+        color: #94a3b8 !important;
     }
     """
     
     light_css = """
-    /* Light Theme */
-    .stApp {
-        background: #f8fafc;
+    /* ===== LIGHT THEME ===== */
+    /* Backgrounds */
+    .stApp, .main > div {
+        background: #f1f5f9;
     }
-    .main > div {
-        background: #f8fafc;
-    }
-    .stMarkdown, .stText, .stCaption, .stMetric {
-        color: #1e293b;
-    }
-    .stMetric label {
-        color: #64748b !important;
-    }
-    .stMetric .stMetricValue {
+    
+    /* Text Colors - High Contrast */
+    .stMarkdown, .stText, .stCaption, .stMetric,
+    .stMarkdown p, .stText p {
         color: #1e293b !important;
     }
+    
+    /* Headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: #0f172a !important;
+    }
+    
+    /* Metric Labels */
+    .stMetric label {
+        color: #475569 !important;
+    }
+    .stMetric .stMetricValue {
+        color: #0f172a !important;
+    }
+    
+    /* Inputs - Light background with dark text */
     .stSelectbox, .stTextInput, .stNumberInput, .stTextArea {
-        background: #ffffff;
-        color: #1e293b;
+        background: #ffffff !important;
     }
-    .stSelectbox input, .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background: #ffffff;
-        color: #1e293b;
-        border-color: #e2e8f0;
+    .stSelectbox input, .stTextInput input, .stNumberInput input, 
+    .stTextArea textarea, .stSelectbox div {
+        background: #ffffff !important;
+        color: #1e293b !important;
+        border-color: #cbd5e1 !important;
     }
+    .stSelectbox div[data-baseweb="select"] {
+        background: #ffffff !important;
+        color: #1e293b !important;
+    }
+    .stSelectbox ul {
+        background: #ffffff !important;
+    }
+    .stSelectbox li {
+        color: #1e293b !important;
+    }
+    .stSelectbox li:hover {
+        background: #f1f5f9 !important;
+    }
+    
+    /* DataFrames */
     .stDataFrame {
         background: #ffffff;
         color: #1e293b;
@@ -250,65 +323,87 @@ def get_theme_css():
         background: #ffffff;
         color: #1e293b;
     }
+    
+    /* Expanders */
     .stExpander {
         background: #ffffff;
         border-color: #e2e8f0;
     }
     .stExpander summary {
-        color: #1e293b;
+        color: #1e293b !important;
     }
+    
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         background: #ffffff;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #64748b;
+        color: #475569 !important;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        color: #667eea;
+        color: #667eea !important;
     }
+    
+    /* Sidebar */
     .stSidebar {
         background: #f8fafc;
     }
     .stSidebar .stMarkdown, .stSidebar .stText {
-        color: #1e293b;
+        color: #1e293b !important;
     }
+    .stSidebar .stMarkdown p {
+        color: #1e293b !important;
+    }
+    
+    /* Alerts */
     .stAlert {
         background: #ffffff;
         border-color: #e2e8f0;
     }
+    .stAlert .stMarkdown p {
+        color: #1e293b !important;
+    }
     .stSuccess {
-        background: rgba(16,185,129,0.1);
-        border-color: #10b981;
+        background: rgba(16,185,129,0.1) !important;
+        border-color: #10b981 !important;
     }
     .stWarning {
-        background: rgba(245,158,11,0.1);
-        border-color: #f59e0b;
+        background: rgba(245,158,11,0.1) !important;
+        border-color: #f59e0b !important;
     }
     .stError {
-        background: rgba(239,68,68,0.1);
-        border-color: #ef4444;
+        background: rgba(239,68,68,0.1) !important;
+        border-color: #ef4444 !important;
     }
     .stInfo {
-        background: rgba(59,130,246,0.1);
-        border-color: #3b82f6;
+        background: rgba(59,130,246,0.1) !important;
+        border-color: #3b82f6 !important;
     }
+    .stAlert .stMarkdown p {
+        color: #1e293b !important;
+    }
+    
+    /* Buttons */
     .stButton button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        color: white !important;
     }
     .stButton button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
+    
+    /* Business Card */
     .business-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
         border-color: #e2e8f0 !important;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
     }
     .business-card .card-name {
-        color: #1e293b !important;
+        color: #0f172a !important;
     }
     .business-card .card-title {
-        color: #64748b !important;
+        color: #475569 !important;
     }
     .business-card .contact-item {
         color: #1e293b !important;
@@ -317,42 +412,65 @@ def get_theme_css():
         color: #475569 !important;
     }
     .business-card .contact-value {
-        color: #1e293b !important;
+        color: #0f172a !important;
     }
+    
+    /* Metric Cards */
     .metric-card, .klip-card, .chart-card, .metric-sm {
         background: #ffffff !important;
         border-color: #e2e8f0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
     }
     .metric-card .value, .klip-card .klip-value, .metric-sm .value {
-        color: #1e293b !important;
+        color: #0f172a !important;
     }
     .metric-card .label, .klip-card .klip-title, .metric-sm .label {
+        color: #475569 !important;
+    }
+    .metric-card .sub, .klip-card .klip-sub, .metric-sm .sub {
         color: #64748b !important;
     }
+    .metric-card .up, .klip-card .up { color: #10b981 !important; }
+    .metric-card .down, .klip-card .down { color: #ef4444 !important; }
+    
+    /* Product Card */
     .product-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
         border-color: #e2e8f0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
     }
     .product-card h4 {
-        color: #1e293b !important;
+        color: #0f172a !important;
     }
     .product-card p {
-        color: #64748b !important;
+        color: #475569 !important;
     }
     .producer-info {
         background: rgba(102, 126, 234, 0.05) !important;
         color: #475569 !important;
     }
+    .product-info-badge {
+        background: #e2e8f0 !important;
+        color: #475569 !important;
+    }
+    
+    /* AI Insights */
     .ai-insight-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
         border-color: #e2e8f0 !important;
         color: #1e293b !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
     }
+    .ai-insight-card strong {
+        color: #0f172a !important;
+    }
+    
+    /* Dashboard */
     .dash-header {
         border-bottom-color: #e2e8f0 !important;
     }
     .dash-header h1 {
-        color: #1e293b !important;
+        color: #0f172a !important;
     }
     .row-sm {
         border-bottom-color: #e2e8f0 !important;
@@ -360,39 +478,28 @@ def get_theme_css():
     .row-sm .name {
         color: #1e293b !important;
     }
-    .stSelectbox div[data-baseweb="select"] {
-        background: #ffffff;
-        color: #1e293b;
+    .row-sm .meta {
+        color: #64748b !important;
     }
-    .stSelectbox ul {
-        background: #ffffff;
+    .row-sm .val {
+        color: #10b981 !important;
     }
-    .stSelectbox li {
-        color: #1e293b;
-    }
-    .stSelectbox li:hover {
-        background: #f1f5f9;
-    }
-    .stDateInput input {
-        background: #ffffff;
-        color: #1e293b;
-    }
-    .stSlider .stSliderTrack {
-        background: #e2e8f0;
-    }
-    .stSlider .stSliderThumb {
-        background: #667eea;
-    }
+    
+    /* Badges */
+    .badge-sm.delivered { background: rgba(16,185,129,0.15); color: #10b981; }
+    .badge-sm.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-sm.shipped { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .badge-sm.cancelled { background: rgba(239,68,68,0.15); color: #ef4444; }
+    
+    /* Checkboxes and Radio */
     .stCheckbox label {
-        color: #1e293b;
+        color: #1e293b !important;
     }
     .stRadio label {
-        color: #1e293b;
+        color: #1e293b !important;
     }
-    .stMultiselect div {
-        background: #ffffff;
-        color: #1e293b;
-    }
+    
+    /* File Uploader */
     .stFileUploader div {
         background: #ffffff;
         border-color: #e2e8f0;
@@ -401,11 +508,42 @@ def get_theme_css():
     .stFileUploader div:hover {
         border-color: #667eea;
     }
-    .stSpinner > div {
-        border-top-color: #667eea !important;
-    }
+    
+    /* Progress Bar */
     .stProgress .stProgressBar {
         background: linear-gradient(90deg, #667eea, #764ba2) !important;
+    }
+    
+    /* Section Titles */
+    .section-title {
+        color: #475569 !important;
+    }
+    
+    /* Captions and small text */
+    .stCaption, .stCaption p {
+        color: #64748b !important;
+    }
+    
+    /* Info messages */
+    .stInfo .stMarkdown p {
+        color: #1e293b !important;
+    }
+    .stWarning .stMarkdown p {
+        color: #1e293b !important;
+    }
+    .stSuccess .stMarkdown p {
+        color: #1e293b !important;
+    }
+    .stError .stMarkdown p {
+        color: #1e293b !important;
+    }
+    
+    /* Metric delta colors */
+    .stMetric .stMetricDelta {
+        color: #10b981 !important;
+    }
+    .stMetric .stMetricDeltaNegative {
+        color: #ef4444 !important;
     }
     """
     
