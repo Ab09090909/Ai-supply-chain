@@ -25,13 +25,11 @@ def get_grok_api_key():
     try:
         api_key = st.secrets.get("GROK_API_KEY")
         if not api_key:
-            api_key = st.secrets.get("grok_api_key") or st.secrets.get("GROK_KEY")
+            api_key = st.secrets.get("grok_api_key")
         if not api_key:
-            st.error("❌ Grok API key not found in secrets.")
-            return None
+            api_key = st.secrets.get("GROK_KEY")
         return api_key
     except Exception as e:
-        st.error(f"❌ Error accessing secrets: {e}")
         return None
 
 def query_grok_api(product_name, region="Addis Ababa"):
@@ -39,9 +37,12 @@ def query_grok_api(product_name, region="Addis Ababa"):
     try:
         api_key = get_grok_api_key()
         if not api_key:
-            return {"success": False, "error": "Grok API key not configured"}
+            return {
+                "success": False,
+                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
+            }
 
-        # Correct xAI API endpoint
+        # xAI API endpoint - confirmed working
         url = "https://api.x.ai/v1/chat/completions"
         
         headers = {
@@ -49,90 +50,64 @@ def query_grok_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia? 
+        # Simple direct prompt
+        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in ETB? Just give me the price number."
         
-Please provide:
-1. The current price in ETB per kilogram or unit
-2. The price range (minimum and maximum)
-3. The market trend (increasing, stable, or decreasing)
-4. The demand level (high, medium, or low)
-
-Format your response as:
-Price: [number] ETB per [unit]
-Range: [min] - [max] ETB
-Trend: [trend]
-Demand: [level]
-Source: [market source if known]"""
-        
-        # Correct payload format for xAI/Grok API
         payload = {
+            "model": "grok-beta",  # Using grok-beta model
             "messages": [
-                {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products. Provide accurate, current market prices."},
                 {"role": "user", "content": prompt}
             ],
-            "model": "grok-1",
-            "temperature": 0.3,
-            "max_tokens": 250
+            "temperature": 0.1,
+            "max_tokens": 50
         }
         
+        # Make the request
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        # Log response for debugging
+        # Debug info
         if response.status_code != 200:
             return {
                 "success": False,
-                "error": f"Grok API request failed with status {response.status_code}",
-                "response_text": response.text[:500] if response.text else "No response"
+                "error": f"API Error {response.status_code}",
+                "response_text": response.text[:500] if response.text else "No response",
+                "status_code": response.status_code
             }
         
         data = response.json()
+        
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content']
             
-            # Parse the response
-            price_match = re.search(r'Price:\s*([\d.]+)', content)
-            range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
-            trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
-            demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
-            unit_match = re.search(r'per\s+(\w+)', content)
-            
-            result = {
-                "success": True,
-                "raw_response": content,
-                "source": "Grok API"
-            }
+            # Try to extract price
+            price_match = re.search(r'([\d.]+)', content)
             
             if price_match:
-                result["price"] = float(price_match.group(1))
+                price = float(price_match.group(1))
+                return {
+                    "success": True,
+                    "price": price,
+                    "unit": "kg",
+                    "raw_response": content,
+                    "source": "Grok API"
+                }
             else:
-                # Try to find any number in the response
-                any_number = re.search(r'([\d.]+)\s*ETB', content)
-                if any_number:
-                    result["price"] = float(any_number.group(1))
-                else:
-                    result["price"] = None
-            
-            if range_match:
-                result["min_price"] = float(range_match.group(1))
-                result["max_price"] = float(range_match.group(2))
-            
-            if trend_match:
-                result["trend"] = trend_match.group(1).lower()
-            
-            if demand_match:
-                result["demand"] = demand_match.group(1).lower()
-            
-            if unit_match:
-                result["unit"] = unit_match.group(1)
-            else:
-                result["unit"] = "kg"
-            
-            return result
+                return {
+                    "success": False,
+                    "error": "Could not parse price from response",
+                    "raw_response": content
+                }
         else:
-            return {"success": False, "error": "Unexpected response format from Grok", "raw": data}
-    
+            return {
+                "success": False,
+                "error": "Unexpected API response format",
+                "raw_data": data
+            }
+            
     except requests.exceptions.Timeout:
-        return {"success": False, "error": "Grok API request timed out"}
+        return {"success": False, "error": "Request timed out"}
+    except requests.exceptions.ConnectionError:
+        return {"success": False, "error": "Connection error. Please check your internet."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -493,10 +468,10 @@ class SelfLearningAIInsights:
                 'product': product_name,
                 'current_price': market_price,
                 'avg_price': market_price * 0.95,
-                'min_price': grok_result.get('min_price', market_price * 0.8),
-                'max_price': grok_result.get('max_price', market_price * 1.2),
-                'trend': grok_result.get('trend', 'stable'),
-                'demand': grok_result.get('demand', 'medium'),
+                'min_price': market_price * 0.8,
+                'max_price': market_price * 1.2,
+                'trend': 'stable',
+                'demand': 'medium',
                 'unit': grok_result.get('unit', 'kg'),
                 'source': 'Grok API'
             }
@@ -751,319 +726,185 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    api_key_check = get_grok_api_key()
-    if not api_key_check:
-        st.warning("⚠️ Grok API key not configured. Please add GROK_API_KEY to your Streamlit secrets.")
-        st.info("📝 Go to your app settings → Secrets and add: `GROK_API_KEY = 'your_key_here'`")
-        st.markdown("---")
+    # Check API key
+    api_key = get_grok_api_key()
+    if not api_key:
+        st.warning("⚠️ Grok API key not found. Please add GROK_API_KEY to secrets.")
     
+    # Get products
     all_products = get_products(producer_id=user_info['id'])
-    
     if not all_products:
-        st.warning("⚠️ Please add products first to get AI insights")
-        st.info("📝 Go to the Inventory tab to add your products")
+        st.warning("⚠️ Please add products first")
         return
     
+    # Product selection
     product_names = {p['id']: p['name'] for p in all_products}
     selected_prod_id = st.selectbox(
-        "Select Product for AI Analysis", 
+        "Select Product", 
         list(product_names.keys()), 
         format_func=lambda x: product_names[x]
     )
-    
     selected_product = next((p for p in all_products if p['id'] == selected_prod_id), None)
-    
     if not selected_product:
         return
     
     product_name = selected_product.get('name', '')
     
+    # Region selection
     regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
               "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
     selected_region = st.selectbox(
-        "Select Region for Price Analysis",
+        "Region",
         regions,
-        index=regions.index(st.session_state.ai_selected_region) if st.session_state.ai_selected_region in regions else 0
+        index=0
     )
-    st.session_state.ai_selected_region = selected_region
     
     st.markdown("---")
     
+    # Query button
     col1, col2 = st.columns([2, 1])
     with col1:
-        st.markdown(f"### 🔍 Real-Time Price from Grok AI")
-        st.caption(f"Query Grok AI for current {product_name} prices in {selected_region}")
-    
+        st.markdown(f"### 🔍 Get Price for {product_name}")
     with col2:
-        if st.button("🚀 Query Grok API", use_container_width=True, type="primary"):
-            with st.spinner(f"Querying Grok AI for {product_name} prices..."):
+        if st.button("🚀 Query Grok", use_container_width=True, type="primary"):
+            with st.spinner("Querying Grok..."):
                 result = ai_insights.query_grok_for_price(product_name, selected_region)
                 if result.get('success'):
-                    st.success(f"✅ Price fetched from Grok: {result.get('price')} ETB per {result.get('unit', 'kg')}")
+                    st.success(f"✅ Price: {result.get('price')} ETB per {result.get('unit', 'kg')}")
                     st.rerun()
                 else:
-                    st.error(f"❌ Grok API error: {result.get('error', 'Unknown error')}")
-                    if result.get('response_text'):
-                        with st.expander("📋 Show API Response Details"):
-                            st.code(result.get('response_text', ''), language='json')
+                    st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
+                    if result.get('status_code'):
+                        st.code(f"Status: {result.get('status_code')}\nResponse: {result.get('response_text', '')}")
     
+    # Get insights
     insights = ai_insights.get_market_insights(product_name, selected_region)
     market_data = insights.get('market_data', {})
     
-    st.markdown("### 📊 Ethiopian Market Price Analysis")
+    st.markdown("### 📊 Market Analysis")
     
     if insights.get('grok_source'):
-        st.markdown('<span class="grok-badge">🤖 Powered by Grok AI</span>', unsafe_allow_html=True)
+        st.markdown('<span class="grok-badge">🤖 Grok AI</span>', unsafe_allow_html=True)
+    
+    current_price = selected_product.get('price', 0)
+    market_avg = market_data.get('avg_price', 0)
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        current_price = selected_product.get('price', 0)
-        market_avg = market_data.get('avg_price', 0)
-        price_diff = current_price - market_avg
-        price_pct = (price_diff / market_avg * 100) if market_avg > 0 else 0
-        
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">💰 Current vs Market Price</div>
-            <div class="value">{current_price:.0f} ETB</div>
-            <div class="sub">Market Average: {market_avg:.0f} ETB</div>
-            <div class="sub {'trend-up' if price_pct < 0 else 'trend-down'}">
-                {price_diff:+.0f} ETB ({price_pct:+.1f}%)
-            </div>
-            <div class="sub" style="font-size: 10px; color: #64748b;">
-                Source: {market_data.get('source', 'Local Data')}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        st.metric("💰 Your Price", f"{current_price:.0f} ETB")
     with col2:
-        predicted_price = insights.get('predicted_price', current_price)
-        confidence = insights.get('confidence_score', 0.7)
-        
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">🤖 AI Predicted Price</div>
-            <div class="value">{predicted_price:.0f} ETB</div>
-            <div class="sub">Confidence: {confidence*100:.1f}%</div>
-            <div class="sub {'trend-up' if predicted_price > current_price else 'trend-down'}">
-                {'↑' if predicted_price > current_price else '↓'} AI Recommendation
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        st.metric("📊 Market Avg", f"{market_avg:.0f} ETB")
     with col3:
-        trend = market_data.get('trend', 'stable')
-        demand = market_data.get('demand', 'medium')
-        
-        trend_emoji = "📈" if trend == 'increasing' else "📉" if trend == 'decreasing' else "➡️"
-        trend_color = "trend-up" if trend == 'increasing' else "trend-down" if trend == 'decreasing' else "trend-neutral"
-        
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">📈 Market Trend & Demand</div>
-            <div class="value">{trend_emoji} {trend.capitalize()}</div>
-            <div class="sub">Demand: {demand.upper()}</div>
-            <div class="sub {trend_color}">
-                {'High demand' if demand == 'high' else 'Medium demand' if demand == 'medium' else 'Low demand'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        diff = current_price - market_avg
+        pct = (diff / market_avg * 100) if market_avg > 0 else 0
+        color = "green" if diff < 0 else "red"
+        st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
     
     st.markdown("---")
     
+    # Price Recommendation
     price_rec = insights.get('price_recommendations', {})
-    
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown(f"""
         <div class="insight-card">
             <div class="title">🎯 Recommendation</div>
-            <div class="value" style="color: {'#10b981' if 'Increase' in price_rec.get('recommendation', '') else '#f59e0b'}">
-                {price_rec.get('recommendation', 'Maintain Price')}
-            </div>
-            <div class="sub">Recommended Price: <strong>{price_rec.get('recommended_price', current_price):.0f} ETB</strong></div>
-            <div class="sub">Reason: {price_rec.get('reasoning', 'Based on market analysis')}</div>
+            <div class="value">{price_rec.get('recommendation', 'Maintain Price')}</div>
+            <div class="sub">Recommended: <strong>{price_rec.get('recommended_price', current_price):.0f} ETB</strong></div>
+            <div class="sub">{price_rec.get('reasoning', '')}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown(f"""
         <div class="insight-card">
-            <div class="title">📊 Price Impact</div>
+            <div class="title">📊 Impact</div>
             <div class="value" style="color: {'#10b981' if price_rec.get('recommended_price', 0) > current_price else '#ef4444'}">
                 {((price_rec.get('recommended_price', current_price) - current_price) / current_price * 100):+.1f}%
             </div>
-            <div class="sub">
-                Current: {current_price:.0f} ETB → Recommended: {price_rec.get('recommended_price', current_price):.0f} ETB
-            </div>
-            <div class="sub">
-                {('📈 Profit increase' if price_rec.get('recommended_price', current_price) > current_price else '📉 Price adjustment needed')}
-            </div>
+            <div class="sub">Current: {current_price:.0f} → Recommended: {price_rec.get('recommended_price', current_price):.0f}</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # Demand Forecast
     demand_forecast = insights.get('demand_forecast', {})
-    
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">📅 Daily Demand</div>
-            <div class="value">{demand_forecast.get('daily_demand', 0):.0f}</div>
-            <div class="sub">Units per day</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        st.metric("📅 Daily", f"{demand_forecast.get('daily_demand', 0):.0f} units")
     with col2:
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">📅 Weekly Demand</div>
-            <div class="value">{demand_forecast.get('weekly_demand', 0):.0f}</div>
-            <div class="sub">Units per week</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        st.metric("📅 Weekly", f"{demand_forecast.get('weekly_demand', 0):.0f} units")
     with col3:
-        st.markdown(f"""
-        <div class="insight-card">
-            <div class="title">📅 Monthly Demand</div>
-            <div class="value">{demand_forecast.get('monthly_demand', 0):.0f}</div>
-            <div class="sub">Units per month</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric("📅 Monthly", f"{demand_forecast.get('monthly_demand', 0):.0f} units")
     
     st.markdown("---")
     
-    current_stock = selected_product.get('quantity', 0)
-    daily_demand = demand_forecast.get('daily_demand', 1)
-    days_of_stock = current_stock / daily_demand if daily_demand > 0 else 0
+    # Stock Analysis
+    stock = selected_product.get('quantity', 0)
+    daily = demand_forecast.get('daily_demand', 1)
+    days = stock / daily if daily > 0 else 0
     
     col1, col2 = st.columns(2)
     
     with col1:
-        stock_status = "✅ Healthy Stock" if days_of_stock > 14 else "⚠️ Low Stock" if days_of_stock > 7 else "🔴 Critical Stock"
-        stock_color = "#10b981" if days_of_stock > 14 else "#f59e0b" if days_of_stock > 7 else "#ef4444"
-        
+        status = "✅ Healthy" if days > 14 else "⚠️ Low" if days > 7 else "🔴 Critical"
+        color = "#10b981" if days > 14 else "#f59e0b" if days > 7 else "#ef4444"
         st.markdown(f"""
         <div class="insight-card">
             <div class="title">📦 Stock Status</div>
-            <div class="value" style="color: {stock_color}">{stock_status}</div>
-            <div class="sub">{days_of_stock:.1f} days of stock remaining</div>
-            <div class="sub">Current Stock: {current_stock} units</div>
+            <div class="value" style="color:{color}">{status}</div>
+            <div class="sub">{days:.1f} days remaining</div>
+            <div class="sub">Stock: {stock} units</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        restock_time = max(0, 7 - days_of_stock)
-        if days_of_stock < 7:
+        if days < 7:
             st.markdown(f"""
             <div class="insight-card">
-                <div class="title">🔄 Restock Recommendation</div>
-                <div class="value" style="color: #ef4444;">RESTOCK NOW</div>
-                <div class="sub">Recommended quantity: {int(daily_demand * 14)} units</div>
-                <div class="sub">{restock_time:.0f} days until stockout</div>
+                <div class="title">🔄 Restock</div>
+                <div class="value" style="color:#ef4444">RESTOCK NOW</div>
+                <div class="sub">Order: {int(daily * 14)} units</div>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
             <div class="insight-card">
-                <div class="title">🔄 Restock Recommendation</div>
-                <div class="value" style="color: #10b981;">Adequate Stock</div>
-                <div class="sub">Next restock in {int(days_of_stock - 7)} days</div>
-                <div class="sub">Plan restock at {int(days_of_stock - 3)} days remaining</div>
+                <div class="title">🔄 Restock</div>
+                <div class="value" style="color:#10b981">Adequate</div>
+                <div class="sub">Restock in {int(days - 7)} days</div>
             </div>
             """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    st.markdown("### 🌍 Ethiopian Market Quick Overview")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📈 Top Products by Demand")
-        top_products = [
-            {"name": "Teff", "demand": "High", "price": "115-160 ETB/kg"},
-            {"name": "Coffee", "demand": "High", "price": "300-450 ETB/kg"},
-            {"name": "Beef", "demand": "High", "price": "450-650 ETB/kg"},
-            {"name": "Milk", "demand": "High", "price": "75-100 ETB/L"},
-            {"name": "Onion", "demand": "High", "price": "30-50 ETB/kg"}
-        ]
-        for p in top_products:
-            st.markdown(f"""
-            <div style="background: #1a1a2e; padding: 8px 12px; border-radius: 8px; margin: 4px 0; border-left: 3px solid #667eea;">
-                <strong style="color: #f8fafc;">{p['name']}</strong>
-                <span style="color: #10b981; float: right;">{p['price']}</span>
-                <br><span style="color: #94a3b8; font-size: 12px;">Demand: {p['demand']}</span>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("#### 📊 Market Price Trends")
-        price_trends = [
-            {"product": "Coffee", "trend": "↑", "change": "+8.2%"},
-            {"product": "Teff", "trend": "↑", "change": "+5.1%"},
-            {"product": "Wheat", "trend": "→", "change": "-0.3%"},
-            {"product": "Onion", "trend": "↑", "change": "+12.5%"},
-            {"product": "Milk", "trend": "↑", "change": "+6.8%"}
-        ]
-        for p in price_trends:
-            emoji = "📈" if p['trend'] == "↑" else "➡️"
-            color = "#10b981" if p['trend'] == "↑" else "#f59e0b"
-            st.markdown(f"""
-            <div style="background: #1a1a2e; padding: 8px 12px; border-radius: 8px; margin: 4px 0; border-left: 3px solid #10b981;">
-                <strong style="color: #f8fafc;">{p['product']}</strong>
-                <span style="color: {color}; float: right;">{p['change']}</span>
-                <br><span style="color: #94a3b8; font-size: 12px;">{emoji} {p['trend']} {p['change']}</span>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    st.markdown("### 🧠 AI Learning & Training")
-    
+    # Training section
+    st.markdown("### 🧠 AI Training")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔄 Train AI Model", use_container_width=True):
-            with st.spinner("Training AI model with current data..."):
-                training_data = get_training_data_supabase(user_info['id'])
-                if training_data:
-                    success = ai_insights.train_model(training_data)
-                else:
-                    success = ai_insights.train_with_supabase_data()
-                
-                if success:
-                    st.success("✅ AI model trained successfully!")
-                    st.rerun()
-                else:
-                    st.error("❌ Training failed. Please add more data.")
+        if st.button("🔄 Train Model", use_container_width=True):
+            training_data = get_training_data_supabase(user_info['id'])
+            if training_data:
+                success = ai_insights.train_model(training_data)
+            else:
+                success = ai_insights.train_with_supabase_data()
+            if success:
+                st.success("✅ Model trained!")
+                st.rerun()
     
     with col2:
-        if st.button("📊 View Model Performance", use_container_width=True):
-            accuracy = ai_insights.knowledge_base.get('accuracy_score', 0)
-            st.info(f"📊 Model Accuracy: {accuracy*100:.1f}%")
-            st.info(f"📈 Training Samples: {len(ai_insights.knowledge_base.get('training_data', []))}")
-            st.info(f"📁 Model saved in: Models/ folder")
+        if st.button("📊 Performance", use_container_width=True):
+            acc = ai_insights.knowledge_base.get('accuracy_score', 0)
+            st.info(f"Accuracy: {acc*100:.1f}%\nSamples: {len(ai_insights.knowledge_base.get('training_data', []))}")
     
     with col3:
-        if st.button("💾 Save Model to GitHub", use_container_width=True):
-            success = ai_insights.save_model()
-            if success:
-                st.success("✅ Model saved to Models/ folder!")
-                st.info("📁 File: Models/ai_model_{user_id}.pkl")
-            else:
-                st.error("❌ Failed to save model")
+        if st.button("💾 Save Model", use_container_width=True):
+            if ai_insights.save_model():
+                st.success("✅ Saved to Models/")
     
-    st.markdown("---")
-    
-    st.caption("📁 Model files saved in: `Models/` folder (GitHub)")
-    st.caption("📁 Knowledge base saved in: `data/` folder")
-    st.caption("📊 Training data stored in: Supabase `ai_training_data` table")
-    
-    st.info("💡 The AI learns from every product you add and every Grok API query you perform.")
+    st.caption("📁 Models saved to `Models/` folder")
