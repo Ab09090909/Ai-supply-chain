@@ -136,22 +136,14 @@ def inject_chatbot_styles():
     </style>
     """, unsafe_allow_html=True)
 
-def render_floating_chatbot():
-    """Main function to render the floating AI assistant."""
+def render_floating_chatbot(user_context: str = ""):
+    """Main function to render the floating AI assistant with dynamic context."""
     
     # Initialize session states
     if "chat_open" not in st.session_state:
         st.session_state.chat_open = False
     if "chat_messages" not in st.session_state:
-        # System prompt tailored for your Supply Chain system
-        system_prompt = {
-            "role": "system",
-            "content": """You are the AI Supply Chain Assistant for a multi-role logistics platform. 
-            You help Producers with inventory and pricing, Merchants with orders and matching, 
-            Customers with tracking, and Admins with system insights. 
-            Be professional, concise, and highly knowledgeable about supply chain operations."""
-        }
-        st.session_state.chat_messages = [system_prompt]
+        st.session_state.chat_messages = [] # We will inject system prompt dynamically
 
     inject_chatbot_styles()
 
@@ -172,7 +164,7 @@ def render_floating_chatbot():
                     <div class="chat-header-info">
                         <div class="chat-avatar">🤖</div>
                         <div>
-                            <p class="chat-title">Supply Chain AI</p>
+                            <p class="chat-title">AgriTech AI Assistant</p>
                             <p class="chat-subtitle">● Online | Powered by Groq</p>
                         </div>
                     </div>
@@ -187,8 +179,7 @@ def render_floating_chatbot():
             # Messages Area
             with st.container():
                 st.markdown('<div class="chat-messages">', unsafe_allow_html=True)
-                # Display history (skip system prompt)
-                for message in st.session_state.chat_messages[1:]:
+                for message in st.session_state.chat_messages:
                     with st.chat_message(message["role"]):
                         st.markdown(message["content"])
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -196,17 +187,17 @@ def render_floating_chatbot():
             # Input Area
             with st.container():
                 st.markdown('<div class="chat-input-area">', unsafe_allow_html=True)
-                prompt = st.chat_input("Ask about inventory, orders, or pricing...", key="chat_input")
+                prompt = st.chat_input("Ask about your inventory, orders, or pricing...", key="chat_input")
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-            st.markdown('</div>', unsafe_allow_html=True) # Close widget container
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # Handle user input
             if prompt:
-                # Add user message
-                st.session_state.chat_messages.append({"role": "user", "content": prompt})
+                # Display user message
                 with st.chat_message("user"):
                     st.markdown(prompt)
+                st.session_state.chat_messages.append({"role": "user", "content": prompt})
 
                 # Generate response
                 with st.chat_message("assistant"):
@@ -214,9 +205,25 @@ def render_floating_chatbot():
                         client = init_groq_client()
                         if client:
                             try:
+                                # 1. Build dynamic system prompt with real-time DB context
+                                system_msg = {
+                                    "role": "system",
+                                    "content": f"""You are the AI Supply Chain Assistant for the Ethiopian AgriTech platform. 
+                                    You help Producers, Merchants, Customers, and Admins. Be professional, concise, and proactive.
+                                    
+                                    CURRENT USER REAL-TIME CONTEXT:
+                                    {user_context}
+                                    
+                                    Use this data to give personalized, data-driven answers. For example, if the context shows 'Critical Low Stock Alerts', proactively advise the user to restock those specific items immediately."""
+                                }
+                                
+                                # 2. Combine system prompt with chat history (limit to last 10 messages to save tokens)
+                                messages_for_api = [system_msg] + st.session_state.chat_messages[-10:]
+
+                                # 3. Stream response from Groq
                                 stream = client.chat.completions.create(
                                     model="llama-3.3-70b-versatile",
-                                    messages=st.session_state.chat_messages,
+                                    messages=messages_for_api,
                                     temperature=0.7,
                                     max_tokens=1024,
                                     stream=True,
@@ -230,12 +237,3 @@ def render_floating_chatbot():
             if st.button("💬", key="open_chat", help="Open AI Assistant"):
                 st.session_state.chat_open = True
                 st.rerun()
-            
-            # Apply FAB styling via a hacky but effective markdown wrapper
-            st.markdown("""
-            <style>
-            button[kind="secondary"][data-testid="baseButton-secondary"]:has(> div[data-testid="stMarkdownContainer"] > p) {
-                /* This targets the button if needed, but we use the class defined above */
-            }
-            </style>
-            """, unsafe_allow_html=True)
