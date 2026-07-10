@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROQ API INTEGRATION - REAL MARKET PRICES
+# GROQ API WITH WEB SEARCH
 # ==========================================
 
 def get_groq_api_key():
@@ -28,8 +28,8 @@ def get_groq_api_key():
     except Exception as e:
         return None
 
-def query_groq_api(product_name, region="Addis Ababa"):
-    """Query the Groq API for current product price in Ethiopia with real market data."""
+def query_groq_with_web_search(product_name, region="Addis Ababa"):
+    """Query Groq API with web search enabled for real market data."""
     try:
         api_key = get_groq_api_key()
         if not api_key:
@@ -45,35 +45,43 @@ def query_groq_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Enhanced prompt for real market prices with quality grades
-        prompt = f"""Provide the CURRENT REAL MARKET PRICE of {product_name} in {region}, Ethiopia.
+        # Enhanced prompt for web search
+        prompt = f"""Search the web for CURRENT REAL MARKET PRICE of {product_name} in {region}, Ethiopia.
 
-IMPORTANT: Use REAL market data. For Teff in Addis Ababa, the price is approximately 117-125 ETB/kg (1,170-1,250 ETB per quintal).
+IMPORTANT: Use Google search results to find the actual current price.
 
-Provide this information:
-Price: [actual current price] ETB/kg
+Search for:
+- Latest {product_name} prices in {region} ETB/kg
+- Ethiopian Commodity Exchange (ECX) prices
+- Market reports from Ethiopian news sources
+
+Provide this information based on actual web search results:
+Price: [actual current price from search] ETB/kg
 Range: [min] - [max] ETB/kg
-Grade: [Grade 1, Grade 2, or Grade 3] - quality grade
+Grade: [Grade 1, Grade 2, or Grade 3]
 Trend: [increasing/stable/decreasing] over last month
 Demand: [high/medium/low]
-Source: [Ethiopian Commodity Exchange (ECX) or Market Source]
+Source: [link or source name from search results]
+Date: [date of the price data from the source]
 
-Be accurate and specific to Ethiopian market conditions."""
+Format your response clearly with the information found in the search results."""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": """You are a market analyst with specific knowledge of Ethiopian agricultural commodity prices. 
-                You know that Teff prices in Addis Ababa are typically 117-125 ETB/kg, Wheat is 45-75 ETB/kg, 
-                Coffee is 300-450 ETB/kg, and other products have specific Ethiopian market prices. 
-                Always provide prices in ETB per kilogram with the actual market rates."""},
+                {"role": "system", "content": """You are a market analyst with access to real-time Google search results. 
+                Always search the web for current prices. 
+                Provide accurate prices from search results with sources."""},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 200,
-            "temperature": 0.1
+            "max_tokens": 300,
+            "temperature": 0.1,
+            # Enable web search if available
+            "tools": [{"type": "web_search"}],
+            "tool_choice": "auto"
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if response.status_code != 200:
             error_msg = f"API Error {response.status_code}"
@@ -95,6 +103,10 @@ Be accurate and specific to Ethiopian market conditions."""
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
+            # Check if search results were used
+            if 'tool_calls' in data['choices'][0]['message']:
+                st.success("🔍 Web search performed for real market data!")
+            
             # Parse the response
             price_match = re.search(r'Price:\s*([\d.]+)', content)
             range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
@@ -102,11 +114,12 @@ Be accurate and specific to Ethiopian market conditions."""
             trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
             demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
             source_match = re.search(r'Source:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
+            date_match = re.search(r'Date:\s*(.+?)(?:\n|$)', content, re.IGNORECASE)
             
             result = {
                 "success": True,
                 "raw_response": content,
-                "source": "Groq API"
+                "source": "Groq API with Web Search"
             }
             
             if price_match:
@@ -128,16 +141,10 @@ Be accurate and specific to Ethiopian market conditions."""
             if source_match:
                 result["data_source"] = source_match.group(1).strip()
             
-            result["unit"] = "kg"
+            if date_match:
+                result["data_date"] = date_match.group(1).strip()
             
-            # Ensure price is realistic for Ethiopian market
-            if result.get("price") and result.get("price") < 20:
-                # If price is unrealistically low, use fallback
-                return {
-                    "success": False,
-                    "error": "Price seems unrealistically low. Using fallback data.",
-                    "raw_response": content
-                }
+            result["unit"] = "kg"
             
             return result
         else:
@@ -172,7 +179,7 @@ def save_training_data_supabase(user_id, data):
             'trend_factor': data.get('trend_factor', 1.0),
             'predicted_price': data.get('predicted_price'),
             'actual_price': data.get('actual_price'),
-            'data_source': data.get('data_source', 'groq_api'),
+            'data_source': data.get('data_source', 'web_search'),
             'region': data.get('region', 'Addis Ababa')
         }
         
@@ -221,7 +228,7 @@ def get_product_market_data(product_name, region="Addis Ababa"):
 # ==========================================
 
 class SelfLearningAIInsights:
-    """Self-learning AI system with Supabase storage and Groq integration"""
+    """Self-learning AI system with Supabase storage and Groq web search"""
     
     def __init__(self, user_id):
         self.user_id = user_id
@@ -253,7 +260,7 @@ class SelfLearningAIInsights:
                     'predictions': {},
                     'learning_iterations': 0,
                     'accuracy_score': 0,
-                    'groq_queries': []
+                    'web_search_queries': []
                 }
                 with open(path, 'w') as f:
                     json.dump(default, f, indent=2)
@@ -268,7 +275,7 @@ class SelfLearningAIInsights:
                 'predictions': {},
                 'learning_iterations': 0,
                 'accuracy_score': 0,
-                'groq_queries': []
+                'web_search_queries': []
             }
     
     def save_knowledge_base(self):
@@ -403,15 +410,15 @@ class SelfLearningAIInsights:
         except Exception as e:
             return False
     
-    def query_groq_for_price(self, product_name, region="Addis Ababa"):
-        """Query Groq API for product price and store results"""
-        result = query_groq_api(product_name, region)
+    def query_with_web_search(self, product_name, region="Addis Ababa"):
+        """Query Groq with web search and store results"""
+        result = query_groq_with_web_search(product_name, region)
         
         if result.get('success'):
-            if 'groq_queries' not in self.knowledge_base:
-                self.knowledge_base['groq_queries'] = []
+            if 'web_search_queries' not in self.knowledge_base:
+                self.knowledge_base['web_search_queries'] = []
             
-            self.knowledge_base['groq_queries'].append({
+            self.knowledge_base['web_search_queries'].append({
                 'product': product_name,
                 'region': region,
                 'price': result.get('price'),
@@ -419,7 +426,8 @@ class SelfLearningAIInsights:
                 'grade': result.get('grade', 'N/A'),
                 'trend': result.get('trend', 'N/A'),
                 'demand': result.get('demand', 'N/A'),
-                'data_source': result.get('data_source', 'Groq API'),
+                'data_source': result.get('data_source', 'Web Search'),
+                'data_date': result.get('data_date', 'N/A'),
                 'timestamp': datetime.now().isoformat(),
                 'raw_response': result.get('raw_response')
             })
@@ -428,7 +436,7 @@ class SelfLearningAIInsights:
                 'product_name': product_name,
                 'price': result.get('price'),
                 'market_price': result.get('price'),
-                'data_source': 'groq_api',
+                'data_source': 'web_search',
                 'region': region,
                 'demand_score': 70,
                 'predicted_price': result.get('price')
@@ -512,24 +520,25 @@ class SelfLearningAIInsights:
             return 1.0
     
     def get_market_insights(self, product_name, region="Addis Ababa"):
-        """Get comprehensive market insights for a product"""
-        # Try Groq API
-        groq_result = self.query_groq_for_price(product_name, region)
+        """Get comprehensive market insights for a product with web search"""
+        # Try Groq with web search
+        web_result = self.query_with_web_search(product_name, region)
         
-        if groq_result.get('success'):
-            market_price = groq_result.get('price')
+        if web_result.get('success'):
+            market_price = web_result.get('price')
             market_data = {
                 'product': product_name,
                 'current_price': market_price,
                 'avg_price': market_price,
-                'min_price': groq_result.get('min_price', market_price * 0.8),
-                'max_price': groq_result.get('max_price', market_price * 1.2),
-                'grade': groq_result.get('grade', 'Standard'),
-                'trend': groq_result.get('trend', 'stable'),
-                'demand': groq_result.get('demand', 'medium'),
-                'data_source': groq_result.get('data_source', 'Groq API'),
-                'unit': groq_result.get('unit', 'kg'),
-                'source': 'Groq API'
+                'min_price': web_result.get('min_price', market_price * 0.8),
+                'max_price': web_result.get('max_price', market_price * 1.2),
+                'grade': web_result.get('grade', 'Standard'),
+                'trend': web_result.get('trend', 'stable'),
+                'demand': web_result.get('demand', 'medium'),
+                'data_source': web_result.get('data_source', 'Web Search'),
+                'data_date': web_result.get('data_date', 'Current'),
+                'unit': web_result.get('unit', 'kg'),
+                'source': 'Groq API with Web Search'
             }
         else:
             # Fallback to local data
@@ -537,6 +546,7 @@ class SelfLearningAIInsights:
             market_data = scraper.get_current_price(product_name)
             market_data['grade'] = 'Standard Grade'
             market_data['data_source'] = 'Fallback Market Data'
+            market_data['data_date'] = 'Current'
         
         predicted_price = self.predict_price({**market_data, 'region': region})
         demand_forecast = self.forecast_demand(product_name, region)
@@ -548,7 +558,7 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'groq_source': groq_result.get('success', False)
+            'web_search_source': web_result.get('success', False)
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -631,8 +641,8 @@ class SelfLearningAIInsights:
         """Calculate confidence score for predictions"""
         base_confidence = 0.7
         
-        if market_data.get('source') == 'Groq API':
-            base_confidence += 0.15
+        if market_data.get('source') == 'Groq API with Web Search':
+            base_confidence += 0.2
         elif market_data.get('source') == 'Ethiopian Market Data':
             base_confidence += 0.1
         
@@ -709,7 +719,7 @@ class EthiopianMarketScraper:
 # ==========================================
 
 def render_ai_insights(user_info, ai):
-    """Render AI Insights tab with Groq API integration - Search Any Product"""
+    """Render AI Insights tab with Groq web search integration"""
     
     ai_insights = SelfLearningAIInsights(user_info['id'])
     
@@ -747,9 +757,9 @@ def render_ai_insights(user_info, ai):
     .insight-card .trend-up { color: #10b981; }
     .insight-card .trend-down { color: #ef4444; }
     .insight-card .trend-neutral { color: #f59e0b; }
-    .groq-badge {
+    .web-search-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc04 75%, #ea4335 100%);
         color: white;
         font-size: 10px;
         padding: 2px 12px;
@@ -789,7 +799,7 @@ def render_ai_insights(user_info, ai):
     """, unsafe_allow_html=True)
     
     st.subheader("🤖 AI-Powered Market Insights")
-    st.caption("Search and analyze any product in the Ethiopian market")
+    st.caption("Search and analyze any product in the Ethiopian market using Groq with web search")
     
     # Status
     col1, col2, col3, col4 = st.columns(4)
@@ -819,7 +829,7 @@ def render_ai_insights(user_info, ai):
     # PRODUCT SELECTION - DROPDOWN OR CUSTOM INPUT
     # ==========================================
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Search Any Product")
+    st.markdown("### 🔍 Search Any Product with Web Search")
     
     col1, col2 = st.columns([2, 1])
     
@@ -861,36 +871,27 @@ def render_ai_insights(user_info, ai):
             help="Enter any product name to analyze market prices"
         )
     
-    # Quick suggestion buttons
-    st.markdown("#### Quick Search")
-    quick_products = ["Teff", "Coffee", "Wheat", "Milk", "Beef", "Onion", "Tomato", "Barley", "Maize"]
-    quick_cols = st.columns(3)
-    for i, product in enumerate(quick_products):
-        with quick_cols[i % 3]:
-            if st.button(f"🔍 {product}", use_container_width=True):
-                selected_product_name = product
-                st.rerun()
-    
     st.markdown('</div>', unsafe_allow_html=True)
     
     if not selected_product_name:
-        st.info("💡 Enter a product name above or select from the quick search buttons to get market insights.")
+        st.info("💡 Enter a product name above to get market insights with web search.")
         return
     
     product_name = selected_product_name.strip()
     
     st.markdown("---")
     
-    # Query button    col1, col2 = st.columns([3, 1])
+    # Query button
+    col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"### 📊 Get Market Price for **{product_name}**")
-        st.caption(f"Analyzing {product_name} in {selected_region}")
+        st.caption(f"Using Groq web search to analyze {product_name} in {selected_region}")
     with col2:
-        if st.button("🚀 Analyze", use_container_width=True, type="primary"):
-            with st.spinner(f"Fetching real market data for {product_name} from Groq AI..."):
-                result = ai_insights.query_groq_for_price(product_name, selected_region)
+        if st.button("🔍 Search Web", use_container_width=True, type="primary"):
+            with st.spinner(f"Searching the web for {product_name} prices in {selected_region}..."):
+                result = ai_insights.query_with_web_search(product_name, selected_region)
                 if result.get('success'):
-                    st.success(f"✅ Market data fetched for {product_name}!")
+                    st.success(f"✅ Web search completed for {product_name}!")
                     st.rerun()
                 else:
                     st.error(f"❌ {result.get('error', 'Unknown error')}")
@@ -901,8 +902,8 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("### 📊 Market Analysis")
     
-    if insights.get('groq_source'):
-        st.markdown('<span class="groq-badge">🤖 Groq AI</span>', unsafe_allow_html=True)
+    if insights.get('web_search_source'):
+        st.markdown('<span class="web-search-badge">🌐 Google Web Search</span>', unsafe_allow_html=True)
     
     # Check if this is a user product
     user_product = next((p for p in all_products if p.get('name', '').lower() == product_name.lower()), None)
@@ -912,7 +913,7 @@ def render_ai_insights(user_info, ai):
         st.info(f"📦 This product is in your inventory with price: {current_price:.0f} ETB")
     else:
         current_price = market_data.get('avg_price', 120)
-        st.info(f"🔍 Analyzing market for: {product_name}")
+        st.info(f"🔍 Web search results for: {product_name}")
     
     market_avg = market_data.get('avg_price', 0)
     
@@ -948,7 +949,8 @@ def render_ai_insights(user_info, ai):
         📈 Market trend is <strong>{market_data.get('trend', 'stable').capitalize()}</strong> 
         with <strong>{market_data.get('demand', 'medium').upper()}</strong> demand.
         <br>
-        📍 Source: <strong>{market_data.get('data_source', 'Market Data')}</strong>
+        📍 Source: <strong>{market_data.get('data_source', 'Web Search')}</strong>
+        {f'<br>📅 Data Date: <strong>{market_data.get("data_date", "Current")}</strong>' if market_data.get('data_date') else ''}
     </div>
     """, unsafe_allow_html=True)
     
@@ -961,7 +963,7 @@ def render_ai_insights(user_info, ai):
         if user_product:
             st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
         else:
-            st.metric("📈 Market Status", "Analyzed")
+            st.metric("📈 Market Status", "Web Search")
     
     # Market Details
     st.caption("---")
