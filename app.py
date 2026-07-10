@@ -5,7 +5,7 @@ from utils.theme import initialize_theme, get_theme_css, render_theme_toggle
 from utils.floating_chatbot import render_floating_chatbot # 1. Import Chatbot
 
 # Note: If shared_ui.py is inside the utils folder, change this to: from utils.shared_ui import get_ai_context
-from shared_ui import get_ai_context # 2. Import Context Builder
+from utils.shared_ui import get_ai_context # 2. Import Context Builder # 2. Import Context Builder
 
 # Configure page
 st.set_page_config(
