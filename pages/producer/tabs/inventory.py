@@ -11,7 +11,9 @@ from utils.db_helpers import (
     get_low_stock_products, update_product, delete_product, get_product_by_id, get_user_by_id
 )
 
+# Import from components
 from ..components.product_card import render_product_card, render_product_detail
+
 
 # ==========================================
 # RENDER BROWSE PRODUCT DETAIL
@@ -195,6 +197,9 @@ def render_browse_product_detail(product, user_info):
         st.rerun()
 
 
+# ==========================================
+# RENDER INVENTORY MAIN
+# ==========================================
 def render_inventory(user_info, ai):
     """Render Professional Inventory Management tab"""
     
