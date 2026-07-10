@@ -39,7 +39,10 @@ def get_supabase_client():
 # Global client
 supabase = get_supabase_client()
 
-# --- User Functions ---
+# ==========================================
+# USER FUNCTIONS
+# ==========================================
+
 def initialize_session_state():
     """Initialize session state variables"""
     if 'authenticated' not in st.session_state:
@@ -48,7 +51,7 @@ def initialize_session_state():
         st.session_state.user_id = None
 
 def authenticate_user(email, password):
-    """Authenticate a user"""
+    """Authenticate a user and return complete user data"""
     try:
         if supabase is None:
             return None, "Database connection failed"
@@ -60,7 +63,7 @@ def authenticate_user(email, password):
         })
         
         if response.user:
-            # Get user profile from users table
+            # Get complete user profile including profile_image
             user_data = supabase.table('users')\
                 .select('*')\
                 .eq('email', email)\
@@ -96,7 +99,7 @@ def logout_user():
     st.session_state.user_id = None
 
 def get_user_by_id(user_id):
-    """Get user by ID"""
+    """Get complete user by ID including profile_image"""
     try:
         if supabase is None:
             return None
@@ -121,6 +124,7 @@ def update_user(user_id, **kwargs):
         
         # Remove None values
         update_data = {k: v for k, v in kwargs.items() if v is not None}
+        update_data['updated_at'] = datetime.now().isoformat()
         
         response = supabase.table('users')\
             .update(update_data)\
@@ -134,7 +138,65 @@ def update_user(user_id, **kwargs):
     except Exception as e:
         return False, f"Error updating user: {e}"
 
-# --- Product Functions ---
+def update_user_profile_image(user_id, image_path):
+    """Update user profile image"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        response = supabase.table('users')\
+            .update({'profile_image': image_path, 'updated_at': datetime.now().isoformat()})\
+            .eq('id', user_id)\
+            .execute()
+        
+        if response.data:
+            return True, "Profile image updated successfully"
+        return False, "Profile image update failed"
+    
+    except Exception as e:
+        return False, f"Error updating profile image: {e}"
+
+def create_user_profile(user_id, email, name, phone=None, company_name=None, address=None, region=None, role='customer'):
+    """Create a user profile in the database"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        now = datetime.now().isoformat()
+        user_data = {
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'role': role,
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Add optional fields
+        if phone:
+            user_data['phone'] = phone
+        if company_name:
+            user_data['company_name'] = company_name
+        if address:
+            user_data['address'] = address
+        if region:
+            user_data['region'] = region
+        
+        response = supabase.table('users')\
+            .insert(user_data)\
+            .execute()
+        
+        if response.data:
+            return True, "User profile created successfully"
+        return False, "Failed to create user profile"
+    
+    except Exception as e:
+        return False, f"Error creating user profile: {e}"
+
+# ==========================================
+# PRODUCT FUNCTIONS
+# ==========================================
+
 def get_products(producer_id=None, limit=100):
     """Get products, optionally filtered by producer"""
     try:
@@ -143,7 +205,8 @@ def get_products(producer_id=None, limit=100):
         
         query = supabase.table('products')\
             .select('*')\
-            .limit(limit)
+            .limit(limit)\
+            .order('created_at', desc=True)
         
         if producer_id:
             query = query.eq('producer_id', producer_id)
@@ -158,7 +221,25 @@ def get_products(producer_id=None, limit=100):
         st.error(f"Error fetching products: {e}")
         return []
 
-def create_product(name, description, category, price, cost_price, stock_quantity, producer_id, weight=0.0, image_url=None):
+def get_product_by_id(product_id):
+    """Get a single product by ID"""
+    try:
+        if supabase is None:
+            return None
+        
+        response = supabase.table('products')\
+            .select('*')\
+            .eq('id', product_id)\
+            .execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error fetching product: {e}")
+        return None
+
+def create_product(name, description, category, price, cost_price, stock_quantity, producer_id, weight=0.0, image_url=None, min_stock=10):
     """Create a new product"""
     try:
         if supabase is None:
@@ -168,6 +249,7 @@ def create_product(name, description, category, price, cost_price, stock_quantit
         import uuid
         sku = f"SKU-{uuid.uuid4().hex[:8].upper()}"
         
+        now = datetime.now().isoformat()
         product_data = {
             'name': name,
             'description': description,
@@ -179,9 +261,13 @@ def create_product(name, description, category, price, cost_price, stock_quantit
             'weight': weight,
             'sku': sku,
             'image_url': image_url,
-            'min_stock': 10,
-            'created_at': datetime.now().isoformat()
+            'min_stock': min_stock,
+            'created_at': now,
+            'updated_at': now
         }
+        
+        # Remove None values
+        product_data = {k: v for k, v in product_data.items() if v is not None}
         
         response = supabase.table('products')\
             .insert(product_data)\
@@ -201,6 +287,7 @@ def update_product(product_id, **kwargs):
             return False, "Database connection failed"
         
         update_data = {k: v for k, v in kwargs.items() if v is not None}
+        update_data['updated_at'] = datetime.now().isoformat()
         
         response = supabase.table('products')\
             .update(update_data)\
@@ -239,7 +326,7 @@ def update_product_stock(product_id, new_quantity):
             return False, "Database connection failed"
         
         response = supabase.table('products')\
-            .update({'quantity': new_quantity})\
+            .update({'quantity': new_quantity, 'updated_at': datetime.now().isoformat()})\
             .eq('id', product_id)\
             .execute()
         
@@ -300,7 +387,31 @@ def get_recent_products(producer_id, limit=5):
         st.error(f"Error fetching recent products: {e}")
         return []
 
-# --- Order Functions ---
+def search_products(search_term, producer_id=None):
+    """Search products by name or description"""
+    try:
+        if supabase is None:
+            return []
+        
+        query = supabase.table('products')\
+            .select('*')\
+            .or_(f'name.ilike.%{search_term}%,description.ilike.%{search_term}%')
+        
+        if producer_id:
+            query = query.eq('producer_id', producer_id)
+        
+        response = query.execute()
+        
+        return response.data if response.data else []
+    
+    except Exception as e:
+        st.error(f"Error searching products: {e}")
+        return []
+
+# ==========================================
+# ORDER FUNCTIONS
+# ==========================================
+
 def get_orders(user_id, role, limit=100):
     """Get orders based on user role"""
     try:
@@ -359,7 +470,79 @@ def get_recent_orders(user_id, role, limit=10):
         st.error(f"Error fetching recent orders: {e}")
         return []
 
-# --- Dashboard Stats ---
+def get_order_by_id(order_id):
+    """Get a single order by ID"""
+    try:
+        if supabase is None:
+            return None
+        
+        response = supabase.table('orders')\
+            .select('*')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error fetching order: {e}")
+        return None
+
+def create_order(product_id, producer_id, merchant_id, customer_id, quantity, total_amount, status='pending'):
+    """Create a new order"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed", None
+        
+        now = datetime.now().isoformat()
+        order_data = {
+            'product_id': product_id,
+            'producer_id': producer_id,
+            'merchant_id': merchant_id,
+            'customer_id': customer_id,
+            'quantity': quantity,
+            'total_amount': total_amount,
+            'status': status,
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Remove None values
+        order_data = {k: v for k, v in order_data.items() if v is not None}
+        
+        response = supabase.table('orders')\
+            .insert(order_data)\
+            .execute()
+        
+        if response.data:
+            return True, "Order created successfully", response.data[0]['id']
+        return False, "Order creation failed", None
+    
+    except Exception as e:
+        return False, f"Error creating order: {e}", None
+
+def update_order_status(order_id, status):
+    """Update order status"""
+    try:
+        if supabase is None:
+            return False, "Database connection failed"
+        
+        response = supabase.table('orders')\
+            .update({'status': status, 'updated_at': datetime.now().isoformat()})\
+            .eq('id', order_id)\
+            .execute()
+        
+        if response.data:
+            return True, "Order status updated successfully"
+        return False, "Order status update failed"
+    
+    except Exception as e:
+        return False, f"Error updating order status: {e}"
+
+# ==========================================
+# DASHBOARD STATS FUNCTIONS
+# ==========================================
+
 def get_default_stats():
     """Return default stats values"""
     return {
@@ -395,7 +578,7 @@ def get_dashboard_stats(role, user_id):
             if products.data:
                 stats['total_products'] = len(products.data)
                 
-                # Calculate low stock
+                # Calculate low stock and stock value
                 low_stock_count = 0
                 total_stock_value = 0
                 total_investment = 0
@@ -465,22 +648,52 @@ def get_dashboard_stats(role, user_id):
         st.error(f"Error fetching dashboard stats: {e}")
         return get_default_stats()
 
-# Add this function to utils/db_helpers.py
+# ==========================================
+# SUPPLEMENTARY FUNCTIONS
+# ==========================================
 
-def update_user_profile_image(user_id, image_path):
-    """Update user profile image"""
+def get_categories():
+    """Get list of available product categories"""
+    return ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Coffee", "Other"]
+
+def get_regions():
+    """Get list of Ethiopian regions"""
+    return ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
+            "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
+
+def get_order_status_options():
+    """Get list of order status options"""
+    return ["pending", "confirmed", "shipped", "delivered", "cancelled"]
+
+def format_currency(amount):
+    """Format amount as ETB currency"""
+    try:
+        return f"{float(amount):,.2f} ETB"
+    except:
+        return "0.00 ETB"
+
+def format_date(date_str):
+    """Format date string to readable format"""
+    try:
+        if date_str:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return dt.strftime("%Y-%m-%d %H:%M")
+        return "N/A"
+    except:
+        return "N/A"
+
+# ==========================================
+# TEST FUNCTIONS (for debugging)
+# ==========================================
+
+def test_connection():
+    """Test the database connection"""
     try:
         if supabase is None:
-            return False, "Database connection failed"
+            return False, "Supabase client not initialized"
         
-        response = supabase.table('users')\
-            .update({'profile_image': image_path})\
-            .eq('id', user_id)\
-            .execute()
-        
-        if response.data:
-            return True, "Profile image updated successfully"
-        return False, "Profile image update failed"
-    
+        # Try a simple query
+        response = supabase.table('users').select('count').limit(1).execute()
+        return True, "Connection successful"
     except Exception as e:
-        return False, f"Error updating profile image: {e}"
+        return False, f"Connection failed: {e}"
