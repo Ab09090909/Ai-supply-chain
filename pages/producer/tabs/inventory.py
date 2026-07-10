@@ -1,5 +1,21 @@
-# Add this function to inventory.py for browse products detail view
+# pages/producer/tabs/inventory.py
+import streamlit as st
+import pandas as pd
+import os
+import uuid
+from datetime import datetime
+import plotly.express as px
 
+from utils.db_helpers import (
+    get_products, create_product, update_product_stock, 
+    get_low_stock_products, update_product, delete_product, get_product_by_id, get_user_by_id
+)
+
+from ..components.product_card import render_product_card, render_product_detail
+
+# ==========================================
+# RENDER BROWSE PRODUCT DETAIL
+# ==========================================
 def render_browse_product_detail(product, user_info):
     """Render detailed view for browsed products with order functionality"""
     
@@ -78,7 +94,6 @@ def render_browse_product_detail(product, user_info):
     producer_address = "N/A"
     
     if producer_id:
-        from utils.db_helpers import get_user_by_id
         producer = get_user_by_id(producer_id)
         if producer:
             producer_name = producer.get('name', 'Unknown')
@@ -179,12 +194,534 @@ def render_browse_product_detail(product, user_info):
         st.session_state.selected_browse_product_id = None
         st.rerun()
 
+
+def render_inventory(user_info, ai):
+    """Render Professional Inventory Management tab"""
+    
+    # Custom CSS with improved dark mode colors
+    st.markdown("""
+    <style>
+    /* Inventory Container */
+    .inventory-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 2px;
+    }
+    
+    /* Stats Row - Single Compact Row */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+        background: #1e293b;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+    }
+    .stat-item {
+        text-align: center;
+        padding: 4px 0;
+    }
+    .stat-item .number {
+        font-size: 22px;
+        font-weight: 700;
+        color: #f8fafc;
+        line-height: 1.2;
+    }
+    .stat-item .number.green { color: #10b981; }
+    .stat-item .number.red { color: #ef4444; }
+    .stat-item .number.blue { color: #667eea; }
+    .stat-item .number.gold { color: #f59e0b; }
+    .stat-item .label {
+        font-size: 10px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 1px;
+        font-weight: 500;
+    }
+    .stat-item .icon {
+        font-size: 16px;
+        display: block;
+        margin-bottom: 2px;
+    }
+    
+    /* Light Mode Stats */
+    .light-mode .stats-row {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .stat-item .number {
+        color: #0f172a !important;
+    }
+    .light-mode .stat-item .label {
+        color: #475569 !important;
+    }
+    
+    /* Search Bar - Improved */
+    .search-container {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        background: #1e293b;
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+    }
+    .search-container input {
+        flex: 1;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 150px;
+    }
+    .search-container input::placeholder {
+        color: #64748b;
+    }
+    .search-container input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+    .search-container select {
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    .search-container select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .light-mode .search-container {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .search-container input,
+    .light-mode .search-container select {
+        background: #ffffff !important;
+        color: #1e293b !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .search-container input::placeholder {
+        color: #94a3b8 !important;
+    }
+    
+    /* Product Grid */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+    
+    /* Browse Cards */
+    .browse-card {
+        background: #1e293b;
+        border-radius: 10px;
+        padding: 14px 16px;
+        border: 1px solid #334155;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+    }
+    .browse-card:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    
+    .light-mode .browse-card {
+        background: #ffffff !important;
+        border-color: #e2e8f0 !important;
+    }
+    .light-mode .browse-card .product-name {
+        color: #0f172a !important;
+    }
+    .light-mode .browse-card .product-meta {
+        color: #475569 !important;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .product-grid {
+            grid-template-columns: 1fr;
+        }
+        .search-container {
+            flex-direction: column;
+        }
+        .search-container input,
+        .search-container select {
+            width: 100%;
+        }
+        .stats-row {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+        }
+        .stat-item .number {
+            font-size: 18px;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Check theme mode for light/dark styling
+    theme_class = "light-mode" if st.session_state.get('theme_mode') == 'light' else ""
+    
+    st.markdown(f'<div class="inventory-container {theme_class}">', unsafe_allow_html=True)
+    
+    # ==========================================
+    # SUB-TABS
+    # ==========================================
+    if 'inventory_subtab' not in st.session_state:
+        st.session_state.inventory_subtab = "My Products"
+    
+    # Custom sub-tab buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📦 My Products", key="subtab-my", use_container_width=True, 
+                    type="primary" if st.session_state.inventory_subtab == "My Products" else "secondary"):
+            st.session_state.inventory_subtab = "My Products"
+            st.rerun()
+    with col2:
+        if st.button("🔍 Browse Products", key="subtab-browse", use_container_width=True,
+                    type="primary" if st.session_state.inventory_subtab == "Browse Products" else "secondary"):
+            st.session_state.inventory_subtab = "Browse Products"
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # ==========================================
+    # SUB-TAB: MY PRODUCTS
+    # ==========================================
+    if st.session_state.inventory_subtab == "My Products":
+        render_my_products(user_info, ai)
+    
+    # ==========================================
+    # SUB-TAB: BROWSE PRODUCTS
+    # ==========================================
+    else:
+        render_browse_products(user_info)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ==========================================
+# RENDER MY PRODUCTS
+# ==========================================
+def render_my_products(user_info, ai):
+    """Render the My Products sub-tab"""
+    
+    # Check if showing product detail
+    if st.session_state.get('show_product_detail', False) and st.session_state.get('selected_product_id'):
+        all_products = get_products(producer_id=user_info['id'])
+        selected_product = next((p for p in all_products if p['id'] == st.session_state.selected_product_id), None)
+        if selected_product:
+            render_product_detail(selected_product, user_info)
+            return
+    
+    # Get all products
+    all_products = get_products(producer_id=user_info['id'])
+    low_stock = get_low_stock_products(producer_id=user_info['id'])
+    
+    # Calculate stats
+    total_products = len(all_products)
+    low_stock_count = len(low_stock)
+    total_value = sum(p.get('price', 0) * p.get('quantity', 0) for p in all_products) if all_products else 0
+    categories_count = len(set(p.get('category', 'Other') for p in all_products)) if all_products else 0
+    
+    # ==========================================
+    # COMPACT STATS ROW - All in One Row
+    # ==========================================
+    st.markdown(f"""
+    <div class="stats-row">
+        <div class="stat-item">
+            <span class="icon">📦</span>
+            <div class="number blue">{total_products}</div>
+            <div class="label">Products</div>
+        </div>
+        <div class="stat-item">
+            <span class="icon">⚠️</span>
+            <div class="number {'red' if low_stock_count > 0 else 'green'}">{low_stock_count}</div>
+            <div class="label">Low Stock</div>
+        </div>
+        <div class="stat-item">
+            <span class="icon">💰</span>
+            <div class="number gold">{total_value:,.0f}</div>
+            <div class="label">Stock Value</div>
+        </div>
+        <div class="stat-item">
+            <span class="icon">📂</span>
+            <div class="number blue">{categories_count}</div>
+            <div class="label">Categories</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Check if editing a product
+    edit_mode = st.session_state.get('edit_product_id') is not None
+    
+    # Add/Edit Product Form
+    with st.expander("➕ Add New Product" if not edit_mode else "✏️ Edit Product", expanded=edit_mode):
+        with st.form("add_product_form"):
+            # If in edit mode, load product data
+            product_data = None
+            if edit_mode:
+                all_products = get_products(producer_id=user_info['id'])
+                product_data = next((p for p in all_products if p['id'] == st.session_state.edit_product_id), None)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                name_input = st.text_input("Product Name", placeholder="e.g., Teff, Coffee", 
+                                          value=product_data['name'] if product_data else "")
+                category = st.selectbox("Category", ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Coffee", "Other"],
+                                       index=["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Coffee", "Other"].index(product_data['category']) if product_data and product_data.get('category') in ["Grains", "Vegetables", "Fruits", "Dairy", "Meat", "Coffee", "Other"] else 0)
+                price = st.number_input("Selling Price (ETB)", min_value=0.01, step=0.01,
+                                       value=float(product_data['price']) if product_data else 0.01)
+                cost_price = st.number_input("Cost Price (ETB)", min_value=0.01, step=0.01,
+                                            value=float(product_data['cost_price']) if product_data and product_data.get('cost_price') else 0.01)
+            
+            with col2:
+                stock = st.number_input("Stock Quantity", min_value=0, step=1,
+                                       value=int(product_data['quantity']) if product_data else 0)
+                min_stock = st.number_input("Min Stock Alert", min_value=1, step=1,
+                                           value=int(product_data.get('min_stock', 10)) if product_data else 10)
+                weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1,
+                                        value=float(product_data.get('weight', 0)) if product_data else 0.0)
+                description = st.text_area("Description", placeholder="Brief product description...", height=80,
+                                          value=product_data.get('description', '') if product_data else "")
+            
+            # Image Upload Section
+            st.markdown("---")
+            st.markdown("### 📷 Product Image")
+            current_image = product_data.get('image_url') if product_data else None
+            
+            if current_image and os.path.exists(current_image):
+                st.markdown("#### Current Image:")
+                st.image(current_image, width=150)
+            
+            uploaded_file = st.file_uploader(
+                "Upload Product Image" + (" (leave empty to keep current)" if edit_mode else ""),
+                type=['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'],
+                help="Supported formats: JPG, JPEG, PNG, GIF, WEBP, BMP, TIFF"
+            )
+            
+            if uploaded_file is not None:
+                st.markdown("#### Preview:")
+                try:
+                    st.image(uploaded_file, caption=f"📷 {uploaded_file.name}", width=250)
+                    st.caption(f"Size: {uploaded_file.size / 1024:.1f} KB")
+                except Exception as e:
+                    st.error(f"Error displaying image: {e}")
+            
+            submitted = st.form_submit_button(
+                "💾 Update Product" if edit_mode else "➕ Add Product", 
+                use_container_width=True, type="primary"
+            )
+            
+            if submitted:
+                if not name_input:
+                    st.error("❌ Product name is required!")
+                else:
+                    image_path = current_image
+                    if uploaded_file is not None:
+                        try:
+                            os.makedirs("uploads/products", exist_ok=True)
+                            file_extension = uploaded_file.name.split('.')[-1].lower()
+                            unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
+                            image_path = os.path.join("uploads/products", unique_filename)
+                            
+                            with open(image_path, "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+                            
+                            st.success(f"✅ Image saved: {uploaded_file.name}")
+                        except Exception as e:
+                            st.error(f"Error saving image: {e}")
+                            image_path = current_image
+                    
+                    if edit_mode:
+                        try:
+                            success, msg = update_product(
+                                product_id=st.session_state.edit_product_id,
+                                name=name_input,
+                                description=description,
+                                category=category,
+                                price=price,
+                                cost_price=cost_price,
+                                stock_quantity=stock,
+                                min_stock=min_stock,
+                                weight=weight,
+                                image_url=image_path
+                            )
+                            
+                            if success:
+                                # Update AI knowledge
+                                product_info = {
+                                    'id': st.session_state.edit_product_id,
+                                    'name': name_input,
+                                    'category': category,
+                                    'price': price,
+                                    'cost_price': cost_price,
+                                    'quantity': stock,
+                                    'weight': weight
+                                }
+                                ai.analyze_product(product_info)
+                                
+                                st.success(f"✅ {msg}")
+                                st.session_state.edit_product_id = None
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {msg}")
+                        except Exception as e:
+                            st.error(f"❌ Error updating product: {e}")
+                    else:
+                        success, msg, prod_id = create_product(
+                            name=name_input, 
+                            description=description, 
+                            category=category,
+                            price=price, 
+                            cost_price=cost_price, 
+                            stock_quantity=stock,
+                            producer_id=user_info['id'], 
+                            weight=weight,
+                            image_url=image_path
+                        )
+                        
+                        if success:
+                            # Update AI knowledge
+                            product_info = {
+                                'id': prod_id,
+                                'name': name_input,
+                                'category': category,
+                                'price': price,
+                                'cost_price': cost_price,
+                                'quantity': stock,
+                                'weight': weight
+                            }
+                            ai.analyze_product(product_info)
+                            
+                            st.success(f"✅ {msg}")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+
+    st.markdown("---")
+    
+    # Low Stock Alerts
+    if low_stock:
+        st.warning(f"⚠️ **{len(low_stock)} products are below minimum stock level!**")
+        df_low = pd.DataFrame(low_stock)
+        st.dataframe(df_low[['name', 'category', 'quantity', 'min_stock']], use_container_width=True)
+    
+    # All Products Display
+    st.subheader("📦 My Products")
+    
+    if all_products:
+        df_all = pd.DataFrame(all_products)
+        
+        # Search and Filter - Improved
+        st.markdown('<div class="search-container">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([3, 2, 1.5])
+        with col1:
+            search_term = st.text_input("🔍 Search", placeholder="Search by name...", key="search_products", label_visibility="collapsed")
+        with col2:
+            categories = ["All"] + sorted(list(set(p.get('category', 'Other') for p in all_products)))
+            filter_category = st.selectbox("📂 Category", categories, key="filter_category", label_visibility="collapsed")
+        with col3:
+            sort_by = st.selectbox("Sort", ["Newest", "Price: Low", "Price: High", "Stock: Low"], key="sort_products", label_visibility="collapsed")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Apply filters
+        filtered_products = all_products.copy()
+        
+        if search_term:
+            filtered_products = [p for p in filtered_products if search_term.lower() in p.get('name', '').lower()]
+        
+        if filter_category != "All":
+            filtered_products = [p for p in filtered_products if p.get('category', 'Other') == filter_category]
+        
+        # Apply sorting
+        if sort_by == "Price: Low":
+            filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0))
+        elif sort_by == "Price: High":
+            filtered_products = sorted(filtered_products, key=lambda x: x.get('price', 0), reverse=True)
+        elif sort_by == "Stock: Low":
+            filtered_products = sorted(filtered_products, key=lambda x: x.get('quantity', 0))
+        
+        st.caption(f"Showing {len(filtered_products)} of {len(all_products)} products")
+        
+        st.markdown('<div class="product-grid">', unsafe_allow_html=True)
+        
+        for product in filtered_products:
+            render_product_card(product, user_info)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Delete Confirmation Dialog
+        if st.session_state.get('delete_product_id'):
+            product_to_delete = next((p for p in all_products if p['id'] == st.session_state.delete_product_id), None)
+            if product_to_delete:
+                st.warning(f"⚠️ Are you sure you want to delete '{product_to_delete['name']}'?")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Delete", use_container_width=True):
+                        try:
+                            success, msg = delete_product(st.session_state.delete_product_id)
+                            if success:
+                                st.success(f"✅ {msg}")
+                                st.session_state.delete_product_id = None
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {msg}")
+                        except Exception as e:
+                            st.error(f"❌ Error deleting product: {e}")
+                with col2:
+                    if st.button("❌ Cancel", use_container_width=True):
+                        st.session_state.delete_product_id = None
+                        st.rerun()
+        
+        # Detailed Table View
+        with st.expander("📋 Detailed List", expanded=False):
+            display_df = df_all[['name', 'category', 'price', 'quantity', 'sku', 'created_at']].copy()
+            display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d')
+            display_df['Producer'] = user_info.get('name', 'Unknown')
+            display_df['Company'] = user_info.get('company_name', 'N/A')
+            st.dataframe(display_df, use_container_width=True)
+            
+            # Export option
+            csv = display_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Export CSV",
+                data=csv,
+                file_name=f"products_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+    else:
+        st.info("📭 No products added yet. Click 'Add New Product' above to get started!")
+
+
+# ==========================================
+# RENDER BROWSE PRODUCTS
+# ==========================================
 def render_browse_products(user_info):
     """Render the Browse Products sub-tab"""
     
     # Check if showing browse product detail
     if st.session_state.get('show_browse_detail', False) and st.session_state.get('selected_browse_product_id'):
-        from utils.db_helpers import get_product_by_id
         selected_product = get_product_by_id(st.session_state.selected_browse_product_id)
         if selected_product:
             render_browse_product_detail(selected_product, user_info)
@@ -194,7 +731,6 @@ def render_browse_products(user_info):
     st.caption("Discover products from other producers on the platform")
     
     # Get all products from all producers (excluding current user's products)
-    from utils.db_helpers import get_products
     all_products = get_products()
     
     # Filter out current user's products
@@ -262,7 +798,6 @@ def render_browse_products(user_info):
                 producer_company = "N/A"
                 
                 if producer_id and producer_id not in producer_cache:
-                    from utils.db_helpers import get_user_by_id
                     producer = get_user_by_id(producer_id)
                     if producer:
                         producer_cache[producer_id] = producer
@@ -272,13 +807,13 @@ def render_browse_products(user_info):
                     producer_name = producer_info.get('name', 'Unknown')
                     producer_company = producer_info.get('company_name', 'N/A')
                 
-                # Product Card
                 stock = product.get('quantity', 0)
-                stock_status = "✅ In Stock" if stock > 0 else "❌ Out of Stock"
                 stock_color = "#10b981" if stock > 0 else "#ef4444"
+                stock_status = "✅ In Stock" if stock > 0 else "❌ Out of Stock"
                 
+                # Product Card
                 st.markdown(f"""
-                <div style="background: #1e293b; border-radius: 10px; padding: 14px 16px; border: 1px solid #334155; margin-bottom: 10px;">
+                <div class="browse-card">
                     <div style="display:flex;justify-content:space-between;align-items:start;">
                         <div>
                             <div style="font-size: 16px; font-weight: 600; color: #f8fafc;">{product.get('name', 'Unknown')}</div>
