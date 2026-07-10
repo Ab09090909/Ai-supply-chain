@@ -17,32 +17,29 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROK API INTEGRATION - FIXED
+# GROK API INTEGRATION - CORRECT FORMAT
 # ==========================================
 
 def get_grok_api_key():
-    """Get Grok API key from secrets with proper error handling"""
+    """Get Grok API key from secrets"""
     try:
-        api_key = st.secrets.get("GROK_API_KEY")
-        if not api_key:
-            api_key = st.secrets.get("grok_api_key")
-        if not api_key:
-            api_key = st.secrets.get("GROK_KEY")
+        # Try different possible key names
+        api_key = st.secrets.get("GROK_API_KEY") or st.secrets.get("grok_api_key") or st.secrets.get("GROK_KEY") or st.secrets.get("XAI_API_KEY")
         return api_key
     except Exception as e:
         return None
 
-def query_grok_api(product_name, region="Addis Ababa", model="grok-1"):
+def query_grok_api(product_name, region="Addis Ababa"):
     """Query the Grok API for current product price in Ethiopia."""
     try:
         api_key = get_grok_api_key()
         if not api_key:
             return {
                 "success": False,
-                "error": "Grok API key not configured."
+                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
             }
 
-        # xAI API endpoint
+        # xAI API endpoint - from official documentation
         url = "https://api.x.ai/v1/chat/completions"
         
         headers = {
@@ -50,55 +47,85 @@ def query_grok_api(product_name, region="Addis Ababa", model="grok-1"):
             "Content-Type": "application/json"
         }
         
-        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in ETB? Give me just the number."
+        # Clean prompt
+        prompt = f"What is the current price of {product_name} in {region}, Ethiopia in Ethiopian Birr (ETB)? Reply with just a number."
         
         payload = {
-            "model": model,
+            "model": "grok-1-latest",  # Latest Grok model
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.1,
-            "max_tokens": 50
+            "temperature": 0.0,
+            "max_tokens": 10
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        # Make the request with timeout
+        response = requests.post(
+            url, 
+            headers=headers, 
+            json=payload, 
+            timeout=30
+        )
         
+        # Debug info
         if response.status_code != 200:
+            error_msg = f"API Error {response.status_code}"
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', error_msg)
+            except:
+                pass
+            
             return {
                 "success": False,
-                "error": f"API Error {response.status_code}",
-                "response_text": response.text[:500] if response.text else "No response",
-                "status_code": response.status_code
+                "error": error_msg,
+                "status_code": response.status_code,
+                "response_text": response.text[:500] if response.text else "No response"
             }
         
         data = response.json()
         
         if 'choices' in data and len(data['choices']) > 0:
-            content = data['choices'][0]['message']['content']
-            price_match = re.search(r'([\d.]+)', content)
+            content = data['choices'][0]['message']['content'].strip()
+            
+            # Extract price - look for any number
+            price_match = re.search(r'(\d+\.?\d*)', content)
             
             if price_match:
                 price = float(price_match.group(1))
-                return {
-                    "success": True,
-                    "price": price,
-                    "unit": "kg",
-                    "raw_response": content,
-                    "source": "Grok API"
-                }
+                # Ensure price is reasonable (between 1 and 10000 ETB)
+                if 1 <= price <= 10000:
+                    return {
+                        "success": True,
+                        "price": price,
+                        "unit": "kg",
+                        "raw_response": content,
+                        "source": "Grok API"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Price {price} seems unreasonable",
+                        "raw_response": content
+                    }
             else:
                 return {
                     "success": False,
-                    "error": "Could not parse price",
+                    "error": "Could not find a number in the response",
                     "raw_response": content
                 }
         else:
             return {
                 "success": False,
-                "error": "Unexpected response",
+                "error": "Unexpected API response format",
                 "raw_data": data
             }
             
+    except requests.exceptions.Timeout:
+        return {"success": False, "error": "Request timed out. Please try again."}
+    except requests.exceptions.ConnectionError:
+        return {"success": False, "error": "Connection error. Please check your internet."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -345,9 +372,9 @@ class SelfLearningAIInsights:
         except Exception as e:
             return False
     
-    def query_grok_for_price(self, product_name, region="Addis Ababa", model="grok-1"):
+    def query_grok_for_price(self, product_name, region="Addis Ababa"):
         """Query Grok API for product price and store results"""
-        result = query_grok_api(product_name, region, model)
+        result = query_grok_api(product_name, region)
         
         if result.get('success'):
             if 'grok_queries' not in self.knowledge_base:
@@ -451,17 +478,10 @@ class SelfLearningAIInsights:
     
     def get_market_insights(self, product_name, region="Addis Ababa"):
         """Get comprehensive market insights for a product"""
-        # Try multiple models
-        models = ["grok-1", "grok-beta"]
-        grok_result = None
+        # Try Grok API
+        grok_result = self.query_grok_for_price(product_name, region)
         
-        for model in models:
-            result = self.query_grok_for_price(product_name, region, model)
-            if result.get('success'):
-                grok_result = result
-                break
-        
-        if grok_result and grok_result.get('success'):
+        if grok_result.get('success'):
             market_price = grok_result.get('price')
             market_data = {
                 'product': product_name,
@@ -475,6 +495,7 @@ class SelfLearningAIInsights:
                 'source': 'Grok API'
             }
         else:
+            # Fallback to local data
             scraper = EthiopianMarketScraper()
             market_data = scraper.get_current_price(product_name)
         
@@ -488,7 +509,7 @@ class SelfLearningAIInsights:
             'demand_forecast': demand_forecast,
             'price_recommendations': price_recommendations,
             'confidence_score': self.calculate_confidence(market_data),
-            'grok_source': grok_result.get('success', False) if grok_result else False
+            'grok_source': grok_result.get('success', False)
         }
     
     def forecast_demand(self, product_name, region="Addis Ababa"):
@@ -744,26 +765,20 @@ def render_ai_insights(user_info, ai):
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown(f"### 🔍 Get Price for {product_name}")
+        st.caption(f"Query Grok AI for current {product_name} prices in {selected_region}")
     with col2:
-        if st.button("🚀 Query Grok", use_container_width=True, type="primary"):
-            with st.spinner("Querying Grok..."):
-                # Try both models
-                models = ["grok-1", "grok-beta"]
-                result = None
-                
-                for model in models:
-                    result = ai_insights.query_grok_for_price(product_name, selected_region, model)
-                    if result.get('success'):
-                        break
-                
-                if result and result.get('success'):
+        if st.button("🚀 Query", use_container_width=True, type="primary"):
+            with st.spinner("Querying Grok AI..."):
+                result = ai_insights.query_grok_for_price(product_name, selected_region)
+                if result.get('success'):
                     st.success(f"✅ Price: {result.get('price')} ETB per {result.get('unit', 'kg')}")
                     st.rerun()
                 else:
-                    error = result.get('error', 'Unknown error') if result else 'No response'
-                    st.error(f"❌ Error: {error}")
+                    st.error(f"❌ {result.get('error', 'Unknown error')}")
+                    if result.get('status_code'):
+                        st.caption(f"Status: {result.get('status_code')}")
     
-    # Get insights
+    # Get insights (always shows local data if Grok fails)
     insights = ai_insights.get_market_insights(product_name, selected_region)
     market_data = insights.get('market_data', {})
     
@@ -888,7 +903,7 @@ def render_ai_insights(user_info, ai):
             st.info(f"Accuracy: {acc*100:.1f}%\nSamples: {samples}")
     
     with col3:
-        if st.button("💾 Save Model", use_container_width=True):
+        if st.button("💾 Save", use_container_width=True):
             if ai_insights.save_model():
                 st.success("✅ Saved to Models/")
     
