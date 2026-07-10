@@ -17,24 +17,18 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# GROK API INTEGRATION WITH BETTER ERROR HANDLING
+# GROK API INTEGRATION - FIXED
 # ==========================================
 
 def get_grok_api_key():
     """Get Grok API key from secrets with proper error handling"""
     try:
-        # Try to get from st.secrets
         api_key = st.secrets.get("GROK_API_KEY")
-        
         if not api_key:
-            # Try alternative key names
             api_key = st.secrets.get("grok_api_key") or st.secrets.get("GROK_KEY")
-        
         if not api_key:
-            st.error("❌ Grok API key not found in secrets. Please add GROK_API_KEY to your Streamlit secrets.")
-            st.info("📝 Go to your app settings → Secrets and add: GROK_API_KEY = 'your_key_here'")
+            st.error("❌ Grok API key not found in secrets.")
             return None
-        
         return api_key
     except Exception as e:
         st.error(f"❌ Error accessing secrets: {e}")
@@ -43,16 +37,11 @@ def get_grok_api_key():
 def query_grok_api(product_name, region="Addis Ababa"):
     """Query the Grok API for current product price in Ethiopia."""
     try:
-        # Get API key from Streamlit secrets with proper error handling
         api_key = get_grok_api_key()
-        
         if not api_key:
-            return {
-                "success": False,
-                "error": "Grok API key not configured. Please add GROK_API_KEY to secrets."
-            }
-        
-        # Grok API endpoint (xAI)
+            return {"success": False, "error": "Grok API key not configured"}
+
+        # Correct xAI API endpoint
         url = "https://api.x.ai/v1/chat/completions"
         
         headers = {
@@ -60,7 +49,6 @@ def query_grok_api(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        # Craft the prompt for Ethiopian market prices
         prompt = f"""What is the current average market price of {product_name} in {region}, Ethiopia? 
         
 Please provide:
@@ -76,66 +64,72 @@ Trend: [trend]
 Demand: [level]
 Source: [market source if known]"""
         
+        # Correct payload format for xAI/Grok API
         payload = {
-            "model": "grok-1",  # Using Grok model
             "messages": [
                 {"role": "system", "content": "You are a market price analyst for Ethiopian agricultural products. Provide accurate, current market prices."},
                 {"role": "user", "content": prompt}
             ],
+            "model": "grok-1",
             "temperature": 0.3,
             "max_tokens": 250
         }
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        if response.status_code == 200:
-            data = response.json()
-            if 'choices' in data and len(data['choices']) > 0:
-                content = data['choices'][0]['message']['content']
-                
-                # Parse the response
-                price_match = re.search(r'Price:\s*([\d.]+)', content)
-                range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
-                trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
-                demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
-                unit_match = re.search(r'per\s+(\w+)', content)
-                
-                result = {
-                    "success": True,
-                    "raw_response": content,
-                    "source": "Grok API"
-                }
-                
-                if price_match:
-                    result["price"] = float(price_match.group(1))
-                
-                if range_match:
-                    result["min_price"] = float(range_match.group(1))
-                    result["max_price"] = float(range_match.group(2))
-                
-                if trend_match:
-                    result["trend"] = trend_match.group(1).lower()
-                
-                if demand_match:
-                    result["demand"] = demand_match.group(1).lower()
-                
-                if unit_match:
-                    result["unit"] = unit_match.group(1)
-                else:
-                    result["unit"] = "kg"
-                
-                return result
-            else:
-                return {
-                    "success": False,
-                    "error": "Unexpected response format from Grok"
-                }
-        else:
+        # Log response for debugging
+        if response.status_code != 200:
             return {
                 "success": False,
                 "error": f"Grok API request failed with status {response.status_code}",
-                "response_text": response.text
+                "response_text": response.text[:500] if response.text else "No response"
             }
+        
+        data = response.json()
+        if 'choices' in data and len(data['choices']) > 0:
+            content = data['choices'][0]['message']['content']
+            
+            # Parse the response
+            price_match = re.search(r'Price:\s*([\d.]+)', content)
+            range_match = re.search(r'Range:\s*([\d.]+)\s*-\s*([\d.]+)', content)
+            trend_match = re.search(r'Trend:\s*(\w+)', content, re.IGNORECASE)
+            demand_match = re.search(r'Demand:\s*(\w+)', content, re.IGNORECASE)
+            unit_match = re.search(r'per\s+(\w+)', content)
+            
+            result = {
+                "success": True,
+                "raw_response": content,
+                "source": "Grok API"
+            }
+            
+            if price_match:
+                result["price"] = float(price_match.group(1))
+            else:
+                # Try to find any number in the response
+                any_number = re.search(r'([\d.]+)\s*ETB', content)
+                if any_number:
+                    result["price"] = float(any_number.group(1))
+                else:
+                    result["price"] = None
+            
+            if range_match:
+                result["min_price"] = float(range_match.group(1))
+                result["max_price"] = float(range_match.group(2))
+            
+            if trend_match:
+                result["trend"] = trend_match.group(1).lower()
+            
+            if demand_match:
+                result["demand"] = demand_match.group(1).lower()
+            
+            if unit_match:
+                result["unit"] = unit_match.group(1)
+            else:
+                result["unit"] = "kg"
+            
+            return result
+        else:
+            return {"success": False, "error": "Unexpected response format from Grok", "raw": data}
     
     except requests.exceptions.Timeout:
         return {"success": False, "error": "Grok API request timed out"}
@@ -216,10 +210,9 @@ class SelfLearningAIInsights:
     
     def __init__(self, user_id):
         self.user_id = user_id
-        self.models_dir = "Models"  # GitHub folder
+        self.models_dir = "Models"
         self.data_dir = "data"
         
-        # Ensure directories exist
         os.makedirs(self.models_dir, exist_ok=True)
         os.makedirs(self.data_dir, exist_ok=True)
         
@@ -284,7 +277,6 @@ class SelfLearningAIInsights:
                     self.scaler = pickle.load(f)
                 return True
             else:
-                # Initialize new model
                 self.model = RandomForestRegressor(
                     n_estimators=100,
                     max_depth=10,
@@ -292,7 +284,6 @@ class SelfLearningAIInsights:
                     n_jobs=-1
                 )
                 self.scaler = StandardScaler()
-                # Try to train with data from Supabase
                 self.train_with_supabase_data()
                 return True
         except Exception as e:
@@ -302,16 +293,13 @@ class SelfLearningAIInsights:
         """Train model using data from Supabase"""
         try:
             training_data = get_training_data_supabase(self.user_id)
-            
             if len(training_data) < 5:
-                # Use local data if Supabase data is insufficient
                 training_data = self.knowledge_base.get('training_data', [])
             
             if len(training_data) > 5:
                 self.train_model(training_data)
                 return True
             else:
-                # Generate synthetic data for initial training
                 synthetic_data = self.generate_synthetic_data()
                 self.train_model(synthetic_data)
                 return True
@@ -341,18 +329,14 @@ class SelfLearningAIInsights:
                 X = np.array(X)
                 y = np.array(y)
                 
-                # Scale features
                 self.scaler.fit(X)
                 X_scaled = self.scaler.transform(X)
                 
-                # Train model
                 self.model.fit(X_scaled, y)
                 
-                # Calculate accuracy
                 self.knowledge_base['accuracy_score'] = self.model.score(X_scaled, y)
                 self.knowledge_base['learning_iterations'] = len(training_data)
                 
-                # Save model to GitHub folder
                 self.save_model()
                 self.save_knowledge_base()
                 return True
@@ -400,7 +384,6 @@ class SelfLearningAIInsights:
         result = query_grok_api(product_name, region)
         
         if result.get('success'):
-            # Store the query in knowledge base
             if 'grok_queries' not in self.knowledge_base:
                 self.knowledge_base['grok_queries'] = []
             
@@ -413,7 +396,6 @@ class SelfLearningAIInsights:
                 'raw_response': result.get('raw_response')
             })
             
-            # Save to Supabase
             save_training_data_supabase(self.user_id, {
                 'product_name': product_name,
                 'price': result.get('price'),
@@ -432,7 +414,6 @@ class SelfLearningAIInsights:
     def predict_price(self, product_data):
         """Predict optimal price using AI model"""
         try:
-            # Try to get market data from Supabase first
             market_data = get_product_market_data(
                 product_data.get('product', ''),
                 product_data.get('region', 'Addis Ababa')
@@ -443,7 +424,6 @@ class SelfLearningAIInsights:
             else:
                 market_price = product_data.get('current_price', 100)
             
-            # Get features
             features = [
                 market_price,
                 self.calculate_demand_score(product_data),
@@ -452,19 +432,15 @@ class SelfLearningAIInsights:
                 self.calculate_trend_factor(product_data)
             ]
             
-            # Scale features
             X = np.array([features])
             X_scaled = self.scaler.transform(X)
             
-            # Predict
             predicted_price = self.model.predict(X_scaled)[0]
             
-            # Ensure prediction is within reasonable range
             min_price = product_data.get('min_price', 50) * 0.7
             max_price = product_data.get('max_price', 300) * 1.3
             predicted_price = max(min_price, min(predicted_price, max_price))
             
-            # Store prediction
             product_name = product_data.get('product', 'Unknown')
             self.knowledge_base['predictions'][product_name] = {
                 'predicted_price': round(predicted_price, 2),
@@ -509,7 +485,6 @@ class SelfLearningAIInsights:
     
     def get_market_insights(self, product_name, region="Addis Ababa"):
         """Get comprehensive market insights for a product"""
-        # Try Grok API first
         grok_result = self.query_grok_for_price(product_name, region)
         
         if grok_result.get('success'):
@@ -526,17 +501,11 @@ class SelfLearningAIInsights:
                 'source': 'Grok API'
             }
         else:
-            # Fallback to local data
             scraper = EthiopianMarketScraper()
             market_data = scraper.get_current_price(product_name)
         
-        # Get predictions
         predicted_price = self.predict_price({**market_data, 'region': region})
-        
-        # Get demand forecast
         demand_forecast = self.forecast_demand(product_name, region)
-        
-        # Get price recommendations
         price_recommendations = self.get_price_recommendations(market_data)
         
         return {
@@ -705,10 +674,8 @@ class EthiopianMarketScraper:
 def render_ai_insights(user_info, ai):
     """Render AI Insights tab with Grok API integration"""
     
-    # Initialize AI
     ai_insights = SelfLearningAIInsights(user_info['id'])
     
-    # Custom CSS
     st.markdown("""
     <style>
     .insight-card {
@@ -771,7 +738,6 @@ def render_ai_insights(user_info, ai):
     st.subheader("🤖 AI-Powered Market Insights")
     st.caption("Real-time Ethiopian market analysis with Grok AI integration")
     
-    # Show AI Learning Status
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("🧠 Learning Iterations", ai_insights.knowledge_base.get('learning_iterations', 0))
@@ -785,14 +751,12 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Check if Grok API key is configured
     api_key_check = get_grok_api_key()
     if not api_key_check:
         st.warning("⚠️ Grok API key not configured. Please add GROK_API_KEY to your Streamlit secrets.")
         st.info("📝 Go to your app settings → Secrets and add: `GROK_API_KEY = 'your_key_here'`")
         st.markdown("---")
     
-    # Get all products for analysis
     all_products = get_products(producer_id=user_info['id'])
     
     if not all_products:
@@ -800,7 +764,6 @@ def render_ai_insights(user_info, ai):
         st.info("📝 Go to the Inventory tab to add your products")
         return
     
-    # Product selection
     product_names = {p['id']: p['name'] for p in all_products}
     selected_prod_id = st.selectbox(
         "Select Product for AI Analysis", 
@@ -815,7 +778,6 @@ def render_ai_insights(user_info, ai):
     
     product_name = selected_product.get('name', '')
     
-    # Region selection
     regions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNP", "Sidama", 
               "Afar", "Benishangul-Gumuz", "Gambella", "Harari", "Dire Dawa", "Somali"]
     selected_region = st.selectbox(
@@ -827,7 +789,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Grok API Query Button
     col1, col2 = st.columns([2, 1])
     with col1:
         st.markdown(f"### 🔍 Real-Time Price from Grok AI")
@@ -842,12 +803,13 @@ def render_ai_insights(user_info, ai):
                     st.rerun()
                 else:
                     st.error(f"❌ Grok API error: {result.get('error', 'Unknown error')}")
+                    if result.get('response_text'):
+                        with st.expander("📋 Show API Response Details"):
+                            st.code(result.get('response_text', ''), language='json')
     
-    # Get AI insights for selected product
     insights = ai_insights.get_market_insights(product_name, selected_region)
     market_data = insights.get('market_data', {})
     
-    # Display Market Price Analysis
     st.markdown("### 📊 Ethiopian Market Price Analysis")
     
     if insights.get('grok_source'):
@@ -910,9 +872,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Price Recommendation
-    st.markdown("### 💡 AI Price Recommendation")
-    
     price_rec = insights.get('price_recommendations', {})
     
     col1, col2 = st.columns(2)
@@ -947,9 +906,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Demand Forecast
-    st.markdown("### 📊 Demand Forecast")
-    
     demand_forecast = insights.get('demand_forecast', {})
     
     col1, col2, col3 = st.columns(3)
@@ -982,9 +938,6 @@ def render_ai_insights(user_info, ai):
         """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
-    # Stock Analysis
-    st.markdown("### 📦 Stock Analysis")
     
     current_stock = selected_product.get('quantity', 0)
     daily_demand = demand_forecast.get('daily_demand', 1)
@@ -1028,7 +981,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Ethiopian Market Quick Overview
     st.markdown("### 🌍 Ethiopian Market Quick Overview")
     
     col1, col2 = st.columns(2)
@@ -1073,7 +1025,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # AI Learning & Training Section
     st.markdown("### 🧠 AI Learning & Training")
     
     col1, col2, col3 = st.columns(3)
@@ -1111,7 +1062,6 @@ def render_ai_insights(user_info, ai):
     
     st.markdown("---")
     
-    # Model Files Location
     st.caption("📁 Model files saved in: `Models/` folder (GitHub)")
     st.caption("📁 Knowledge base saved in: `data/` folder")
     st.caption("📊 Training data stored in: Supabase `ai_training_data` table")
