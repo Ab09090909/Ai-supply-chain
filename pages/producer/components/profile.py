@@ -1,6 +1,9 @@
 # pages/producer/components/profile.py
 import streamlit as st
-from utils.db_helpers import update_user
+import os
+import uuid
+from PIL import Image
+from utils.db_helpers import update_user, update_user_profile_image
 
 def render_profile(user_info):
     """Render the business card profile - Mobile Responsive"""
@@ -37,6 +40,13 @@ def render_profile(user_info):
         flex-shrink: 0;
     }
     
+    .profile-pic-container {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin-bottom: 12px;
+    }
+    
     .profile-pic-large {
         width: 120px;
         height: 120px;
@@ -50,9 +60,19 @@ def render_profile(user_info):
         color: white;
         border: 4px solid #fff;
         box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-        margin-bottom: 12px;
-        flex-shrink: 0;
-        transition: all 0.3s ease;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .profile-pic-large:hover {
+        transform: scale(1.05);
+    }
+    
+    .profile-pic-large img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
     }
     
     .card-name {
@@ -156,6 +176,11 @@ def render_profile(user_info):
             min-width: unset;
         }
         
+        .profile-pic-container {
+            width: 100px;
+            height: 100px;
+        }
+        
         .profile-pic-large {
             width: 100px;
             height: 100px;
@@ -186,11 +211,6 @@ def render_profile(user_info):
             font-size: 13px;
         }
         
-        .contact-icon {
-            font-size: 16px;
-            width: 24px;
-        }
-        
         .edit-profile-btn {
             font-size: 13px;
             padding: 10px 20px;
@@ -204,6 +224,11 @@ def render_profile(user_info):
             margin: 0 5px 15px 5px;
         }
         
+        .profile-pic-container {
+            width: 80px;
+            height: 80px;
+        }
+        
         .profile-pic-large {
             width: 80px;
             height: 80px;
@@ -213,61 +238,6 @@ def render_profile(user_info):
         .card-name {
             font-size: 18px;
         }
-        
-        .card-title {
-            font-size: 11px;
-        }
-        
-        .contact-item {
-            font-size: 12px;
-            gap: 8px;
-        }
-        
-        .contact-label {
-            min-width: 60px;
-            font-size: 11px;
-        }
-        
-        .contact-value {
-            font-size: 12px;
-        }
-        
-        .edit-profile-btn {
-            font-size: 12px;
-            padding: 8px 16px;
-        }
-    }
-    
-    /* Tablet Styles */
-    @media screen and (min-width: 769px) and (max-width: 1024px) {
-        .business-card {
-            padding: 22px;
-            max-width: 800px;
-        }
-        
-        .profile-pic-large {
-            width: 110px;
-            height: 110px;
-            font-size: 44px;
-        }
-        
-        .card-name {
-            font-size: 20px;
-        }
-        
-        .card-left {
-            min-width: 150px;
-            padding-right: 20px;
-        }
-    }
-    
-    /* Animation for profile pic */
-    .profile-pic-large {
-        transition: transform 0.3s ease;
-    }
-    
-    .profile-pic-large:hover {
-        transform: scale(1.05);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -280,16 +250,29 @@ def render_profile(user_info):
     company = user_info.get('company_name', 'Not specified')
     address = user_info.get('address', 'Not specified')
     region = user_info.get('region', 'Addis Ababa')
+    profile_image = user_info.get('profile_image', None)
     
     # Get role and format
     role = user_info.get('role', 'producer').capitalize()
+    
+    # Display profile image or initial
+    profile_html = ""
+    if profile_image and os.path.exists(profile_image):
+        try:
+            profile_html = f'<img src="{profile_image}" alt="Profile" class="profile-pic-large">'
+        except:
+            profile_html = f'<div class="profile-pic-large">{initial}</div>'
+    else:
+        profile_html = f'<div class="profile-pic-large">{initial}</div>'
     
     # Render Business Card
     st.markdown(f"""
     <div class="business-card">
         <div class="card-container">
             <div class="card-left">
-                <div class="profile-pic-large">{initial}</div>
+                <div class="profile-pic-container">
+                    {profile_html}
+                </div>
                 <p class="card-name">{name}</p>
                 <p class="card-title">{role} • {company}</p>
             </div>
@@ -326,10 +309,10 @@ def render_profile(user_info):
     """, unsafe_allow_html=True)
     
     # Show welcome message
-    st.caption(f"👋 Welcome, {name}! | {email} | {region}")
+    st.caption(f"👋 Welcome, {name}!")
 
 def render_edit_profile(user_info):
-    """Render the edit profile section - Mobile Responsive"""
+    """Render the edit profile section with image upload"""
     st.markdown('<div id="edit-profile-section"></div>', unsafe_allow_html=True)
     
     with st.expander("✏️ Edit Profile Information", expanded=st.session_state.get('show_edit_profile', False)):
@@ -354,6 +337,35 @@ def render_edit_profile(user_info):
                 new_region = st.selectbox("🌍 Region", regions, index=region_idx)
             
             st.markdown("---")
+            st.markdown("### 📷 Profile Picture")
+            
+            # Show current profile image
+            current_image = user_info.get('profile_image', None)
+            if current_image and os.path.exists(current_image):
+                st.markdown("#### Current Profile Picture:")
+                try:
+                    st.image(current_image, width=150)
+                except:
+                    pass
+            else:
+                st.info("No profile picture set. Upload one below.")
+            
+            # Image upload
+            uploaded_file = st.file_uploader(
+                "Upload Profile Picture",
+                type=['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'],
+                help="Supported formats: JPG, JPEG, PNG, GIF, WEBP, BMP, TIFF"
+            )
+            
+            if uploaded_file is not None:
+                st.markdown("#### Preview:")
+                try:
+                    st.image(uploaded_file, caption=f"📷 {uploaded_file.name}", width=200)
+                    st.caption(f"Size: {uploaded_file.size / 1024:.1f} KB")
+                except Exception as e:
+                    st.error(f"Error displaying image: {e}")
+            
+            st.markdown("---")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -364,6 +376,35 @@ def render_edit_profile(user_info):
             if save_btn:
                 if new_name and new_email:
                     try:
+                        # Handle image upload
+                        image_path = current_image
+                        if uploaded_file is not None:
+                            try:
+                                # Create uploads directory
+                                os.makedirs("uploads/profiles", exist_ok=True)
+                                
+                                # Generate unique filename
+                                file_extension = uploaded_file.name.split('.')[-1].lower()
+                                unique_filename = f"profile_{user_info['id']}_{uuid.uuid4().hex[:8]}.{file_extension}"
+                                image_path = os.path.join("uploads/profiles", unique_filename)
+                                
+                                # Save the file
+                                with open(image_path, "wb") as f:
+                                    f.write(uploaded_file.getbuffer())
+                                
+                                # Update profile image in database
+                                success, msg = update_user_profile_image(user_info['id'], image_path)
+                                if success:
+                                    st.session_state.user_info['profile_image'] = image_path
+                                    st.success("✅ Profile image updated!")
+                                else:
+                                    st.error(f"❌ {msg}")
+                                    
+                            except Exception as e:
+                                st.error(f"Error saving image: {e}")
+                                image_path = current_image
+                        
+                        # Update user information
                         update_user(user_info['id'], 
                                    name=new_name, 
                                    email=new_email,
