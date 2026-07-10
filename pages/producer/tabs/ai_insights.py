@@ -18,64 +18,7 @@ warnings.filterwarnings('ignore')
 from utils.db_helpers import get_products, get_user_by_id, supabase
 
 # ==========================================
-# PRODUCT CATEGORY & UNIT DETECTION
-# ==========================================
-
-def get_product_unit(product_name):
-    """Detect the correct unit for a product"""
-    categories = {
-        "kg": ["coffee", "wheat", "teff", "corn", "maize", "sugar", "rice", "barley", 
-               "sorghum", "sesame", "honey", "butter", "cheese", "flour", "grain", 
-               "onion", "tomato", "potato", "cabbage", "carrot", "garlic", "ginger",
-               "beef", "mutton", "goat", "fish", "meat", "poultry"],
-        "liter": ["oil", "cooking oil", "fuel", "milk", "yogurt", "juice", "water"],
-        "unit": ["car", "phone", "laptop", "motorcycle", "bicycle", "furniture"],
-        "quintal": ["grain", "sorghum", "barley", "wheat", "teff"],
-        "piece": ["egg", "bread", "injera", "chicken", "banana", "mango", "avocado", 
-                  "orange", "papaya", "apple", "lime", "lemon"]
-    }
-    
-    product_lower = product_name.lower().strip()
-    for unit, products in categories.items():
-        if any(p in product_lower for p in products):
-            return unit
-    return "kg"  # Default
-
-def is_commodity(product_name):
-    """Check if product is a valid Ethiopian commodity"""
-    valid_commodities = [
-        'coffee', 'teff', 'wheat', 'barley', 'maize', 'corn', 'sorghum', 
-        'millet', 'sesame', 'honey', 'sugar', 'rice', 'milk', 'butter',
-        'cheese', 'yogurt', 'egg', 'chicken', 'beef', 'mutton', 'goat',
-        'onion', 'tomato', 'potato', 'cabbage', 'carrot', 'green pepper',
-        'banana', 'mango', 'avocado', 'orange', 'papaya', 'apple',
-        'cooking oil', 'wheat flour', 'teff flour', 'bread', 'injera',
-        'garlic', 'ginger', 'lime', 'lemon', 'fish', 'poultry'
-    ]
-    
-    product_lower = product_name.lower().strip()
-    for commodity in valid_commodities:
-        if commodity in product_lower or product_lower in commodity:
-            return True
-    return False
-
-def validate_product(product_name):
-    """Validate product input"""
-    if not product_name or len(product_name.strip()) < 2:
-        return False, "Please enter a valid product name (at least 2 characters)"
-    
-    # Block non-commodity items
-    non_commodities = ["car", "phone", "laptop", "house", "computer", "table", "chair", 
-                       "television", "tv", "radio", "fridge", "refrigerator", "stove"]
-    product_lower = product_name.lower().strip()
-    
-    if any(item in product_lower for item in non_commodities):
-        return False, f"❌ '{product_name}' is not a market commodity. Please enter an agricultural product like: coffee, wheat, teff, sugar, cooking oil, onion, tomato, etc."
-    
-    return True, "OK"
-
-# ==========================================
-# GROQ API INTEGRATION - CLEAN PROMPT
+# GROQ API INTEGRATION - UNIT DETECTION
 # ==========================================
 
 def get_groq_api_key():
@@ -86,56 +29,29 @@ def get_groq_api_key():
     except Exception as e:
         return None
 
-def build_prompt(product_name, region):
-    """Build a clean prompt for Groq without hardcoded prices"""
-    unit = get_product_unit(product_name)
-    
-    prompt = f"""You are an Ethiopian market analyst analyzing {product_name} in {region}, Ethiopia.
-
-Product: {product_name}
-Region: {region}
-Unit: {unit}
-
-Your task: Provide a realistic market analysis based on your knowledge of Ethiopian agricultural markets.
-
-Provide:
-1. Current estimated price (ETB/{unit})
-2. Price range (ETB/{unit})
-3. Market trend (increasing/stable/decreasing)
-4. Demand level (high/medium/low)
-5. Confidence level (HIGH/MEDIUM/LOW)
-
-Important:
-- Use your knowledge of Ethiopian market conditions
-- Be realistic and specific
-- If you don't have enough information, say "Insufficient data" and set confidence to LOW
-- Do not invent prices or sources"""
-    
-    return prompt
+def validate_product(product_name):
+    """Validate product input - accepts all products"""
+    if not product_name or len(product_name.strip()) < 2:
+        return False, "Please enter a valid product name (at least 2 characters)"
+    return True, "OK"
 
 def query_groq_market_data(product_name, region="Addis Ababa"):
-    """Query Groq API with clean prompt"""
+    """Query Groq API for any product - let Groq detect unit"""
     try:
-        # Validate product first
         is_valid, msg = validate_product(product_name)
         if not is_valid:
             return {
                 "success": False,
                 "error": msg,
-                "fallback_used": True,
-                "is_commodity": False
+                "fallback_used": True
             }
-        
-        # Check if it's a commodity
-        is_commodity_check = is_commodity(product_name)
         
         api_key = get_groq_api_key()
         if not api_key:
             return {
                 "success": False,
                 "error": "Groq API key not configured.",
-                "fallback_used": True,
-                "is_commodity": is_commodity_check
+                "fallback_used": True
             }
 
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -145,15 +61,28 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
             "Content-Type": "application/json"
         }
         
-        prompt = build_prompt(product_name, region)
+        # Prompt that asks Groq to detect the unit
+        prompt = f"""Analyze the market price for {product_name} in {region}, Ethiopia.
+
+First, determine the correct unit of measurement for this product (kg, liter, piece, unit, pair, meter, dozen, etc.).
+
+Then provide:
+1. Unit: [the correct unit for this product]
+2. Current estimated price (ETB per {unit})
+3. Price range (ETB per {unit})
+4. Market trend (increasing/stable/decreasing)
+5. Demand level (high/medium/low)
+6. Confidence level (HIGH/MEDIUM/LOW)
+
+Be realistic and specific for the Ethiopian market."""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian agricultural markets. Provide realistic, data-driven estimates."},
+                {"role": "system", "content": "You are a market analyst with knowledge of Ethiopian markets. Determine the correct unit for any product and provide realistic price estimates."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 400,
+            "max_tokens": 500,
             "temperature": 0.1
         }
         
@@ -163,8 +92,7 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
             return {
                 "success": False,
                 "error": f"API Error {response.status_code}",
-                "fallback_used": True,
-                "is_commodity": is_commodity_check
+                "fallback_used": True
             }
         
         data = response.json()
@@ -172,20 +100,22 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
         if 'choices' in data and len(data['choices']) > 0:
             content = data['choices'][0]['message']['content'].strip()
             
-            # Parse response - look for price numbers
+            # Parse response - let Groq tell us the unit
+            unit_match = re.search(r'Unit:\s*(\w+)', content, re.IGNORECASE)
             price_match = re.search(r'price.*?([\d.]+)', content, re.IGNORECASE)
             range_match = re.search(r'range.*?([\d.]+)\s*-\s*([\d.]+)', content, re.IGNORECASE)
             trend_match = re.search(r'trend.*?(\w+)', content, re.IGNORECASE)
             demand_match = re.search(r'demand.*?(\w+)', content, re.IGNORECASE)
             confidence_match = re.search(r'confidence.*?(\w+)', content, re.IGNORECASE)
             
-            unit = get_product_unit(product_name)
+            # Get unit from Groq or default
+            unit = unit_match.group(1).lower() if unit_match else "unit"
+            
             result = {
                 "success": True,
                 "raw_response": content,
                 "source": "Groq API",
-                "unit": unit,
-                "is_commodity": True
+                "unit": unit
             }
             
             if price_match:
@@ -211,97 +141,34 @@ def query_groq_market_data(product_name, region="Addis Ababa"):
             return {
                 "success": False,
                 "error": "Unexpected API response format",
-                "fallback_used": True,
-                "is_commodity": is_commodity_check
+                "fallback_used": True
             }
             
     except requests.exceptions.Timeout:
-        return {"success": False, "error": "Request timed out", "fallback_used": True, "is_commodity": False}
+        return {"success": False, "error": "Request timed out", "fallback_used": True}
     except Exception as e:
-        return {"success": False, "error": str(e), "fallback_used": True, "is_commodity": False}
+        return {"success": False, "error": str(e), "fallback_used": True}
 
 # ==========================================
-# FALLBACK - ESTIMATED PRICES (REALISTIC RANGES)
+# FALLBACK DATA FOR ANY PRODUCT
 # ==========================================
-
-def get_estimated_price(product_name):
-    """Get a realistic estimated price based on product category"""
-    product_lower = product_name.lower().strip()
-    unit = get_product_unit(product_name)
-    
-    # Default price ranges by category
-    if 'coffee' in product_lower:
-        return 300, 250, 350, 'increasing', 'high', f'ETB/{unit}'
-    elif 'teff' in product_lower:
-        return 100, 80, 120, 'increasing', 'high', f'ETB/{unit}'
-    elif 'wheat' in product_lower:
-        return 55, 45, 70, 'stable', 'high', f'ETB/{unit}'
-    elif 'sugar' in product_lower:
-        return 65, 50, 80, 'stable', 'high', f'ETB/{unit}'
-    elif 'oil' in product_lower or 'cooking' in product_lower:
-        return 150, 120, 180, 'increasing', 'high', f'ETB/{unit}'
-    elif 'milk' in product_lower:
-        return 75, 60, 90, 'increasing', 'high', f'ETB/{unit}'
-    elif 'beef' in product_lower or 'meat' in product_lower:
-        return 500, 400, 600, 'increasing', 'high', f'ETB/{unit}'
-    elif 'onion' in product_lower:
-        return 35, 25, 45, 'volatile', 'high', f'ETB/{unit}'
-    elif 'tomato' in product_lower:
-        return 42, 30, 55, 'volatile', 'high', f'ETB/{unit}'
-    elif 'potato' in product_lower:
-        return 50, 35, 65, 'increasing', 'medium', f'ETB/{unit}'
-    elif 'egg' in product_lower:
-        return 7, 5, 10, 'stable', 'high', f'ETB/piece'
-    elif 'chicken' in product_lower:
-        return 325, 250, 400, 'stable', 'medium', f'ETB/piece'
-    elif 'banana' in product_lower:
-        return 20, 15, 25, 'stable', 'medium', f'ETB/piece'
-    elif 'mango' in product_lower:
-        return 17, 12, 22, 'decreasing', 'medium', f'ETB/piece'
-    elif 'avocado' in product_lower:
-        return 15, 10, 20, 'increasing', 'high', f'ETB/piece'
-    else:
-        # Generic estimate for unknown products
-        return 100, 60, 150, 'stable', 'medium', f'ETB/{unit}'
 
 def get_fallback_data(product_name, region="Addis Ababa"):
-    """Get fallback data without hardcoded price lists"""
-    
-    if not is_commodity(product_name):
-        return {
-            'product': product_name,
-            'price': None,
-            'min_price': None,
-            'max_price': None,
-            'avg_price': None,
-            'unit': get_product_unit(product_name),
-            'trend': 'N/A',
-            'demand': 'N/A',
-            'data_source': 'Not a commodity',
-            'source': 'Invalid',
-            'is_fallback': True,
-            'is_commodity': False,
-            'error': f"'{product_name}' is not a recognized Ethiopian market commodity."
-        }
-    
-    price, min_price, max_price, trend, demand, unit_display = get_estimated_price(product_name)
-    unit = get_product_unit(product_name)
-    
+    """Get fallback data for any product"""
     return {
         'product': product_name,
-        'price': price,
-        'min_price': min_price,
-        'max_price': max_price,
-        'avg_price': price,
-        'unit': unit,
-        'trend': trend,
-        'demand': demand,
-        'data_source': 'Market Estimate',
+        'price': None,
+        'min_price': None,
+        'max_price': None,
+        'avg_price': None,
+        'unit': 'unit',
+        'trend': 'stable',
+        'demand': 'medium',
+        'data_source': 'Estimate',
         'source': 'Estimated',
         'is_fallback': True,
-        'is_commodity': True,
-        'confidence': 'MEDIUM',
-        'unit_display': unit_display
+        'confidence': 'LOW',
+        'unit_display': 'ETB/unit'
     }
 
 # ==========================================
@@ -434,9 +301,9 @@ class SelfLearningAIInsights:
         products = [
             {'name': 'coffee', 'price': 300, 'demand': 90, 'seasonal': 1.1},
             {'name': 'teff', 'price': 100, 'demand': 85, 'seasonal': 1.0},
-            {'name': 'wheat flour', 'price': 70, 'demand': 88, 'seasonal': 1.0},
+            {'name': 'wheat', 'price': 55, 'demand': 88, 'seasonal': 1.0},
             {'name': 'sugar', 'price': 65, 'demand': 85, 'seasonal': 0.9},
-            {'name': 'cooking oil', 'price': 150, 'demand': 92, 'seasonal': 1.0},
+            {'name': 'oil', 'price': 150, 'demand': 92, 'seasonal': 1.0},
             {'name': 'milk', 'price': 75, 'demand': 88, 'seasonal': 1.0},
             {'name': 'beef', 'price': 500, 'demand': 80, 'seasonal': 1.1},
             {'name': 'onion', 'price': 35, 'demand': 92, 'seasonal': 0.9},
@@ -477,14 +344,13 @@ class SelfLearningAIInsights:
     def get_market_data(self, product_name, region="Addis Ababa"):
         """Get market data from Groq or fallback"""
         
-        # Validate product first
+        # Validate product
         is_valid, msg = validate_product(product_name)
         if not is_valid:
             return {
                 'product': product_name,
                 'error': msg,
                 'is_valid': False,
-                'is_commodity': False,
                 'source': 'Validation Failed'
             }
         
@@ -498,44 +364,31 @@ class SelfLearningAIInsights:
                 'min_price': groq_result.get('min_price', groq_result.get('price') * 0.8),
                 'max_price': groq_result.get('max_price', groq_result.get('price') * 1.2),
                 'avg_price': groq_result.get('price'),
-                'unit': groq_result.get('unit', get_product_unit(product_name)),
+                'unit': groq_result.get('unit', 'unit'),
                 'trend': groq_result.get('trend', 'stable'),
                 'demand': groq_result.get('demand', 'medium'),
                 'confidence': groq_result.get('confidence', 'MEDIUM'),
                 'data_source': 'Groq AI Analysis',
                 'source': 'Groq API',
-                'is_commodity': True,
                 'is_valid': True,
                 'raw_response': groq_result.get('raw_response', '')
             }
         else:
             # Use fallback data
             fallback_data = get_fallback_data(product_name, region)
-            
-            if not fallback_data.get('is_commodity', True):
-                return {
-                    'product': product_name,
-                    'error': fallback_data.get('error', 'Not a commodity'),
-                    'is_valid': False,
-                    'is_commodity': False,
-                    'source': 'Invalid Input'
-                }
-            
             return {
                 'product': product_name,
                 'price': fallback_data.get('price'),
                 'min_price': fallback_data.get('min_price'),
                 'max_price': fallback_data.get('max_price'),
                 'avg_price': fallback_data.get('avg_price'),
-                'unit': fallback_data.get('unit', get_product_unit(product_name)),
+                'unit': fallback_data.get('unit', 'unit'),
                 'trend': fallback_data.get('trend', 'stable'),
                 'demand': fallback_data.get('demand', 'medium'),
-                'confidence': fallback_data.get('confidence', 'MEDIUM'),
-                'data_source': fallback_data.get('data_source', 'Market Estimate'),
+                'confidence': fallback_data.get('confidence', 'LOW'),
+                'data_source': fallback_data.get('data_source', 'Estimate'),
                 'source': 'Estimated',
-                'is_commodity': fallback_data.get('is_commodity', True),
                 'is_valid': True,
-                'unit_display': fallback_data.get('unit_display', f'ETB/{get_product_unit(product_name)}'),
                 'raw_response': ''
             }
 
@@ -545,7 +398,7 @@ class SelfLearningAIInsights:
 # ==========================================
 
 def render_ai_insights(user_info, ai=None):
-    """Render AI Insights tab with clean UI"""
+    """Render AI Insights tab with Groq unit detection"""
     
     # Initialize AI
     ai_insights = SelfLearningAIInsights(user_info['id'])
@@ -602,15 +455,6 @@ def render_ai_insights(user_info, ai=None):
         border-radius: 12px;
         font-weight: 600;
     }
-    .invalid-badge {
-        display: inline-block;
-        background: #ef4444;
-        color: white;
-        font-size: 10px;
-        padding: 2px 12px;
-        border-radius: 12px;
-        font-weight: 600;
-    }
     .insight-text {
         background: #1a1a2e;
         border-radius: 12px;
@@ -640,27 +484,11 @@ def render_ai_insights(user_info, ai=None):
         border-radius: 12px;
         font-weight: 500;
     }
-    .warning-box {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid #ef4444;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin: 8px 0;
-        color: #fca5a5;
-    }
-    .info-box {
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid #3b82f6;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin: 8px 0;
-        color: #93c5fd;
-    }
     </style>
     """, unsafe_allow_html=True)
     
     st.subheader("🤖 AI-Powered Market Insights")
-    st.caption("Search and analyze agricultural commodities in the Ethiopian market")
+    st.caption("Search and analyze any product in the Ethiopian market - Groq detects the unit")
     
     # Status
     col1, col2, col3, col4 = st.columns(4)
@@ -679,7 +507,7 @@ def render_ai_insights(user_info, ai=None):
     # API Key Check
     api_key = get_groq_api_key()
     if not api_key:
-        st.warning("⚠️ Groq API key not found. Using fallback market data.")
+        st.warning("⚠️ Groq API key not found. Using fallback data.")
         st.info("Add GROQ_API_KEY to secrets for AI-powered predictions.")
     
     # Get user's products for dropdown
@@ -690,7 +518,7 @@ def render_ai_insights(user_info, ai=None):
     # PRODUCT SELECTION
     # ==========================================
     st.markdown('<div class="search-section">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Search Any Agricultural Product")
+    st.markdown("### 🔍 Search Any Product")
     
     col1, col2 = st.columns([2, 1])
     
@@ -708,7 +536,7 @@ def render_ai_insights(user_info, ai=None):
     
     st.markdown("---")
     
-    # Product name input - FIXED for "Enter any product name"
+    # Product name input
     if search_option == "Select from my products":
         if user_product_names:
             selected_product_name = st.selectbox(
@@ -720,19 +548,17 @@ def render_ai_insights(user_info, ai=None):
             st.warning("No products in your inventory. Please add products first or use custom search.")
             selected_product_name = st.text_input(
                 "Enter Product Name",
-                placeholder="e.g., Coffee, Teff, Wheat, Sugar, Onion, Tomato...",
-                help="Enter any agricultural product to analyze"
+                placeholder="e.g., Coffee, Teff, Car, Phone, Laptop, Onion, Tomato...",
+                help="Enter any product to analyze"
             )
     else:
-        # TEXT INPUT for custom product - FIXED
         selected_product_name = st.text_input(
             "Enter Product Name",
-            placeholder="e.g., Coffee, Teff, Wheat, Sugar, Onion, Tomato, Beef, Milk...",
-            help="Enter any agricultural product to analyze market prices"
+            placeholder="e.g., Coffee, Teff, Car, Phone, Laptop, Onion, Tomato, Beef, Milk, Egg...",
+            help="Enter any product to analyze market prices"
         )
         
-        # Show example products
-        st.caption("💡 Examples: Coffee, Teff, Wheat, Sugar, Cooking Oil, Onion, Tomato, Beef, Milk, Egg, Banana")
+        st.caption("💡 Examples: Coffee, Teff, Car, Phone, Laptop, Onion, Tomato, Beef, Milk, Egg, Banana, Shoes, TV, Furniture")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -741,26 +567,6 @@ def render_ai_insights(user_info, ai=None):
         return
     
     product_name = selected_product_name.strip()
-    unit = get_product_unit(product_name)
-    is_valid_commodity = is_commodity(product_name)
-    
-    st.markdown("---")
-    
-    # Show product info
-    col1, col2 = st.columns(2)
-    with col1:
-        st.caption(f"📦 Product: **{product_name}**")
-    with col2:
-        st.caption(f"📏 Unit: **{unit}**")
-    
-    if not is_valid_commodity:
-        st.markdown(f"""
-        <div class="warning-box">
-            ⚠️ <strong>'{product_name}'</strong> is not a standard Ethiopian market commodity.
-            Please try: coffee, teff, wheat, sugar, cooking oil, milk, beef, onion, tomato, egg, banana, etc.
-        </div>
-        """, unsafe_allow_html=True)
-        return
     
     st.markdown("---")
     
@@ -773,55 +579,51 @@ def render_ai_insights(user_info, ai=None):
         st.error(f"❌ {market_data.get('error', 'Invalid product')}")
         return
     
-    st.markdown("### 📊 Market Analysis")
+    unit = market_data.get('unit', 'unit')
+    
+    # Show product info
+    st.markdown(f"### 📊 Market Analysis for **{product_name}**")
+    st.caption(f"📍 Region: {selected_region} | 📏 Unit detected: **{unit}**")
+    st.markdown("---")
     
     # Source badge
     if market_data.get('source') == 'Groq API':
         st.markdown('<span class="groq-badge">🤖 Groq AI</span>', unsafe_allow_html=True)
-    elif market_data.get('source') == 'Invalid Input':
-        st.markdown('<span class="invalid-badge">❌ Invalid</span>', unsafe_allow_html=True)
     else:
         st.markdown('<span class="fallback-badge">📊 Estimated</span>', unsafe_allow_html=True)
     
     current_price = market_data.get('price', 0)
     market_avg = market_data.get('avg_price', 0)
-    unit_display = market_data.get('unit', unit)
     confidence = market_data.get('confidence', 'MEDIUM')
     
     # Confidence color
     confidence_color = "confidence-high" if confidence == "HIGH" else "confidence-medium" if confidence == "MEDIUM" else "confidence-low"
     
-    # Generate market insight
     if current_price and market_avg:
         diff = current_price - market_avg
         pct = (diff / market_avg * 100) if market_avg > 0 else 0
         
         if diff > 0:
-            price_status = f"Your price is {pct:.0f}% above the market average"
-            status_color = "#ef4444"
+            price_status = f"Price is {pct:.0f}% above the market average"
             status_emoji = "🔴"
         elif diff < 0:
-            price_status = f"Your price is {abs(pct):.0f}% below the market average"
-            status_color = "#10b981"
+            price_status = f"Price is {abs(pct):.0f}% below the market average"
             status_emoji = "🟢"
         else:
-            price_status = "Your price matches the market average"
-            status_color = "#f59e0b"
+            price_status = "Price matches the market average"
             status_emoji = "🟡"
         
         st.markdown(f"""
         <div class="insight-text">
-            💡 <strong>Market Insight:</strong> The current market price of <strong>{product_name}</strong> in <strong>{selected_region}</strong> is approximately 
-            <strong>{market_avg:.0f} ETB/{unit_display}</strong>
+            💡 <strong>Market Insight:</strong> The estimated market price of <strong>{product_name}</strong> in <strong>{selected_region}</strong> is 
+            <strong>{market_avg:.0f} ETB/{unit}</strong>
             <br><br>
             {status_emoji} {price_status}.
             <br>
-            📊 Estimated range: <strong>{market_data.get('min_price', 0):.0f} - {market_data.get('max_price', 0):.0f} ETB/{unit_display}</strong>
+            📊 Estimated range: <strong>{market_data.get('min_price', 0):.0f} - {market_data.get('max_price', 0):.0f} ETB/{unit}</strong>
             <br>
-            📈 Market trend is <strong>{market_data.get('trend', 'stable').capitalize()}</strong> 
+            📈 Market trend: <strong>{market_data.get('trend', 'stable').capitalize()}</strong> 
             with <strong>{market_data.get('demand', 'medium').upper()}</strong> demand.
-            <br>
-            📍 Source: <strong>{market_data.get('data_source', 'Market Data')}</strong>
             <br>
             🎯 Confidence: <span class="{confidence_color}"><strong>{confidence}</strong></span>
         </div>
@@ -829,9 +631,9 @@ def render_ai_insights(user_info, ai=None):
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("💰 Estimated Price", f"{current_price:.0f} ETB/{unit_display}")
+            st.metric("💰 Estimated Price", f"{current_price:.0f} ETB/{unit}")
         with col2:
-            st.metric("📊 Market Average", f"{market_avg:.0f} ETB/{unit_display}")
+            st.metric("📊 Market Avg", f"{market_avg:.0f} ETB/{unit}")
         with col3:
             st.metric("📈 Difference", f"{diff:+.0f} ETB", delta=f"{pct:+.1f}%")
         
@@ -844,10 +646,10 @@ def render_ai_insights(user_info, ai=None):
             st.success("✅ High confidence - Based on reliable market analysis.")
     
     # Market Details
-    st.caption("---")
-    detail_cols = st.columns(3)
+    st.markdown("---")
+    detail_cols = st.columns(4)
     with detail_cols[0]:
-        st.caption(f"📏 Unit: {unit_display}")
+        st.caption(f"📏 Unit: **{unit}**")
     with detail_cols[1]:
         if market_data.get('trend'):
             trend_emoji = "📈" if market_data.get('trend') == 'increasing' else "📉" if market_data.get('trend') == 'decreasing' else "➡️"
@@ -856,10 +658,12 @@ def render_ai_insights(user_info, ai=None):
         if market_data.get('demand'):
             demand_emoji = "🔥" if market_data.get('demand') == 'high' else "📊" if market_data.get('demand') == 'medium' else "❄️"
             st.caption(f"{demand_emoji} Demand: {market_data.get('demand', 'N/A').capitalize()}")
+    with detail_cols[3]:
+        st.caption(f"🎯 Confidence: **{confidence}**")
     
     # Show raw response if available
-    if market_data.get('raw_response') and st.checkbox("Show AI Analysis", key="show_raw"):
-        with st.expander("📋 AI Analysis Details"):
+    if market_data.get('raw_response') and st.checkbox("Show AI Analysis Details", key="show_raw"):
+        with st.expander("📋 Groq AI Analysis"):
             st.text(market_data.get('raw_response'))
     
     st.markdown("---")
