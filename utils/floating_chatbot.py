@@ -1,24 +1,49 @@
+"""
+AgriTech floating AI chatbot — Streamlit-native (clicks + replies work).
+"""
+
+from __future__ import annotations
+
 import os
 import re
+from typing import Optional
+
 import streamlit as st
-from groq import Groq
+
+try:
+    from groq import Groq
+except ImportError:  # package missing
+    Groq = None  # type: ignore
 
 
-def get_groq_client():
-    api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+# ── Groq client ───────────────────────────────────────────────────────────────
+
+def get_groq_client() -> Optional["Groq"]:
+    if Groq is None:
+        return None
+    api_key = None
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY")
+    except Exception:
+        pass
+    if not api_key:
+        api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return None
     return Groq(api_key=api_key)
 
 
 @st.cache_resource
-def init_groq_client():
+def init_groq_client() -> Optional["Groq"]:
     return get_groq_client()
 
 
+# ── Markdown → safe HTML ──────────────────────────────────────────────────────
+
 def _md_to_html(text: str) -> str:
     text = (
-        text.replace("&", "&amp;")
+        str(text)
+        .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
@@ -43,16 +68,24 @@ def _build_messages_html(messages: list) -> str:
         )
     parts = []
     for msg in messages:
-        content = _md_to_html(msg["content"])
-        css = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+        content = _md_to_html(msg.get("content", ""))
+        css = "user-bubble" if msg.get("role") == "user" else "bot-bubble"
         parts.append(f'<div class="bubble {css}">{content}</div>')
     return "\n".join(parts)
 
 
+# ── AI reply ──────────────────────────────────────────────────────────────────
+
 def _get_ai_reply(user_context: str) -> str:
+    if Groq is None:
+        return "⚠️ Package `groq` is not installed. Run: `pip install groq`"
+
     client = init_groq_client()
     if not client:
-        return "⚠️ Groq API key not configured. Add `GROQ_API_KEY` to `.streamlit/secrets.toml` or env."
+        return (
+            "⚠️ Groq API key not configured. "
+            "Add `GROQ_API_KEY` to `.streamlit/secrets.toml` or export it in the environment."
+        )
 
     try:
         system_msg = {
@@ -62,12 +95,12 @@ def _get_ai_reply(user_context: str) -> str:
                 "Help Producers, Merchants, Customers, and Admins. Be professional and concise.\n"
                 "Formatting rules: use **bold** for key terms, numbered lists for steps, "
                 "bullet points for options. Do NOT use markdown headers (#, ##).\n\n"
-                f"CURRENT USER CONTEXT:\n{user_context}"
+                f"CURRENT USER CONTEXT:\n{user_context or 'No extra context provided.'}"
             ),
         }
+        history = st.session_state.get("chat_messages", [])[-12:]
         api_msgs = [system_msg] + [
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.chat_messages[-12:]
+            {"role": m["role"], "content": m["content"]} for m in history
         ]
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -76,47 +109,29 @@ def _get_ai_reply(user_context: str) -> str:
             max_tokens=1024,
             stream=False,
         )
-        return resp.choices[0].message.content or "Sorry, no response generated."
+        return (resp.choices[0].message.content or "").strip() or (
+            "Sorry, no response generated."
+        )
     except Exception as e:
         return f"⚠️ Connection error: {e}"
 
 
-def render_floating_chatbot(user_context: str = "", show: bool = True):
-    """Floating chat widget that actually receives clicks/messages via Streamlit widgets."""
-    if not show:
-        return
+# ── CSS ───────────────────────────────────────────────────────────────────────
 
-    # ── session state ─────────────────────────────────────────────
-    if "chat_open" not in st.session_state:
-        st.session_state.chat_open = False
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []
-
-    is_open = st.session_state.chat_open
-    messages_html = _build_messages_html(st.session_state.chat_messages)
-
-    # ── CSS ───────────────────────────────────────────────────────
+def _inject_css(is_open: bool) -> None:
+    width = "360px" if is_open else "64px"
     st.markdown(
         f"""
 <style>
-/* Floating root: parent of our anchor markers */
 div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) {{
     position: fixed !important;
     bottom: 20px !important;
     right: 20px !important;
     z-index: 999999 !important;
-    width: {"360px" if is_open else "64px"} !important;
+    width: {width} !important;
     background: transparent !important;
     border: none !important;
 }}
-
-/* Hide Streamlit button chrome on FAB */
-div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) button {{
-    border: none !important;
-    box-shadow: none !important;
-}}
-
-/* FAB button look */
 .agri-fab-wrap button {{
     width: 58px !important;
     height: 58px !important;
@@ -127,12 +142,12 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) button {{
     font-size: 24px !important;
     box-shadow: 0 6px 22px rgba(78,84,200,.65) !important;
     padding: 0 !important;
+    border: none !important;
 }}
 .agri-fab-wrap button:hover {{
     transform: scale(1.08) !important;
+    box-shadow: 0 10px 30px rgba(78,84,200,.85) !important;
 }}
-
-/* Chat panel shell */
 .agri-panel {{
     background: #1a1b2e !important;
     border-radius: 16px !important;
@@ -147,11 +162,6 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) button {{
     color: white !important;
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
-}}
-.agri-header-left {{
-    display: flex !important;
-    align-items: center !important;
     gap: 10px !important;
 }}
 .agri-avatar {{
@@ -162,11 +172,19 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) button {{
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    font-size: 16px !important;
 }}
-.agri-title {{ font-size: 14px !important; font-weight: 600 !important; margin: 0 !important; }}
-.agri-status {{ font-size: 10px !important; opacity: .85 !important; margin: 0 !important; }}
+.agri-title {{
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+}}
+.agri-status {{
+    font-size: 10px !important;
+    opacity: .85 !important;
+    margin: 0 !important;
+}}
 .dot-green {{ color: #7bffb2 !important; }}
-
 #agri-messages {{
     max-height: 320px !important;
     min-height: 180px !important;
@@ -204,8 +222,13 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) button {{
     font-family: monospace !important;
     font-size: 12px !important;
 }}
-
-/* Chat input inside floating panel */
+.agri-actions button {{
+    background: #252640 !important;
+    color: #dde0ff !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+}}
 div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) [data-testid="stChatInput"] {{
     padding: 8px 10px 12px 10px !important;
     background: #1a1b2e !important;
@@ -215,28 +238,44 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) [data-testid="st
     color: #dde0ff !important;
     border: 1.5px solid #4e54c8 !important;
     border-radius: 18px !important;
-}}
-
-/* Top action buttons row */
-.agri-actions button {{
-    background: #252640 !important;
-    color: #dde0ff !important;
-    border: 1px solid rgba(255,255,255,.12) !important;
-    border-radius: 8px !important;
-    font-size: 12px !important;
+    font-size: 13px !important;
 }}
 </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # ── Floating UI (all Streamlit widgets — clicks work) ─────────
-    root = st.container()
-    with root:
+
+# ── Main API ──────────────────────────────────────────────────────────────────
+
+def render_floating_chatbot(user_context: str = "", show: bool = True) -> None:
+    """
+    Floating bottom-right AI chat.
+
+    Parameters
+    ----------
+    user_context : str
+        Injected into the system prompt (user, role, page, etc.).
+    show : bool
+        False hides the widget (e.g. login screen).
+    """
+    if not show:
+        return
+
+    if "chat_open" not in st.session_state:
+        st.session_state.chat_open = False
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+
+    is_open = bool(st.session_state.chat_open)
+    messages_html = _build_messages_html(st.session_state.chat_messages)
+    _inject_css(is_open)
+
+    with st.container():
         st.markdown('<div class="agri-chat-root"></div>', unsafe_allow_html=True)
 
+        # Closed: FAB only
         if not is_open:
-            # FAB open button
             st.markdown('<div class="agri-fab-wrap">', unsafe_allow_html=True)
             if st.button("💬", key="agri_fab_open", help="Open AgriTech Assistant"):
                 st.session_state.chat_open = True
@@ -249,12 +288,10 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) [data-testid="st
             f"""
 <div class="agri-panel">
   <div class="agri-header">
-    <div class="agri-header-left">
-      <div class="agri-avatar">🤖</div>
-      <div>
-        <p class="agri-title">AgriTech Assistant</p>
-        <p class="agri-status"><span class="dot-green">●</span> Online</p>
-      </div>
+    <div class="agri-avatar">🤖</div>
+    <div>
+      <p class="agri-title">AgriTech Assistant</p>
+      <p class="agri-status"><span class="dot-green">●</span> Online</p>
     </div>
   </div>
   <div id="agri-messages">
@@ -277,12 +314,11 @@ div[data-testid="stVerticalBlock"]:has(> div > .agri-chat-root) [data-testid="st
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Real Streamlit input — this is what makes replies work
+        # Real Streamlit input — required for replies
         prompt = st.chat_input(
             "Ask about inventory, orders, pricing…",
             key="agri_chat_input",
         )
-
         if prompt and prompt.strip():
             st.session_state.chat_messages.append(
                 {"role": "user", "content": prompt.strip()}
